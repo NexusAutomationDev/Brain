@@ -217,26 +217,119 @@ Which phases cover which requirements. Populated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| FOUND-01..12 | TBD | Pending |
-| AUTH-01..04 | TBD | Pending |
-| BOT-01..09 | TBD | Pending |
-| WEB-01..05 | TBD | Pending |
-| MQ-01..09 | TBD | Pending |
-| IDEMP-01..03 | TBD | Pending |
-| GRAPH-01..06 | TBD | Pending |
-| LLM-01..11 | TBD | Pending |
-| STM-01..06 | TBD | Pending |
-| VEC-01..08 | TBD | Pending |
-| EMB-01..05 | TBD | Pending |
-| OBS-01..06 | TBD | Pending |
-| RESP-01..04 | TBD | Pending |
-| DEPLOY-01..08 | TBD | Pending |
+| FOUND-01 | Phase 1 | Pending |
+| FOUND-02 | Phase 1 | Pending |
+| FOUND-03 | Phase 1 | Pending |
+| FOUND-04 | Phase 1 | Pending |
+| FOUND-05 | Phase 1 | Pending |
+| FOUND-06 | Phase 1 | Pending |
+| FOUND-07 | Phase 1 | Pending |
+| FOUND-08 | Phase 1 | Pending |
+| FOUND-09 | Phase 1 | Pending |
+| FOUND-10 | Phase 1 | Pending |
+| FOUND-11 | Phase 1 | Pending |
+| FOUND-12 | Phase 1 | Pending |
+| AUTH-01 | Phase 3 | Pending |
+| AUTH-02 | Phase 3 | Pending |
+| AUTH-03 | Phase 1 | Pending |
+| AUTH-04 | Phase 1 | Pending |
+| BOT-01 | Phase 2 | Pending |
+| BOT-02 | Phase 2 | Pending |
+| BOT-03 | Phase 2 | Pending |
+| BOT-04 | Phase 2 | Pending |
+| BOT-05 | Phase 2 | Pending |
+| BOT-06 | Phase 2 | Pending |
+| BOT-07 | Phase 2 | Pending |
+| BOT-08 | Phase 2 | Pending |
+| BOT-09 | Phase 2 | Pending |
+| WEB-01 | Phase 3 | Pending |
+| WEB-02 | Phase 3 | Pending |
+| WEB-03 | Phase 3 | Pending |
+| WEB-04 | Phase 3 | Pending |
+| WEB-05 | Phase 3 | Pending |
+| MQ-01 | Phase 8 | Pending |
+| MQ-02 | Phase 8 | Pending |
+| MQ-03 | Phase 8 | Pending |
+| MQ-04 | Phase 8 | Pending |
+| MQ-05 | Phase 8 | Pending |
+| MQ-06 | Phase 8 | Pending |
+| MQ-07 | Phase 8 | Pending |
+| MQ-08 | Phase 8 | Pending |
+| MQ-09 | Phase 8 | Pending |
+| IDEMP-01 | Phase 8 | Pending |
+| IDEMP-02 | Phase 8 | Pending |
+| IDEMP-03 | Phase 8 | Pending |
+| GRAPH-01 | Phase 6 | Pending |
+| GRAPH-02 | Phase 6 | Pending |
+| GRAPH-03 | Phase 6 | Pending |
+| GRAPH-04 | Phase 6 | Pending |
+| GRAPH-05 | Phase 3 | Pending |
+| GRAPH-06 | Phase 3 | Pending |
+| LLM-01 | Phase 5 | Pending |
+| LLM-02 | Phase 5 | Pending |
+| LLM-03 | Phase 5 | Pending |
+| LLM-04 | Phase 5 | Pending |
+| LLM-05 | Phase 5 | Pending |
+| LLM-06 | Phase 5 | Pending |
+| LLM-07 | Phase 5 | Pending |
+| LLM-08 | Phase 5 | Pending |
+| LLM-09 | Phase 5 | Pending |
+| LLM-10 | Phase 5 | Pending |
+| LLM-11 | Phase 5 | Pending |
+| STM-01 | Phase 6 | Pending |
+| STM-02 | Phase 6 | Pending |
+| STM-03 | Phase 6 | Pending |
+| STM-04 | Phase 6 | Pending |
+| STM-05 | Phase 6 | Pending |
+| STM-06 | Phase 6 | Pending |
+| VEC-01 | Phase 7 | Pending |
+| VEC-02 | Phase 7 | Pending |
+| VEC-03 | Phase 7 | Pending |
+| VEC-04 | Phase 7 | Pending |
+| VEC-05 | Phase 7 | Pending |
+| VEC-06 | Phase 7 | Pending |
+| VEC-07 | Phase 7 | Pending |
+| VEC-08 | Phase 7 | Pending |
+| EMB-01 | Phase 7 | Pending |
+| EMB-02 | Phase 7 | Pending |
+| EMB-03 | Phase 7 | Pending |
+| EMB-04 | Phase 7 | Pending |
+| EMB-05 | Phase 7 | Pending |
+| OBS-01 | Phase 4 | Pending |
+| OBS-02 | Phase 4 | Pending |
+| OBS-03 | Phase 4 | Pending |
+| OBS-04 | Phase 4 | Pending |
+| OBS-05 | Phase 4 | Pending |
+| OBS-06 | Phase 4 | Pending |
+| RESP-01 | Phase 3 | Pending |
+| RESP-02 | Phase 3 | Pending |
+| RESP-03 | Phase 8 | Pending |
+| RESP-04 | Phase 3 | Pending |
+| DEPLOY-01 | Phase 1 | Pending |
+| DEPLOY-02 | Phase 1 | Pending |
+| DEPLOY-03 | Phase 1 | Pending |
+| DEPLOY-04 | Phase 1 | Pending |
+| DEPLOY-05 | Phase 1 | Pending |
+| DEPLOY-06 | Phase 1 | Pending |
+| DEPLOY-07 | Phase 1 | Pending |
+| DEPLOY-08 | Phase 1 | Pending |
 
 **Coverage:**
-- v1 requirements: 87 total
-- Mapped to phases: 0 (pending roadmap creation)
-- Unmapped: 87 ⚠️
+- v1 requirements: 96 total (12 FOUND + 4 AUTH + 9 BOT + 5 WEB + 9 MQ + 3 IDEMP + 6 GRAPH + 11 LLM + 6 STM + 8 VEC + 5 EMB + 6 OBS + 4 RESP + 8 DEPLOY)
+- Mapped to phases: 96 ✓
+- Unmapped: 0 ✓
+
+**Distribution by phase:**
+- Phase 1 (Foundations & Compose Skeleton): 22 reqs
+- Phase 2 (Bot Persona CRUD + Audit): 9 reqs
+- Phase 3 (Minimal Webhook + Single-Node Graph): 12 reqs
+- Phase 4 (Langfuse Wiring): 6 reqs
+- Phase 5 (Multi-Provider + Fallback): 11 reqs
+- Phase 6 (Short-Term Memory + Postgres Checkpointer): 10 reqs
+- Phase 7 (Vector Memory): 13 reqs
+- Phase 8 (RabbitMQ Ingress + Idempotency): 13 reqs
+- Phase 9 (Hardening): 0 v1 reqs (operational hardening; v2-HARD items tracked separately)
 
 ---
 *Requirements defined: 2026-05-21*
-*Last updated: 2026-05-21 after initial definition*
+*Last updated: 2026-05-21 after roadmap traceability mapping*
