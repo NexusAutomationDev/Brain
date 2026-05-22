@@ -30,7 +30,17 @@
   3. Service refuses to start with a clear Pydantic Settings error if any required env var is missing or malformed; `.env.example` documents every variable and `gitleaks` (pre-commit) blocks any commit containing a real secret.
   4. Two Postgres schemas exist after the `brain-migrate` init container completes: `langgraph.*` (owned by checkpointer `.setup()`) and `brain.*` (owned by Alembic), and the workers depend on the init container's successful completion.
   5. Sending `SIGTERM` to the running container drains in-flight HTTP requests within the grace window before exit; all logs are JSON via structlog (no `print` / stdlib logging in production code).
-**Plans**: TBD
+**Plans**: 9 plans
+Plans:
+- [ ] 01-01-PLAN.md — Python project bootstrap (pyproject.toml exact pins, uv.lock, .gitignore, .gitleaks.toml, .pre-commit-config.yaml)
+- [ ] 01-02-PLAN.md — src/brain/ package skeleton (11 packages per ARCHITECTURE.md, READMEs, tests/ harness)
+- [ ] 01-03-PLAN.md — Pydantic Settings + schema_version helper + .env.example (FOUND-04/05/11, AUTH-03/04, DEPLOY-07)
+- [ ] 01-04-PLAN.md — structlog logging + RequestIDMiddleware + thread_id helper + 4 grep-ban hooks (FOUND-06/08/10)
+- [ ] 01-05-PLAN.md — FastAPI app + lifespan + /healthz + /readyz + uvicorn entrypoint (FOUND-03, FOUND-09)
+- [ ] 01-06-PLAN.md — psycopg pool, Alembic env.py, brain-migrate entrypoint (FOUND-06 driver, FOUND-07 dual schemas)
+- [ ] 01-07-PLAN.md — Multi-stage Dockerfile (base→dev→prod, non-root, healthcheck) (DEPLOY-03)
+- [ ] 01-08-PLAN.md — docker-compose.yml (10 services) + docker-compose.lite.yml + topology-init placeholder (DEPLOY-01/02/04/05/06)
+- [ ] 01-09-PLAN.md — Smoke scripts + parity checks + GitHub Actions CI + README quickstart (DEPLOY-08)
 
 ### Phase 2: Bot Persona CRUD + Audit
 **Goal**: An operator can manage bot personas as data (create, read, update, soft-delete) through a documented HTTP API, with every change captured in an append-only audit log and existing conversations protected from mid-turn persona changes.
@@ -192,7 +202,7 @@ Phases that can skip research (standard patterns): **2, 3, 6, 9**.
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundations & Compose Skeleton | 0/TBD | Not started | - |
+| 1. Foundations & Compose Skeleton | 0/9 | Planned | - |
 | 2. Bot Persona CRUD + Audit | 0/TBD | Not started | - |
 | 3. Minimal Webhook + Single-Node Graph | 0/TBD | Not started | - |
 | 4. Langfuse Wiring | 0/TBD | Not started | - |
@@ -204,4 +214,4 @@ Phases that can skip research (standard patterns): **2, 3, 6, 9**.
 
 ---
 *Roadmap created: 2026-05-21*
-*Last updated: 2026-05-21 after initial roadmap creation*
+*Last updated: 2026-05-22 after Phase 1 plan decomposition (9 plans across 4 waves)*
