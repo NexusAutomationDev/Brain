@@ -18,7 +18,6 @@ from unittest.mock import patch
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # create_app() surface
 # ---------------------------------------------------------------------------
@@ -60,11 +59,14 @@ def test_module_level_app_is_fastapi(settings_factory: Any) -> None:
     # vars; reload_settings() clears the cache before re-import.
     settings_factory()  # populates env
 
+    # Re-resolve `brain.api.app` via sys.modules so we get the module, not the
+    # package's `app` attribute (the package's __init__ re-exports the FastAPI
+    # instance under the same name `app`, which `import x.y as z` resolves to).
     import importlib
+    import sys
 
-    import brain.api.app as app_mod
-
-    importlib.reload(app_mod)
+    importlib.import_module("brain.api.app")
+    app_mod = sys.modules["brain.api.app"]
     from fastapi import FastAPI
 
     assert isinstance(app_mod.app, FastAPI)
@@ -72,8 +74,6 @@ def test_module_level_app_is_fastapi(settings_factory: Any) -> None:
 
 def test_lifespan_is_async_context_manager() -> None:
     """`lifespan` must be an async context manager (FastAPI requirement)."""
-    import contextlib
-
     from brain.api.app import lifespan
 
     # `asynccontextmanager` wraps the generator in a `_AsyncGeneratorContextManager`
@@ -85,10 +85,6 @@ def test_lifespan_is_async_context_manager() -> None:
     cm = lifespan(FastAPI())
     assert hasattr(cm, "__aenter__")
     assert hasattr(cm, "__aexit__")
-    # Cleanup: don't actually enter it (would open real deps).
-    if hasattr(cm, "gen"):
-        cm.gen.close()  # type: ignore[attr-defined]
-    contextlib.suppress(Exception)  # noqa: B018 — best-effort cleanup
 
 
 # ---------------------------------------------------------------------------

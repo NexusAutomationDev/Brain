@@ -1,208 +1,262 @@
-"""Integration test for lifespan + SIGTERM graceful shutdown (FOUND-09 / D-13).
+"""Integration test for lifespan startup → shutdown cleanliness (FOUND-09 / D-13).
 
-Scope — realistic for Phase 1:
-  - Boot a real uvicorn subprocess running `python -m brain.api.main`.
-  - Wait for `/healthz` to respond 200 (lifespan opened the deps successfully).
-  - Send SIGTERM and assert:
-      * the process exits with rc=0 within `grace_seconds + 5` seconds
-        (NOT killed by SIGKILL — that would be rc=-9),
-      * captured stdout contains a structured `"shutdown_complete"` log line.
+Scope — realistic for Phase 1 (per plan 01-05 escape-hatch):
 
-What this test does NOT do:
-  - Prove that an in-flight long request fully drains across SIGTERM. A real
-    long endpoint does not exist until Phase 3; plan 01-09's smoke-up.sh covers
-    the container-level drain via `docker compose down`.
+  The original plan-of-record was to spawn `python -m brain.api.main` against a
+  real testcontainers Postgres, send SIGTERM to the subprocess, and assert
+  rc=0 + a captured `shutdown_complete` JSON log line. That approach proved
+  flaky in this worktree because `aio_pika.connect_robust(...)` to a non-listen
+  address raises `AMQPConnectionError` on the *first* connect (robust reconnect
+  only engages after an initial successful handshake), which makes the lifespan
+  body fail at startup — uvicorn never binds the socket — and the test cannot
+  even reach the SIGTERM step without a real RabbitMQ testcontainer.
 
-Skip conditions:
-  - Docker daemon unavailable (testcontainers can't boot Postgres).
-  - The `testcontainers` extras for Postgres are not installed.
+  Plan 01-05's `<action>` block explicitly authorizes the simplification:
+    "If full subprocess test proves flaky, simplify to: in-process `async with
+     lifespan(create_app())` then assert it cleanly exits without exception
+     (validates the lifespan body); SIGTERM behavior is owned by uvicorn (cited)
+     and validated by `scripts/smoke-up.sh` in plan 01-09."
 
-NOTE: this test requires a working `BRAIN_*` env (Postgres DSN from the
-testcontainer, plus stubbed rabbit/qdrant URLs). The lifespan opens
-`aio_pika.connect_robust` and `AsyncQdrantClient` lazily / robustly enough that
-unreachable broker / qdrant URLs do not raise at startup; only `/readyz`
-(NOT called in this test, only `/healthz`) would surface the dep failures.
+  This file implements that simpler shape:
+    - Monkey-patch `psycopg_pool.AsyncConnectionPool`, `aio_pika.connect_robust`,
+      and `qdrant_client.AsyncQdrantClient` inside `brain.api.app` with
+      AsyncMock objects so the lifespan can start and finish without live
+      services.
+    - `async with lifespan(app):` then exits the context manager normally and
+      asserts every stub's close/cleanup method ran (proves shutdown order +
+      that no exception leaked).
+    - Two extra tests assert (a) the startup → shutdown ORDER (open: pool,
+      rabbit, qdrant; close: qdrant, rabbit, pool — reverse) via call_order
+      tracking, and (b) that an exception in one shutdown step does NOT prevent
+      the others from running (because `contextlib.suppress` wraps each close).
+
+  Container-level SIGTERM drain is owned by plan 01-09's `scripts/smoke-up.sh`,
+  which runs `docker compose down` against a fully-wired stack and observes
+  rc=0 + `shutdown_complete` in container logs.
+
+Marker: `@pytest.mark.integration` because the file lives under
+`tests/integration/` (auto-marked by conftest.py).
 """
 from __future__ import annotations
 
-import json
-import os
-import signal
-import socket
-import subprocess
-import sys
-import time
-import urllib.error
-import urllib.request
-from collections.abc import Iterator
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 if TYPE_CHECKING:
-    from pathlib import Path
+    from collections.abc import Iterator
 
 
 pytestmark = pytest.mark.integration
 
 
-def _docker_available() -> bool:
-    """Cheap probe: does `docker info` succeed?"""
-    try:
-        result = subprocess.run(
-            ["docker", "info"],
-            capture_output=True,
-            timeout=5,
-            check=False,
-        )
-        return result.returncode == 0
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        return False
-
-
-def _free_port() -> int:
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
-
-
-def _wait_for_health(port: int, timeout: float) -> bool:
-    """Poll http://127.0.0.1:{port}/healthz until 200 or timeout."""
-    deadline = time.monotonic() + timeout
-    last_err: Exception | None = None
-    while time.monotonic() < deadline:
-        try:
-            with urllib.request.urlopen(  # noqa: S310 — localhost only
-                f"http://127.0.0.1:{port}/healthz",
-                timeout=1.0,
-            ) as resp:
-                if resp.status == 200:
-                    return True
-        except (urllib.error.URLError, ConnectionError, OSError) as e:
-            last_err = e
-        time.sleep(0.2)
-    if last_err is not None:
-        print(f"[test_shutdown] last /healthz error: {last_err!r}", file=sys.stderr)
-    return False
-
-
-@pytest.fixture(scope="module")
-def project_root() -> Path:
-    from pathlib import Path
-
-    return Path(__file__).resolve().parents[2]
-
-
 @pytest.fixture
-def brain_subprocess(
-    project_root: Path,
-    postgres_container,  # noqa: ANN001 — pytest fixture injected by conftest
-) -> Iterator[tuple[subprocess.Popen[bytes], int]]:
-    """Launch `python -m brain.api.main` against a real testcontainer Postgres."""
-    port = _free_port()
+def stubbed_lifespan_deps(
+    monkeypatch: pytest.MonkeyPatch,
+) -> Iterator[dict[str, Any]]:
+    """Replace the three external dep constructors in `brain.api.app` with stubs.
 
-    dsn = postgres_container.get_connection_url()
-    # testcontainers returns `postgresql+psycopg2://...`; strip the driver
-    # qualifier so psycopg v3 picks it up natively.
-    dsn = dsn.replace("postgresql+psycopg2://", "postgresql://").replace(
-        "postgresql+psycopg://", "postgresql://"
-    )
-
-    env = os.environ.copy()
-    env.update(
-        {
-            "BRAIN_AUTH__TOKEN": "test-token-test-token-test-token",
-            "BRAIN_POSTGRES__DSN": dsn,
-            # Unreachable URLs are fine — /healthz is dep-free and we never
-            # call /readyz in this test. aio_pika.connect_robust is robust to
-            # broker-not-yet-up at startup; AsyncQdrantClient is lazy.
-            "BRAIN_RABBITMQ__URL": "amqp://test:test@127.0.0.1:1/",
-            "BRAIN_QDRANT__URL": "http://127.0.0.1:1",
-            "BRAIN_LOG_FORMAT": "json",
-            "BRAIN_LOG_LEVEL": "INFO",
-            "BRAIN_SHUTDOWN__GRACE_SECONDS": "5",
-            # uvicorn bind override via env: we monkey-patch by spawning a
-            # tiny wrapper instead — see UVICORN_PORT below.
-            "UVICORN_PORT": str(port),
-            "PYTHONUNBUFFERED": "1",
-        }
-    )
-
-    # We can't easily change the host/port baked into brain.api.main without
-    # editing it, so spawn uvicorn directly with the same flags main() uses.
-    # This still exercises the lifespan + RequestIDMiddleware + health router.
-    cmd = [
-        sys.executable,
-        "-m",
-        "uvicorn",
-        "brain.api.app:app",
-        "--host",
-        "127.0.0.1",
-        "--port",
-        str(port),
-        "--workers",
-        "1",
-        "--timeout-graceful-shutdown",
-        env["BRAIN_SHUTDOWN__GRACE_SECONDS"],
-    ]
-    proc = subprocess.Popen(  # noqa: S603 — fixed argv from this test
-        cmd,
-        cwd=str(project_root),
-        env=env,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-    )
-    try:
-        yield proc, port
-    finally:
-        if proc.poll() is None:
-            proc.kill()
-            proc.wait(timeout=5)
-
-
-@pytest.mark.skipif(not _docker_available(), reason="docker daemon unavailable")
-def test_sigterm_drains_and_exits_cleanly(
-    brain_subprocess: tuple[subprocess.Popen[bytes], int],
-) -> None:
-    """Process boots, /healthz green, SIGTERM → rc=0 within grace_seconds + 5.
-
-    Captured stdout includes a structlog `shutdown_complete` line, proving the
-    lifespan finally-block executed.
+    Yields a dict capturing the stub instances so tests can assert close/order.
     """
-    proc, port = brain_subprocess
+    # Build stub instances first.
+    pool = MagicMock(name="AsyncConnectionPool")
+    pool.open = AsyncMock(return_value=None)
+    pool.close = AsyncMock(return_value=None)
 
-    # 1. Wait for the app to be ready (lifespan opened deps successfully).
-    assert _wait_for_health(port, timeout=30), "uvicorn did not become healthy"
+    rabbit_conn = MagicMock(name="RobustConnection")
+    rabbit_conn.is_closed = False
+    rabbit_conn.close = AsyncMock(return_value=None)
 
-    # 2. SIGTERM.
-    grace = 5  # matches BRAIN_SHUTDOWN__GRACE_SECONDS in fixture env
-    proc.send_signal(signal.SIGTERM)
-    try:
-        rc = proc.wait(timeout=grace + 5)
-    except subprocess.TimeoutExpired:
-        proc.kill()
-        pytest.fail("uvicorn did not exit within grace_seconds + 5")
+    qdrant = MagicMock(name="AsyncQdrantClient")
+    qdrant.close = AsyncMock(return_value=None)
 
-    # rc=0 = clean exit. rc=-SIGKILL (-9) would mean uvicorn ignored SIGTERM.
-    assert rc == 0, f"clean shutdown expected, got rc={rc}"
+    # Track call order across stubs (open: pool→rabbit→qdrant;
+    # close: qdrant→rabbit→pool).
+    call_order: list[str] = []
 
-    # 3. Captured stdout must contain a structured `shutdown_complete` line.
-    assert proc.stdout is not None
-    stdout_bytes = proc.stdout.read() or b""
-    stdout = stdout_bytes.decode("utf-8", errors="replace")
-    print(f"[test_shutdown] captured stdout:\n{stdout}")  # surfaces in pytest -s
+    async def _pool_open() -> None:
+        call_order.append("open_pool")
 
-    found_shutdown = False
-    for line in stdout.splitlines():
-        line = line.strip()
-        if not line.startswith("{"):
-            continue
-        try:
-            payload = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if payload.get("event") == "shutdown_complete":
-            found_shutdown = True
-            break
+    async def _rabbit_connect(_url: str) -> Any:
+        call_order.append("open_rabbit")
+        return rabbit_conn
 
-    assert found_shutdown, "structlog 'shutdown_complete' line not found in stdout"
+    def _qdrant_ctor(*_a: Any, **_kw: Any) -> Any:
+        call_order.append("open_qdrant")
+        return qdrant
+
+    async def _qdrant_close() -> None:
+        call_order.append("close_qdrant")
+
+    async def _rabbit_close() -> None:
+        call_order.append("close_rabbit")
+
+    async def _pool_close() -> None:
+        call_order.append("close_pool")
+
+    pool.open = _pool_open
+    pool.close = _pool_close
+    rabbit_conn.close = _rabbit_close
+    qdrant.close = _qdrant_close
+
+    def _pool_ctor(*_a: Any, **_kw: Any) -> Any:
+        return pool
+
+    # `import brain.api.app as app_mod` would resolve to the FastAPI instance
+    # because brain.api/__init__.py re-exports `app` under the same name.
+    # Force the module-object lookup via sys.modules / importlib.
+    import importlib
+    import sys
+
+    importlib.import_module("brain.api.app")
+    app_mod = sys.modules["brain.api.app"]
+
+    monkeypatch.setattr(app_mod, "AsyncConnectionPool", _pool_ctor)
+    monkeypatch.setattr(app_mod, "aio_pika", MagicMock(connect_robust=_rabbit_connect))
+    monkeypatch.setattr(app_mod, "AsyncQdrantClient", _qdrant_ctor)
+
+    yield {
+        "pool": pool,
+        "rabbit": rabbit_conn,
+        "qdrant": qdrant,
+        "call_order": call_order,
+    }
+
+
+@pytest.fixture(autouse=True)
+def _settings_for_lifespan(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Materialize valid env so `get_settings()` inside the lifespan succeeds."""
+    monkeypatch.setenv("BRAIN_AUTH__TOKEN", "test-token-test-token-test-token")
+    monkeypatch.setenv("BRAIN_POSTGRES__DSN", "postgresql://t:t@localhost:5432/t")
+    monkeypatch.setenv("BRAIN_RABBITMQ__URL", "amqp://t:t@localhost:5672/")
+    monkeypatch.setenv("BRAIN_QDRANT__URL", "http://localhost:6333")
+    monkeypatch.setenv("BRAIN_SHUTDOWN__GRACE_SECONDS", "5")
+
+    from brain.config.settings import reload_settings
+
+    reload_settings()
+
+
+@pytest.mark.asyncio
+async def test_lifespan_startup_and_shutdown_complete_without_exception(
+    stubbed_lifespan_deps: dict[str, Any],
+) -> None:
+    """`async with lifespan(app):` enters, yields, exits — no exception."""
+    from fastapi import FastAPI
+
+    from brain.api.app import lifespan
+
+    app = FastAPI()
+    async with lifespan(app):
+        # Startup ran; deps must be bound to app.state.
+        assert app.state.pool is stubbed_lifespan_deps["pool"]
+        assert app.state.rabbit is stubbed_lifespan_deps["rabbit"]
+        assert app.state.qdrant is stubbed_lifespan_deps["qdrant"]
+        assert app.state.settings is not None
+
+    # If we reach here, lifespan's finally-block ran cleanly.
+
+
+@pytest.mark.asyncio
+async def test_lifespan_closes_deps_in_reverse_order(
+    stubbed_lifespan_deps: dict[str, Any],
+) -> None:
+    """Open: pool → rabbit → qdrant. Close: qdrant → rabbit → pool."""
+    from fastapi import FastAPI
+
+    from brain.api.app import lifespan
+
+    app = FastAPI()
+    async with lifespan(app):
+        pass
+
+    call_order = stubbed_lifespan_deps["call_order"]
+    assert call_order == [
+        "open_pool",
+        "open_rabbit",
+        "open_qdrant",
+        "close_qdrant",
+        "close_rabbit",
+        "close_pool",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_lifespan_shutdown_resilient_to_one_failing_close(
+    stubbed_lifespan_deps: dict[str, Any],
+) -> None:
+    """If one dep's close raises, the others still run (T-05-04 robustness)."""
+    from fastapi import FastAPI
+
+    from brain.api.app import lifespan
+
+    # Patch qdrant.close to raise — pool.close + rabbit.close must still fire.
+    async def _boom() -> None:
+        raise RuntimeError("qdrant close failed")
+
+    stubbed_lifespan_deps["qdrant"].close = _boom
+
+    app = FastAPI()
+    # Must NOT propagate — the lifespan suppresses close failures so other
+    # deps still get a chance to clean up.
+    async with lifespan(app):
+        pass
+
+    # The post-qdrant cleanup steps must still have happened.
+    call_order = stubbed_lifespan_deps["call_order"]
+    assert "close_rabbit" in call_order
+    assert "close_pool" in call_order
+
+
+@pytest.mark.asyncio
+async def test_lifespan_does_not_leak_secrets_to_logs(
+    stubbed_lifespan_deps: dict[str, Any],
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """startup_complete log line must NOT contain auth token or DSN (T-05-07)."""
+    from fastapi import FastAPI
+
+    from brain.api.app import lifespan
+
+    app = FastAPI()
+    async with lifespan(app):
+        pass
+
+    captured = capsys.readouterr()
+    # The bearer token + DSN MUST NOT appear in any log line.
+    assert "test-token-test-token-test-token" not in captured.out
+    assert "test-token-test-token-test-token" not in captured.err
+    assert "postgresql://t:t@" not in captured.out
+    assert "postgresql://t:t@" not in captured.err
+    # But shutdown_complete event SHOULD be observable as the JSON `event` key.
+    # (Allow either out or err depending on uvicorn's logging routing.)
+    combined = captured.out + captured.err
+    # In JSON mode the line contains `"event": "shutdown_complete"`.
+    # In console mode the line contains the event name as a token.
+    assert "shutdown_complete" in combined
+
+
+# ---------------------------------------------------------------------------
+# Optional: live-subprocess SIGTERM drain (skipped without docker + rabbit MQ)
+# ---------------------------------------------------------------------------
+#
+# A future plan (01-09 smoke + Phase 6 testcontainers-rabbitmq) will spawn a
+# real uvicorn subprocess against live Postgres + RabbitMQ + Qdrant containers
+# and assert that SIGTERM yields rc=0 within `grace_seconds + 5`. That test is
+# deferred because:
+#   - aio_pika.connect_robust raises on first connect to an unreachable broker,
+#     so a stub URL doesn't work in subprocess mode;
+#   - the testcontainers `rabbitmq` extra is in `[dependency-groups].dev` but
+#     spinning three live containers per test is expensive and adds flake risk
+#     that exceeds Phase 1's smoke-test budget;
+#   - plan 01-09's `scripts/smoke-up.sh` already covers container-level SIGTERM
+#     drain via `docker compose down`.
+@pytest.mark.skip(
+    reason=(
+        "Container-level SIGTERM drain owned by plan 01-09 smoke-up.sh; "
+        "lifespan shape proven in the in-process tests above."
+    )
+)
+def test_subprocess_sigterm_drain_deferred() -> None:  # pragma: no cover
+    """Placeholder — see module docstring + plan 01-05 escape-hatch."""
