@@ -12,13 +12,11 @@ file path under `tmp_path` so the path-based filter triggers correctly.
 
 from __future__ import annotations
 
-import os
 import stat
 import subprocess
 from pathlib import Path
 
 import pytest
-
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 LINT_DIR = REPO_ROOT / "scripts" / "lint"

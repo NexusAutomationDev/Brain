@@ -28,9 +28,33 @@ repos:
         args: ["check", "--fix"]
       - id: ruff-format
 
-  # Local hooks reserved for plan 01-04:
-  #   - id: ban-asyncpg
-  #   - id: ban-sync-postgressaver
-  #   - id: ban-raw-thread-id
-  #   - id: ban-stdlib-logging
-  # See plan 01-04 PLAN.md.
+  # Local grep ban hooks (plan 01-04):
+  - repo: local
+    hooks:
+      - id: ban-asyncpg
+        name: Ban asyncpg imports (FOUND-06)
+        entry: scripts/lint/ban-asyncpg.sh
+        language: system
+        types: [python]
+        pass_filenames: true
+
+      - id: ban-sync-postgressaver
+        name: Ban sync PostgresSaver outside scripts/ (D-17)
+        entry: scripts/lint/ban-sync-postgressaver.sh
+        language: system
+        types: [python]
+        pass_filenames: true
+
+      - id: ban-raw-thread-id
+        name: Ban raw f-string thread_id construction outside helper (FOUND-08)
+        entry: scripts/lint/ban-raw-thread-id.sh
+        language: system
+        types: [python]
+        pass_filenames: true
+
+      - id: ban-stdlib-logging
+        name: Ban stdlib logging in src/brain/ (FOUND-10)
+        entry: scripts/lint/ban-stdlib-logging.sh
+        language: system
+        types: [python]
+        pass_filenames: true
