@@ -1,0 +1,117 @@
+# docker-compose.lite.yml — inner-loop dev subset (D-02, D-10).
+# No Langfuse subsystem. Brain runs with BRAIN_LANGFUSE__ENABLED=false so no
+# outbound Langfuse calls are attempted.
+# Use `docker compose -f docker-compose.lite.yml up -d` for fast inner-loop dev.
+# CI runs lite on every PR; full stack runs nightly.
+#
+# Volume naming decision (per plan 01-08 §SUMMARY): shared `brain-pg-data` /
+# `rmq-data` / `qdrant-data` so plan 01-09's check-compose-parity.sh does not
+# have to allow-list volume-name differences. Lite and full share the same
+# named volumes on a developer machine; switching stacks reuses the same data.
+
+networks:
+  brain-net:
+    driver: bridge
+
+volumes:
+  brain-pg-data:
+  rmq-data:
+  qdrant-data:
+
+services:
+  brain-postgres:
+    image: postgres:17-trixie
+    environment:
+      POSTGRES_USER: brain
+      POSTGRES_PASSWORD: brain
+      POSTGRES_DB: brain
+    volumes:
+      - "brain-pg-data:/var/lib/postgresql/data"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U brain -d brain"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks: [brain-net]
+
+  rabbitmq:
+    image: rabbitmq:4.1-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: brain
+      RABBITMQ_DEFAULT_PASS: brain
+    ports:
+      - "127.0.0.1:15672:15672"
+    volumes:
+      - "rmq-data:/var/lib/rabbitmq"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 6
+      start_period: 30s
+    networks: [brain-net]
+
+  qdrant:
+    image: qdrant/qdrant:v1.18.0
+    ports:
+      - "127.0.0.1:6333:6333"
+    volumes:
+      - "qdrant-data:/qdrant/storage"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- localhost:6333/healthz || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks: [brain-net]
+
+  brain-migrate:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: prod
+    env_file: .env
+    command: ["python", "-m", "brain.db.migrate"]
+    depends_on:
+      brain-postgres:
+        condition: service_healthy
+    networks: [brain-net]
+    restart: "no"
+
+  brain-topology-init:
+    # Phase 1 placeholder for DEPLOY-06 — see compose/brain-topology-init/README.md.
+    # Phase 8 replaces image+command with the aio-pika topology declarer.
+    image: alpine:3.20
+    command: ["true"]
+    restart: "no"
+    networks: [brain-net]
+
+  brain:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: prod
+    env_file: .env
+    environment:
+      # Belt-and-suspenders: lite stack must never attempt Langfuse calls,
+      # even if .env says enabled=true (A7 / D-10).
+      BRAIN_LANGFUSE__ENABLED: "false"
+    ports:
+      - "8000:8000"
+    depends_on:
+      brain-migrate:
+        condition: service_completed_successfully
+      brain-postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+    networks: [brain-net]
