@@ -1502,27 +1502,31 @@ curl -s http://localhost:8000/readyz
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **`AsyncPostgresSaver.setup()` and schema namespacing.**
    - What we know: `.from_conn_string()` enforces `autocommit=True, prepare_threshold=0, row_factory=dict_row`. `.setup()` is idempotent.
    - What's unclear: Whether 3.1.0 honors a non-`public` `search_path` on the connection, or whether it hardcodes `public.checkpoints`.
    - Recommendation: Plan step 1 of `brain-migrate` runs Alembic (creates `brain.*` + schema), step 2 runs `CREATE SCHEMA IF NOT EXISTS langgraph; SET search_path TO langgraph` immediately before `.setup()`, then asserts table presence via `SELECT to_regclass('langgraph.checkpoints')`. Fail the init container if assertion fails.
+   - **RESOLVED:** plan 01-06 injects search_path via DSN options + asserts schema presence post-setup (see build_langgraph_dsn + assert_schemas_present helpers).
 
 2. **MinIO replacement timeline.**
    - What we know: Upstream MinIO community is archived. Phase 1 pins a pre-archive release.
    - What's unclear: Which S3-compatible alternative (Garage, SeaweedFS, RustFS) integrates cleanly with Langfuse v3 — none have been validated against Langfuse's `LANGFUSE_S3_*` env shape in production-grade testing the research could surface.
    - Recommendation: Track as a v1.x backlog item; reassess at Phase 9. Not a Phase-1 blocker.
+   - **RESOLVED:** deferred to v1.x backlog; documented in docker-compose.yml comment block and README "Known Limitations" section; revisit in Phase 9 hardening.
 
 3. **Should `brain-migrate` also assert `brain.*` schema presence?**
    - What we know: Alembic's `version_table_schema="brain"` + `include_name` ensures Alembic only manages `brain.*`. Migrations are idempotent on re-run.
    - What's unclear: Whether the planner wants `brain-migrate` to additionally `SELECT to_regclass('brain.alembic_version')` post-run as a smoke check.
    - Recommendation: YES — a one-line assertion at the end of `brain.db.migrate` makes the init-container exit code reflect reality, not just absence of exception.
+   - **RESOLVED:** plan 01-06 brain-migrate entrypoint asserts both langgraph.checkpoints and brain.alembic_version exist post-setup via assert_schemas_present.
 
 4. **CI smoke test scope.**
    - What we know: Phase 1 success criterion #1 wants `docker compose up` deterministic.
    - What's unclear: Should CI actually `docker compose up` the full 10-service stack, or only the lite stack? Full stack is ~3GB image pull + 90s+ startup.
    - Recommendation: CI runs lite stack on every PR; full stack on a nightly job. Phase 1 plan must encode this split.
+   - **RESOLVED:** plan 01-09 .github/workflows/ci.yml runs lite smoke per-PR and full smoke on nightly cron.
 
 ---
 
