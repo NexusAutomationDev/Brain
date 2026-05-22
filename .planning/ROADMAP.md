@@ -34,10 +34,10 @@
 Plans:
 - [x] 01-01-PLAN.md — Python project bootstrap (pyproject.toml exact pins, uv.lock, .gitignore, .gitleaks.toml, .pre-commit-config.yaml)
 - [x] 01-02-PLAN.md — src/brain/ package skeleton (11 packages per ARCHITECTURE.md, READMEs, tests/ harness)
-- [ ] 01-03-PLAN.md — Pydantic Settings + schema_version helper + .env.example (FOUND-04/05/11, AUTH-03/04, DEPLOY-07)
-- [ ] 01-04-PLAN.md — structlog logging + RequestIDMiddleware + thread_id helper + 4 grep-ban hooks (FOUND-06/08/10)
+- [x] 01-03-PLAN.md — Pydantic Settings + schema_version helper + .env.example (FOUND-04/05/11, AUTH-03/04, DEPLOY-07)
+- [x] 01-04-PLAN.md — structlog logging + RequestIDMiddleware + thread_id helper + 4 grep-ban hooks (FOUND-06/08/10)
 - [ ] 01-05-PLAN.md — FastAPI app + lifespan + /healthz + /readyz + uvicorn entrypoint (FOUND-03, FOUND-09)
-- [ ] 01-06-PLAN.md — psycopg pool, Alembic env.py, brain-migrate entrypoint (FOUND-06 driver, FOUND-07 dual schemas)
+- [x] 01-06-PLAN.md — psycopg pool, Alembic env.py, brain-migrate entrypoint (FOUND-06 driver, FOUND-07 dual schemas)
 - [ ] 01-07-PLAN.md — Multi-stage Dockerfile (base→dev→prod, non-root, healthcheck) (DEPLOY-03)
 - [ ] 01-08-PLAN.md — docker-compose.yml (10 services) + docker-compose.lite.yml + topology-init placeholder (DEPLOY-01/02/04/05/06)
 - [ ] 01-09-PLAN.md — Smoke scripts + parity checks + GitHub Actions CI + README quickstart (DEPLOY-08)
