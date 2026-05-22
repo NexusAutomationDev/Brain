@@ -20,3 +20,14 @@ Items discovered during plan execution that are out-of-scope for the current pla
 ## From plan 01-04 (Wave 2a executor) — non-issues
 
 - Ruff check on the plan's own files (`src/brain/observability/`, `src/brain/api/`, `src/brain/graph/`, the four new test files) passes cleanly.
+
+## From plan 01-09 (Wave 4 executor)
+
+### 2. Pre-existing ruff I001 in `alembic/env.py`
+
+- **Path:** `alembic/env.py:15`
+- **Issue:** Import block un-sorted: `from alembic import context` follows `from brain.config.settings ...` + `from sqlalchemy ...`. Ruff's isort wants `from alembic` grouped alphabetically with the others.
+- **Cause:** Pre-existing from plan 01-06 (alembic stack). Not introduced by 01-09; surfaced when 01-09 added a tree-wide `ruff check .` step to CI.
+- **Severity:** Low — does not affect runtime; only blocks a tree-wide `uv run ruff check .`. The new lint-and-unit CI job will surface it on the first PR.
+- **Suggested fix:** `uv run ruff check --fix alembic/env.py` (one-line auto-fix).
+- **Owner / Phase:** Fold into the same `chore(01): ruff cleanup` follow-up as item #1, before the Phase 1 acceptance gate runs in CI.

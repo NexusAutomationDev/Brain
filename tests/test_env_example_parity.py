@@ -10,6 +10,7 @@ This test is the source of truth for drift detection going forward; the
 piggybacks on ``brain.config.settings._known_brain_env_keys`` rather than
 re-implementing the walk.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -83,15 +84,11 @@ def _settings_keys() -> set[str]:
             and not issubclass(nested, BaseSettings)
         ):
             # Nested sub-models use the configured delimiter (typically '__').
-            nested_prefix = (
-                f"{base_prefix}_{name.upper()}" if base_prefix else name.upper()
-            )
+            nested_prefix = f"{base_prefix}_{name.upper()}" if base_prefix else name.upper()
             keys |= _walk(nested, nested_prefix, delim)
         else:
             # Top-level scalar — single-underscore join with the prefix.
-            top_key = (
-                f"{base_prefix}_{name.upper()}" if base_prefix else name.upper()
-            )
+            top_key = f"{base_prefix}_{name.upper()}" if base_prefix else name.upper()
             keys.add(top_key)
     return keys
 
@@ -128,9 +125,7 @@ def test_every_settings_brain_field_appears_in_env_example():
     expected = {k for k in _settings_keys() if k.startswith("BRAIN_")}
     declared = _env_example_brain_keys()
     missing = expected - declared
-    assert not missing, (
-        f"Settings fields with no .env.example entry: {sorted(missing)}"
-    )
+    assert not missing, f"Settings fields with no .env.example entry: {sorted(missing)}"
 
 
 def test_every_env_example_brain_key_maps_to_a_settings_field():
