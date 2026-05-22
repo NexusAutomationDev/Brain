@@ -18,7 +18,6 @@ import structlog
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-
 UUID4_REGEX = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
 )
