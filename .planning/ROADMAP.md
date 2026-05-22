@@ -40,7 +40,7 @@ Plans:
 - [x] 01-06-PLAN.md — psycopg pool, Alembic env.py, brain-migrate entrypoint (FOUND-06 driver, FOUND-07 dual schemas)
 - [x] 01-07-PLAN.md — Multi-stage Dockerfile (base→dev→prod, non-root, healthcheck) (DEPLOY-03)
 - [x] 01-08-PLAN.md — docker-compose.yml (10 services) + docker-compose.lite.yml + topology-init placeholder (DEPLOY-01/02/04/05/06)
-- [ ] 01-09-PLAN.md — Smoke scripts + parity checks + GitHub Actions CI + README quickstart (DEPLOY-08)
+- [x] 01-09-PLAN.md — Smoke scripts + parity checks + GitHub Actions CI + README quickstart (DEPLOY-08)
 
 ### Phase 2: Bot Persona CRUD + Audit
 **Goal**: An operator can manage bot personas as data (create, read, update, soft-delete) through a documented HTTP API, with every change captured in an append-only audit log and existing conversations protected from mid-turn persona changes.
