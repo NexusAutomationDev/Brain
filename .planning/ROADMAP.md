@@ -38,8 +38,8 @@ Plans:
 - [x] 01-04-PLAN.md — structlog logging + RequestIDMiddleware + thread_id helper + 4 grep-ban hooks (FOUND-06/08/10)
 - [x] 01-05-PLAN.md — FastAPI app + lifespan + /healthz + /readyz + uvicorn entrypoint (FOUND-03, FOUND-09)
 - [x] 01-06-PLAN.md — psycopg pool, Alembic env.py, brain-migrate entrypoint (FOUND-06 driver, FOUND-07 dual schemas)
-- [ ] 01-07-PLAN.md — Multi-stage Dockerfile (base→dev→prod, non-root, healthcheck) (DEPLOY-03)
-- [ ] 01-08-PLAN.md — docker-compose.yml (10 services) + docker-compose.lite.yml + topology-init placeholder (DEPLOY-01/02/04/05/06)
+- [x] 01-07-PLAN.md — Multi-stage Dockerfile (base→dev→prod, non-root, healthcheck) (DEPLOY-03)
+- [x] 01-08-PLAN.md — docker-compose.yml (10 services) + docker-compose.lite.yml + topology-init placeholder (DEPLOY-01/02/04/05/06)
 - [ ] 01-09-PLAN.md — Smoke scripts + parity checks + GitHub Actions CI + README quickstart (DEPLOY-08)
 
 ### Phase 2: Bot Persona CRUD + Audit
