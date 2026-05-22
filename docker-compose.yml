@@ -1,0 +1,301 @@
+# docker-compose.yml — Brain full stack (10 long-running services + 2 init containers).
+# Lite override: docker-compose.lite.yml (no Langfuse subsystem).
+# See .planning/phases/01-foundations-compose-skeleton/01-RESEARCH.md Example 8.
+#
+# Brain MUST NOT depends_on langfuse-* (PITFALL 8.1 / D-11 / OBS-04).
+# Two Postgres instances per PITFALL 6.2 (never share Brain + Langfuse).
+# MinIO pinned to last pre-archive release (Pitfall 8 / Open Question #2).
+#
+# NOTE: Compose v2 ignores the top-level `version:` field; it is omitted here.
+
+networks:
+  brain-net:
+    driver: bridge
+
+volumes:
+  brain-pg-data:
+  rmq-data:
+  qdrant-data:
+  lf-pg-data:
+  ch-data:
+  redis-data:
+  minio-data:
+
+services:
+  # ────────────────────────────────────────────────────────────────────
+  # Core path (Brain + its 3 hard runtime deps + 2 init containers)
+  # ────────────────────────────────────────────────────────────────────
+
+  brain-postgres:
+    image: postgres:17-trixie
+    environment:
+      POSTGRES_USER: brain
+      POSTGRES_PASSWORD: brain
+      POSTGRES_DB: brain
+    volumes:
+      - "brain-pg-data:/var/lib/postgresql/data"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U brain -d brain"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks: [brain-net]
+    # NO host port — Brain-Postgres is internal-only on brain-net (D-12, T-08-03).
+
+  rabbitmq:
+    image: rabbitmq:4.1-management-alpine
+    environment:
+      # Matches BRAIN_RABBITMQ__URL=amqp://brain:brain@rabbitmq:5672/ in .env.example.
+      # Production rotation deferred to Phase 9 (T-08-08).
+      RABBITMQ_DEFAULT_USER: brain
+      RABBITMQ_DEFAULT_PASS: brain
+    ports:
+      # Management UI only — host-bound (D-12). AMQP 5672 stays internal.
+      - "127.0.0.1:15672:15672"
+    volumes:
+      - "rmq-data:/var/lib/rabbitmq"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 6
+      start_period: 30s
+    networks: [brain-net]
+
+  qdrant:
+    image: qdrant/qdrant:v1.18.0
+    ports:
+      # Dashboard host-bound (D-12).
+      - "127.0.0.1:6333:6333"
+    volumes:
+      - "qdrant-data:/qdrant/storage"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- localhost:6333/healthz || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks: [brain-net]
+
+  brain-migrate:
+    # One-shot init container: runs Alembic migrations + checkpointer .setup()
+    # before brain starts. Plan 01-06 owns the entrypoint module.
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: prod
+    env_file: .env
+    command: ["python", "-m", "brain.db.migrate"]
+    depends_on:
+      brain-postgres:
+        condition: service_healthy
+    networks: [brain-net]
+    restart: "no"
+
+  brain-topology-init:
+    # Phase 1 placeholder for DEPLOY-06. Phase 8 replaces image+command with:
+    # aio-pika topology declarer for brain.in / brain.dlx / brain.dlq.
+    # Do not delete this entry — Brain's depends_on (Phase 8) will key off it.
+    # Pinned to alpine:3.20 (never a floating tag) per CLAUDE.md §10 / T-08-04 / T-08-11.
+    image: alpine:3.20
+    command: ["true"]
+    restart: "no"
+    networks: [brain-net]
+
+  # Brain MUST NOT depends_on any langfuse-* service.
+  # Observability cannot block the request path (PITFALL 8.1 / D-11 / OBS-04 / T-08-01).
+  brain:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: prod
+    env_file: .env
+    ports:
+      - "8000:8000"
+    depends_on:
+      brain-migrate:
+        condition: service_completed_successfully
+      brain-postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+    networks: [brain-net]
+
+  # ────────────────────────────────────────────────────────────────────
+  # Langfuse subsystem (5 services — D-09).
+  # All start in parallel; Brain does NOT wait on them (PITFALL 8.1).
+  # ────────────────────────────────────────────────────────────────────
+
+  langfuse-postgres:
+    # Separate Postgres instance from brain-postgres per PITFALL 6.2 / T-08-02.
+    image: postgres:17-trixie
+    environment:
+      POSTGRES_USER: langfuse
+      POSTGRES_PASSWORD: ${LANGFUSE_POSTGRES_PASSWORD}
+      POSTGRES_DB: langfuse
+    volumes:
+      - "lf-pg-data:/var/lib/postgresql/data"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U langfuse"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks: [brain-net]
+
+  clickhouse:
+    # Langfuse v3 requires ClickHouse >= 24.3 (STACK.md §7).
+    # 24.8-alpine is the chosen stable tag (A5). If unavailable, fall back to 24.3-alpine.
+    image: clickhouse/clickhouse-server:24.8-alpine
+    environment:
+      CLICKHOUSE_DB: default
+      CLICKHOUSE_USER: clickhouse
+      CLICKHOUSE_PASSWORD: ${LANGFUSE_CLICKHOUSE_PASSWORD}
+    volumes:
+      - "ch-data:/var/lib/clickhouse"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- localhost:8123/ping || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      # ClickHouse first boot can exceed 60s — see T-08-10.
+      start_period: 60s
+    networks: [brain-net]
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--requirepass", "${LANGFUSE_REDIS_AUTH}"]
+    volumes:
+      - "redis-data:/data"
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a ${LANGFUSE_REDIS_AUTH} ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+    networks: [brain-net]
+
+  # MinIO upstream archived community images early 2026; this pin is the last
+  # stable release. See .planning/research/PITFALLS.md / RESEARCH.md Open Question #2
+  # for migration plan (Garage / SeaweedFS / RustFS). Tracked as T-08-05 (accept).
+  minio:
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z-cpuv1
+    command: ["server", "--address", ":9000", "--console-address", ":9001", "/data"]
+    environment:
+      MINIO_ROOT_USER: ${LANGFUSE_MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${LANGFUSE_MINIO_ROOT_PASSWORD}
+    volumes:
+      - "minio-data:/data"
+    healthcheck:
+      test: ["CMD-SHELL", "mc ready local || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks: [brain-net]
+    # NO host port — MinIO is internal-only (D-12).
+
+  langfuse-web:
+    image: langfuse/langfuse:3.175.0
+    ports:
+      - "3000:3000"
+    environment:
+      NEXTAUTH_SECRET: ${LANGFUSE_NEXTAUTH_SECRET}
+      SALT: ${LANGFUSE_SALT}
+      ENCRYPTION_KEY: ${LANGFUSE_ENCRYPTION_KEY}
+      DATABASE_URL: postgresql://langfuse:${LANGFUSE_POSTGRES_PASSWORD}@langfuse-postgres:5432/langfuse
+      CLICKHOUSE_URL: http://clickhouse:8123
+      CLICKHOUSE_MIGRATION_URL: clickhouse://clickhouse:9000
+      CLICKHOUSE_USER: clickhouse
+      CLICKHOUSE_PASSWORD: ${LANGFUSE_CLICKHOUSE_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_AUTH: ${LANGFUSE_REDIS_AUTH}
+      LANGFUSE_S3_EVENT_UPLOAD_BUCKET: langfuse
+      LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://minio:9000
+      LANGFUSE_S3_EVENT_UPLOAD_REGION: auto
+      LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: ${LANGFUSE_MINIO_ROOT_USER}
+      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: ${LANGFUSE_MINIO_ROOT_PASSWORD}
+      LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
+      LANGFUSE_S3_MEDIA_UPLOAD_BUCKET: langfuse
+      LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT: http://minio:9000
+      LANGFUSE_S3_MEDIA_UPLOAD_REGION: auto
+      LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID: ${LANGFUSE_MINIO_ROOT_USER}
+      LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: ${LANGFUSE_MINIO_ROOT_PASSWORD}
+      LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE: "true"
+      NEXTAUTH_URL: http://localhost:3000
+      TELEMETRY_ENABLED: "false"
+    depends_on:
+      langfuse-postgres:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    # Upstream image ships NO baked healthcheck — add our own (A2 / T-08-06).
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/public/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    networks: [brain-net]
+
+  langfuse-worker:
+    image: langfuse/langfuse-worker:3.175.0
+    environment:
+      DATABASE_URL: postgresql://langfuse:${LANGFUSE_POSTGRES_PASSWORD}@langfuse-postgres:5432/langfuse
+      CLICKHOUSE_URL: http://clickhouse:8123
+      CLICKHOUSE_MIGRATION_URL: clickhouse://clickhouse:9000
+      CLICKHOUSE_USER: clickhouse
+      CLICKHOUSE_PASSWORD: ${LANGFUSE_CLICKHOUSE_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_AUTH: ${LANGFUSE_REDIS_AUTH}
+      SALT: ${LANGFUSE_SALT}
+      ENCRYPTION_KEY: ${LANGFUSE_ENCRYPTION_KEY}
+      LANGFUSE_S3_EVENT_UPLOAD_BUCKET: langfuse
+      LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://minio:9000
+      LANGFUSE_S3_EVENT_UPLOAD_REGION: auto
+      LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: ${LANGFUSE_MINIO_ROOT_USER}
+      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: ${LANGFUSE_MINIO_ROOT_PASSWORD}
+      LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
+      LANGFUSE_S3_MEDIA_UPLOAD_BUCKET: langfuse
+      LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT: http://minio:9000
+      LANGFUSE_S3_MEDIA_UPLOAD_REGION: auto
+      LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID: ${LANGFUSE_MINIO_ROOT_USER}
+      LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: ${LANGFUSE_MINIO_ROOT_PASSWORD}
+      LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE: "true"
+      TELEMETRY_ENABLED: "false"
+    depends_on:
+      langfuse-postgres:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    # Worker has no liveness HTTP endpoint (A2). The depends_on chain ensures
+    # coherent boot. Process-liveness healthcheck (Rule 2 deviation: plan body
+    # said "no healthcheck" but the verify command requires `healthcheck:` >= 10
+    # and the threat register treats every long-running service as needing one).
+    # `pgrep node` is the standard probe for the Node-based langfuse-worker image.
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -x node >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+    networks: [brain-net]
