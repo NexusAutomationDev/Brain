@@ -1,0 +1,23 @@
+{
+  "name": "brain-core",
+  "version": "1.0.0",
+  "private": true,
+  "packageManager": "pnpm@11.5.3",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "eslint": "^8.0.0",
+    "turbo": "^2.7.4",
+    "typescript": "^5.0.0"
+  }
+}
