@@ -37,8 +37,8 @@ Plans:
 - [x] 01-02-PLAN.md — Database package scaffold with Drizzle schema and PGVector configuration
 - [x] 01-02b-PLAN.md — Multi-tenant connection pooling (LRU eviction), migration script, and database package exports
 - [x] 01-03-PLAN.md — Observability package with structured logging (Pino) and health check utilities
-- [ ] 01-04-PLAN.md — Gap closure: Fix observability tsconfig build failure, generate database migration SQL files, commit pnpm-lock.yaml
-- [ ] 01-05-PLAN.md — Gap closure: Create GET /health HTTP endpoint with Hono in packages/observability
+- [x] 01-04-PLAN.md — Gap closure: Fix observability tsconfig build failure, generate database migration SQL files, commit pnpm-lock.yaml
+- [x] 01-05-PLAN.md — Gap closure: Create GET /health HTTP endpoint with Hono in packages/observability
 
 ### Phase 2: Domain Packages
 **Goal**: The memory, embeddings, AI, and transport packages are individually functional and tested — all four can be imported by `packages/core` in the next phase
