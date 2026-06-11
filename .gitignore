@@ -3,3 +3,6 @@ dist/
 .turbo/
 *.tsbuildinfo
 bun.lock
+.env
+.env.*
+!.env.example
