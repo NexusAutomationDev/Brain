@@ -50,17 +50,8 @@ Plans:
   3. A Webhook transport handler receives an HTTP POST, extracts the `BrainEvent`, deduplicates a replay of the same `X-Request-Id`, and returns 200 once and 409 on the duplicate
   4. Langfuse traces appear in the Langfuse dashboard when `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY` env vars are set and a graph executes
   5. `EMBEDDING_MODEL` and `EMBEDDING_DIMENSIONS` env vars configure the embedding provider and vector column size without any hardcoded values in package source
-**Plans**: 8 plans
-
-Plans:
-- [ ] 02-00-PLAN.md — Wave 0: brain_test DB setup + all 14 test stub files (Nyquist compliance)
-- [ ] 02-01-PLAN.md — Wave 1: Register packages/ai, packages/memory, packages/transport in monorepo (package.json, tsconfig, pnpm install)
-- [ ] 02-02-PLAN.md — Wave 2: AI package core — BrainStateAnnotation, createCheckpointer (PostgresSaver), subgraph pattern
-- [ ] 02-03-PLAN.md — Wave 3: AI package factories — createLLM (4 providers), createEmbeddings, packages/ai barrel
-- [ ] 02-04-PLAN.md — Wave 2: Transport package — ITransport, BrainEvent zod schema, DedupCache, WebhookTransport, createTransport
-- [ ] 02-05-PLAN.md — Wave 2: Memory layers — readProfile/writeProfile (long-term), upsertEmbedding/searchSimilar (semantic)
-- [ ] 02-06-PLAN.md — Wave 3: Memory completion — getCheckpoint (short-term), MemoryManager (3-layer composition), packages/memory barrel
-- [ ] 02-07-PLAN.md — Wave 4: Langfuse tracing — createTracingCallbacks in packages/observability (OBS-03)
+**Plans**: TBD
+**UI hint**: no
 
 ### Phase 3: Brain SDK
 **Goal**: `packages/core` exposes a stable `IBrain` contract, a `BrainRunner` that wires all domain packages, and a `ToolsRegistry` — ready for Brain implementations to be registered and executed
@@ -91,7 +82,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation | 7/7 | Complete | 2026-06-11 |
-| 2. Domain Packages | 0/8 | Ready to execute | - |
+| 1. Foundation | 0/7 | Not started | - |
+| 2. Domain Packages | 0/TBD | Not started | - |
 | 3. Brain SDK | 0/TBD | Not started | - |
 | 4. Validation Brain | 0/TBD | Not started | - |
