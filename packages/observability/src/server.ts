@@ -47,7 +47,7 @@ export function createHealthApp(sql: Sql): Hono {
 export function startServer(sql: Sql, port?: number): void {
   const app = createHealthApp(sql);
   const listenPort = port ?? parseInt(process.env.PORT || '3000', 10);
-  const logger = createLogger({ service: 'health-server' });
+  const logger = createLogger();
 
   Bun.serve({
     port: listenPort,
