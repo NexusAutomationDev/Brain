@@ -1,5 +1,4 @@
-import { pgTable, text, uuid, timestamp, jsonb, index } from 'drizzle-orm/pg-core';
-import { vector } from 'pgvector/drizzle-orm';
+import { pgTable, text, uuid, timestamp, jsonb, index, vector } from 'drizzle-orm/pg-core';
 
 // DB-02: Read dimension from env — must be locked before first migration.
 // WARNING: Cannot be changed after first migration without re-embedding all data.
