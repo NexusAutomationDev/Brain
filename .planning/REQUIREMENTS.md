@@ -82,10 +82,33 @@
 
 | REQ-ID | Phase | Status |
 |--------|-------|--------|
-| INFRA-01..04 | TBD | — |
-| DB-01..06 | TBD | — |
-| MEM-01..04 | TBD | — |
-| AI-01..05 | TBD | — |
-| TRANS-01..04 | TBD | — |
-| SDK-01..04 | TBD | — |
-| OBS-01..03 | TBD | — |
+| INFRA-01 | Phase 1 | Pending |
+| INFRA-02 | Phase 1 | Pending |
+| INFRA-03 | Phase 4 | Pending |
+| INFRA-04 | Phase 1 | Pending |
+| DB-01 | Phase 1 | Pending |
+| DB-02 | Phase 1 | Pending |
+| DB-03 | Phase 1 | Pending |
+| DB-04 | Phase 1 | Pending |
+| DB-05 | Phase 1 | Pending |
+| DB-06 | Phase 1 | Pending |
+| MEM-01 | Phase 2 | Pending |
+| MEM-02 | Phase 2 | Pending |
+| MEM-03 | Phase 2 | Pending |
+| MEM-04 | Phase 2 | Pending |
+| AI-01 | Phase 2 | Pending |
+| AI-02 | Phase 2 | Pending |
+| AI-03 | Phase 2 | Pending |
+| AI-04 | Phase 2 | Pending |
+| AI-05 | Phase 2 | Pending |
+| TRANS-01 | Phase 2 | Pending |
+| TRANS-02 | Phase 2 | Pending |
+| TRANS-03 | Phase 2 | Pending |
+| TRANS-04 | Phase 2 | Pending |
+| OBS-01 | Phase 1 | Pending |
+| OBS-02 | Phase 1 | Pending |
+| OBS-03 | Phase 2 | Pending |
+| SDK-01 | Phase 3 | Pending |
+| SDK-02 | Phase 3 | Pending |
+| SDK-03 | Phase 3 | Pending |
+| SDK-04 | Phase 3 | Pending |
