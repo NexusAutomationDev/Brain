@@ -29,7 +29,12 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. A database migration applied via `drizzle-kit migrate` creates all tables (`users`, `memories`, `agent_state`, `embeddings`) with the PGVector column sized by `EMBEDDING_DIMENSIONS` env
   4. Switching `DATABASE_NAME` env between two values routes queries to two isolated databases without cross-contamination, and the connection pool holds at most 20 tenants with LRU eviction
   5. Any package can import the pino logger and emit a structured JSON log line; `GET /health` returns `{ status: "ok", db: "connected", transport: "webhook" }`
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 01-01-PLAN.md — Monorepo scaffold with pnpm workspaces, Turborepo, shared TypeScript config, and packages/shared foundation
+- [ ] 01-02-PLAN.md — Database package with Drizzle schema, multi-tenant connection pooling (LRU eviction), and migration infrastructure
+- [ ] 01-03-PLAN.md — Observability package with structured logging (Pino) and health check utilities
 
 ### Phase 2: Domain Packages
 **Goal**: The memory, embeddings, AI, and transport packages are individually functional and tested — all four can be imported by `packages/core` in the next phase
@@ -73,7 +78,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation | 0/TBD | Not started | - |
+| 1. Foundation | 0/3 | Not started | - |
 | 2. Domain Packages | 0/TBD | Not started | - |
 | 3. Brain SDK | 0/TBD | Not started | - |
 | 4. Validation Brain | 0/TBD | Not started | - |
