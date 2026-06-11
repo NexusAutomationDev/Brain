@@ -17,7 +17,10 @@
     "paths": {
       "@brain-pkg/shared": ["packages/shared/src"],
       "@brain-pkg/database": ["packages/database/src"],
-      "@brain-pkg/observability": ["packages/observability/src"]
+      "@brain-pkg/observability": ["packages/observability/src"],
+      "@brain-pkg/ai": ["packages/ai/src"],
+      "@brain-pkg/memory": ["packages/memory/src"],
+      "@brain-pkg/transport": ["packages/transport/src"]
     }
   }
 }
