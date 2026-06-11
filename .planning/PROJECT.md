@@ -12,19 +12,19 @@ Uma infraestrutura de agentes modular onde novos Brains são criados definindo a
 
 ### Validated
 
-(None yet — ship to validate)
+- [x] Monorepo estruturado com `packages/` (shared, database, observability) — Validated in Phase 1: foundation
+- [x] Schema PostgreSQL + PGVector (users, memories, agent_state, embeddings) — Validated in Phase 1: foundation
+- [x] Multi-tenancy: 1 banco por cliente, seleção via `DATABASE_NAME` env (TenantPoolManager, LRU max 20) — Validated in Phase 1: foundation
+- [x] Observabilidade básica (health check GET /health, logging estruturado com Pino) — Validated in Phase 1: foundation
 
 ### Active
 
-- [ ] Monorepo estruturado com `apps/` e `packages/` (core, ai, memory, embeddings, transport, database, observability, shared)
+- [ ] `apps/` directory com Brain packages (SDR, Suporte, etc.)
 - [ ] Brain SDK: interface de plugin no core para registro e declaração de Brains
 - [ ] Transport layer: Webhook e RabbitMQ, selecionados via `ENV=TRANSPORT`
 - [ ] Tools Registry: habilitar/desabilitar ferramentas por tipo de Brain
-- [ ] Schema PostgreSQL + PGVector (users, memories, agent_state, embeddings)
 - [ ] Arquitetura de memória em 3 camadas: short-term, long-term, semantic (embeddings)
-- [ ] Multi-tenancy: 1 banco por cliente, seleção via `DATABASE_NAME` env
 - [ ] Docker: runtime Bun, estrutura para imagens por Brain
-- [ ] Observabilidade básica (health check, logging estruturado)
 
 ### Out of Scope
 
@@ -79,4 +79,4 @@ Este documento evolui nas transições de fase e marcos de milestone.
 4. Atualizar Context com estado atual
 
 ---
-*Last updated: 2026-06-11 after initialization*
+*Last updated: 2026-06-11 — Phase 1 (foundation) complete*
