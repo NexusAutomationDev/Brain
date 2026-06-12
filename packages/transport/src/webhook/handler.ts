@@ -5,13 +5,28 @@ import { BrainEventSchema } from "./events.js";
 import type { BrainEvent } from "./events.js";
 
 /**
+ * T-3-04-03: Local interface to avoid circular dependency.
+ * packages/core imports from @brain-pkg/transport (for BrainEvent).
+ * If handler.ts imported from @brain-pkg/core it would create a cycle:
+ *   core → transport → core.
+ * Duck typing: BrainRunner satisfies IBrainRunnerLike structurally.
+ */
+interface IBrainRunnerLike {
+  run(event: BrainEvent): Promise<{ reply: string }>;
+}
+
+/**
  * TRANS-02, D-04: Creates the Hono app with the POST /api/v1/webhook route.
  *
  * Security (T-2-02, ASVS V5): BrainEvent body validated with zod safeParse.
  * Security (T-2-04): thread_id (if present in event) is NEVER returned in response.
  * Security (T-2-01): X-Request-Id TTL dedup prevents replay attacks.
+ *
+ * @param runner - Optional BrainRunner-compatible instance. If provided, events are
+ *   dispatched to the runner and the reply is returned. If absent, returns { status: "accepted" }
+ *   (fallback — should not occur in production).
  */
-export function createWebhookApp(): Hono {
+export function createWebhookApp(runner?: IBrainRunnerLike): Hono {
   const app = new Hono();
   const cache = new DedupCache(); // one cache per app instance — safe for tests (fresh per beforeEach)
 
@@ -39,9 +54,16 @@ export function createWebhookApp(): Hono {
       return c.json({ error: "Invalid BrainEvent", details: parsed.error.flatten() }, 400);
     }
 
-    const _event: BrainEvent = parsed.data;
-    // Event dispatching will be wired in Phase 3 (BrainRunner)
+    const event: BrainEvent = parsed.data;
+
+    // Phase 3 wiring: dispatch to BrainRunner if provided
     // T-2-04: Do NOT return thread_id or session internals in response
+    if (runner) {
+      const result = await runner.run(event);
+      return c.json({ status: "ok", reply: result.reply });
+    }
+
+    // Fallback: runner not injected (should not occur in production)
     return c.json({ status: "accepted" }, 200);
   });
 
