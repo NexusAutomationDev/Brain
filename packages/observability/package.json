@@ -12,10 +12,12 @@
   },
   "dependencies": {
     "@brain-pkg/shared": "workspace:*",
+    "@langfuse/langchain": "^5.4.1",
     "hono": "^4.12.25",
     "pino": "^10.3.1"
   },
   "devDependencies": {
+    "@opentelemetry/api": "^1.9.0",
     "@types/bun": "latest",
     "postgres": "^3.4.9",
     "typescript": "^5.0.0"
