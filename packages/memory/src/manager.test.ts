@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
-import { FakeEmbeddings } from "@langchain/core/utils/testing";
+import { SyntheticEmbeddings } from "@langchain/core/utils/testing";
 import { MemoryManager } from "./manager.js";
 import { createCheckpointer } from "@brain-pkg/ai";
 import type { PostgresSaver } from "@langchain/langgraph-checkpoint-postgres";
@@ -19,7 +19,7 @@ describeIfDb("MemoryManager (MEM-04, SC-2)", () => {
   let manager: MemoryManager;
   const testUserId = `manager-test-${Date.now()}`;
   const testThreadId = `thread-${Date.now()}`;
-  const fakeEmbeddings = new FakeEmbeddings();
+  const fakeEmbeddings = new SyntheticEmbeddings({ vectorSize: 128 });
 
   beforeAll(async () => {
     sql = postgres(TEST_URL!);

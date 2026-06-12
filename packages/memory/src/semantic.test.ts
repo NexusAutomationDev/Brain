@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
-import { FakeEmbeddings } from "@langchain/core/utils/testing";
+import { SyntheticEmbeddings } from "@langchain/core/utils/testing";
 import { upsertEmbedding, searchSimilar } from "./semantic.js";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 
-// D-11: FakeEmbeddings for testing — no external API calls
-// EMBEDDING_DIMENSIONS=10 is set in .env.test to match brain_test schema
+// D-11: SyntheticEmbeddings for testing — no external API calls
+// EMBEDDING_DIMENSIONS=128 in .env.test matches schema validation range (128-4096)
 const TEST_URL = process.env.TEST_DATABASE_URL;
 const describeIfDb = TEST_URL ? describe : describe.skip;
 
@@ -15,12 +15,12 @@ describeIfDb("SemanticMemory (MEM-03)", () => {
   let db: PostgresJsDatabase;
   const testUserId = `test-semantic-${Date.now()}`;
   const testSessionId = `session-${Date.now()}`;
-  let fakeEmbeddings: FakeEmbeddings;
+  let fakeEmbeddings: SyntheticEmbeddings;
 
   beforeAll(async () => {
     sql = postgres(TEST_URL!);
     db = drizzle(sql) as PostgresJsDatabase;
-    fakeEmbeddings = new FakeEmbeddings();
+    fakeEmbeddings = new SyntheticEmbeddings({ vectorSize: 128 });
   });
 
   afterAll(async () => {
@@ -75,7 +75,7 @@ describeIfDb("SemanticMemory (MEM-03)", () => {
   });
 
   it("upsertEmbedding is fire-and-forget — function returns void synchronously", () => {
-    const vector = Array(10).fill(0.1) as number[];
+    const vector = Array(128).fill(0.1) as number[];
     // Should return undefined (void), not a Promise that the caller must await
     const result = upsertEmbedding(db, {
       userId: testUserId,
