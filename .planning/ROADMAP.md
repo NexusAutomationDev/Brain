@@ -62,7 +62,7 @@ Plans:
 - [x] 02-07-PLAN.md — Wave 4: Observability (createTracingCallbacks, Langfuse conditional integration)
 - [x] 02-08-PLAN.md — Gap closure Wave 5: Add missing direct deps to packages/memory/package.json (drizzle-orm, postgres, @langchain/langgraph-checkpoint-postgres)
 - [x] 02-09-PLAN.md — Gap closure Wave 5: Fix mock.module collision in AI tests + add test:integration script for PostgresSaver SC-1
-- [ ] 02-10-PLAN.md — Gap closure Wave 6: Fix EMBEDDING_DIMENSIONS=10 in .env.test and replace FakeEmbeddings with SyntheticEmbeddings (SC-2 blocker)
+- [x] 02-10-PLAN.md — Gap closure Wave 6: Fix EMBEDDING_DIMENSIONS=10 in .env.test and replace FakeEmbeddings with SyntheticEmbeddings (SC-2 blocker)
 
 ### Phase 3: Brain SDK
 **Goal**: `packages/core` exposes a stable `IBrain` contract, a `BrainRunner` that wires all domain packages, and a `ToolsRegistry` — ready for Brain implementations to be registered and executed
