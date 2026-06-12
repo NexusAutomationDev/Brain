@@ -3,6 +3,3 @@ packages:
   - 'packages/*'
 allowBuilds:
   esbuild: false
-minimumReleaseAgeExclude:
-  - '@langchain/langgraph-sdk@1.9.21'
-  - '@langchain/langgraph@1.4.1'
