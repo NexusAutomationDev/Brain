@@ -72,6 +72,15 @@ importers:
       '@brain-pkg/transport':
         specifier: workspace:*
         version: link:../transport
+      drizzle-orm:
+        specifier: 0.45.2
+        version: 0.45.2(@opentelemetry/api@1.9.1)(bun-types@1.3.14)(pg@8.21.0)(postgres@3.4.9)
+      hono:
+        specifier: ^4.12.0
+        version: 4.12.25
+      postgres:
+        specifier: ^3.4.9
+        version: 3.4.9
     devDependencies:
       '@types/bun':
         specifier: latest

@@ -36,5 +36,5 @@ export async function loadPrompts(
     .from(prompts)
     .where(and(eq(prompts.brainType, brainType), inArray(prompts.key, keys)));
 
-  return Object.fromEntries(rows.map((r) => [r.key, r.content]));
+  return Object.fromEntries(rows.map((r: { key: string; content: string }) => [r.key, r.content]));
 }
