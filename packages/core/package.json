@@ -1,0 +1,25 @@
+{
+  "name": "@brain-pkg/core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "bun test src",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@brain-pkg/ai": "workspace:*",
+    "@brain-pkg/memory": "workspace:*",
+    "@brain-pkg/database": "workspace:*",
+    "@brain-pkg/transport": "workspace:*",
+    "@brain-pkg/observability": "workspace:*",
+    "@brain-pkg/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.0.0"
+  }
+}

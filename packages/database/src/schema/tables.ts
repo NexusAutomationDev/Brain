@@ -1,4 +1,4 @@
-import { pgTable, text, uuid, timestamp, jsonb, index, vector } from 'drizzle-orm/pg-core';
+import { pgTable, text, uuid, timestamp, jsonb, index, vector, uniqueIndex } from 'drizzle-orm/pg-core';
 
 // DB-02: Read dimension from env — must be locked before first migration.
 // WARNING: Cannot be changed after first migration without re-embedding all data.
@@ -58,4 +58,20 @@ export const embeddings = pgTable('embeddings', {
     .using('hnsw', table.embedding.op('vector_cosine_ops'))
     .with({ m: 16, ef_construction: 64 }),
   sessionIdx: index('embeddings_session_idx').on(table.sessionId),
+}));
+
+// SDK-04: Prompts table — stores all brain prompts keyed by (brain_type, key).
+// D-11: Schema with id, brain_type, key, content, created_at, updated_at.
+// D-08: UNIQUE constraint on (brain_type, key) — sub-agents are separate brain_types.
+// D-09: No version column in v1 — direct UPDATE, history via git.
+// D-10: No locale column in v1 — i18n is v2.
+export const prompts = pgTable('prompts', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  brainType: text('brain_type').notNull(),
+  key: text('key').notNull(),
+  content: text('content').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  brainTypeKeyIdx: uniqueIndex('prompts_brain_type_key_idx').on(table.brainType, table.key),
 }));
