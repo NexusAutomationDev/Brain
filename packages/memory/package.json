@@ -1,0 +1,22 @@
+{
+  "name": "@brain-pkg/memory",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@brain-pkg/shared": "workspace:*",
+    "@brain-pkg/database": "workspace:*",
+    "@brain-pkg/ai": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.0.0"
+  }
+}
