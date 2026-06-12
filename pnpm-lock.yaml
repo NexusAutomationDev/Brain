@@ -28,22 +28,22 @@ importers:
         version: link:../shared
       '@langchain/anthropic':
         specifier: ^1.4.0
-        version: 1.4.0(@langchain/core@1.1.48(openai@6.42.0(zod@3.25.76)))
+        version: 1.4.0(@langchain/core@1.1.48(@opentelemetry/api@1.9.1)(openai@6.42.0(zod@3.25.76)))
       '@langchain/core':
         specifier: ^1.1.48
-        version: 1.1.48(openai@6.42.0(zod@3.25.76))
+        version: 1.1.48(@opentelemetry/api@1.9.1)(openai@6.42.0(zod@3.25.76))
       '@langchain/google-genai':
         specifier: ^2.1.31
-        version: 2.1.31(@langchain/core@1.1.48(openai@6.42.0(zod@3.25.76)))
+        version: 2.1.31(@langchain/core@1.1.48(@opentelemetry/api@1.9.1)(openai@6.42.0(zod@3.25.76)))
       '@langchain/langgraph':
         specifier: ^1.4.1
-        version: 1.4.1(@langchain/core@1.1.48(openai@6.42.0(zod@3.25.76)))(zod@3.25.76)
+        version: 1.4.1(@langchain/core@1.1.48(@opentelemetry/api@1.9.1)(openai@6.42.0(zod@3.25.76)))(zod@3.25.76)
       '@langchain/langgraph-checkpoint-postgres':
         specifier: ^1.0.3
-        version: 1.0.3(@langchain/core@1.1.48(openai@6.42.0(zod@3.25.76)))(@langchain/langgraph-checkpoint@1.1.0(@langchain/core@1.1.48(openai@6.42.0(zod@3.25.76))))
+        version: 1.0.3(@langchain/core@1.1.48(@opentelemetry/api@1.9.1)(openai@6.42.0(zod@3.25.76)))(@langchain/langgraph-checkpoint@1.1.0(@langchain/core@1.1.48(@opentelemetry/api@1.9.1)(openai@6.42.0(zod@3.25.76))))
       '@langchain/openai':
         specifier: ^1.4.7
-        version: 1.4.7(@langchain/core@1.1.48(openai@6.42.0(zod@3.25.76)))
+        version: 1.4.7(@langchain/core@1.1.48(@opentelemetry/api@1.9.1)(openai@6.42.0(zod@3.25.76)))
     devDependencies:
       '@types/bun':
         specifier: latest
@@ -59,7 +59,7 @@ importers:
         version: link:../shared
       drizzle-orm:
         specifier: ^0.45.2
-        version: 0.45.2(bun-types@1.3.14)(pg@8.21.0)(postgres@3.4.9)
+        version: 0.45.2(@opentelemetry/api@1.9.1)(bun-types@1.3.14)(pg@8.21.0)(postgres@3.4.9)
       lru-cache:
         specifier: ^11.5.1
         version: 11.5.1
@@ -91,7 +91,19 @@ importers:
       '@brain-pkg/shared':
         specifier: workspace:*
         version: link:../shared
+      drizzle-orm:
+        specifier: ^0.45.2
+        version: 0.45.2(@opentelemetry/api@1.9.1)(bun-types@1.3.14)(pg@8.21.0)(postgres@3.4.9)
+      postgres:
+        specifier: ^3.4.9
+        version: 3.4.9
     devDependencies:
+      '@langchain/core':
+        specifier: ^1.1.48
+        version: 1.1.48(@opentelemetry/api@1.9.1)(openai@6.42.0(zod@3.25.76))
+      '@langchain/langgraph-checkpoint-postgres':
+        specifier: ^1.0.3
+        version: 1.0.3(@langchain/core@1.1.48(@opentelemetry/api@1.9.1)(openai@6.42.0(zod@3.25.76)))(@langchain/langgraph-checkpoint@1.1.0(@langchain/core@1.1.48(@opentelemetry/api@1.9.1)(openai@6.42.0(zod@3.25.76))))
       '@types/bun':
         specifier: latest
         version: 1.3.14
@@ -104,6 +116,9 @@ importers:
       '@brain-pkg/shared':
         specifier: workspace:*
         version: link:../shared
+      '@langfuse/langchain':
+        specifier: ^5.4.1
+        version: 5.4.1(@langchain/core@1.1.48(@opentelemetry/api@1.9.1)(openai@6.42.0(zod@3.25.76)))(@opentelemetry/api@1.9.1)
       hono:
         specifier: ^4.12.25
         version: 4.12.25
@@ -111,6 +126,9 @@ importers:
         specifier: ^10.3.1
         version: 10.3.1
     devDependencies:
+      '@opentelemetry/api':
+        specifier: ^1.9.0
+        version: 1.9.1
       '@types/bun':
         specifier: latest
         version: 1.3.14
@@ -724,6 +742,23 @@ packages:
   '@langchain/protocol@0.0.16':
     resolution: {integrity: sha512-ws+J7MaHyhO5dG7f0vdyHQiUn9hoCnki0f3crJPa4MCTGzcRC39jYSCghyrGtBPYQnZbUQiGyRVpW3z3M8IpJg==}
 
+  '@langfuse/core@5.4.1':
+    resolution: {integrity: sha512-TjaRTr9fGqaWuyYKFSezKxN4DWAaK/lq//hRMw8rQKFkZUs6vTgUODxqZTFTR6np5VnLVw+eZLlnHROPKbXqdg==}
+    peerDependencies:
+      '@opentelemetry/api': ^1.9.0
+
+  '@langfuse/langchain@5.4.1':
+    resolution: {integrity: sha512-cCGrOLAhxK5L45nYxr4qrO1bWGV11PkTweg03W+eBJoSKbpzjDSjVEZm5CG4dXRwJbj2CHQoVuyQ8F5u/XeBIg==}
+    peerDependencies:
+      '@langchain/core': '>=0.3.8'
+      '@opentelemetry/api': ^1.9.0
+
+  '@langfuse/tracing@5.4.1':
+    resolution: {integrity: sha512-nPyoPXXNMaJgaUZgIE0haWI/hrT7l4r/irp0o/FGaBYR2V07EFNvSKFcqOsX1pQvVvB6HyfNlYQm7AoQJj+fqQ==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      '@opentelemetry/api': ^1.9.0
+
   '@nodelib/fs.scandir@2.1.5':
     resolution: {integrity: sha512-vq24Bq3ym5HEQm2NKCr3yXDwjc7vTsEThRDnkp2DK9p1uqLR+DHurm/NOTo0KG7HYHU7eppKZj3MyqYuMBf62g==}
     engines: {node: '>= 8'}
@@ -735,6 +770,10 @@ packages:
   '@nodelib/fs.walk@1.2.8':
     resolution: {integrity: sha512-oGB+UxlgWcgQkgwo8GcEGwemoTFt3FIO9ababBmaGwXIoBKZ+GTy0pP185beGg7Llih/NSHSV2XAs1lnznocSg==}
     engines: {node: '>= 8'}
+
+  '@opentelemetry/api@1.9.1':
+    resolution: {integrity: sha512-gLyJlPHPZYdAk1JENA9LeHejZe1Ti77/pTeFm/nMXmQH/HFZlcS/O2XJB+L8fkbrNSqhdtlvjBVjxwUYanNH5Q==}
+    engines: {node: '>=8.0.0'}
 
   '@pinojs/redact@0.4.0':
     resolution: {integrity: sha512-k2ENnmBugE/rzQfEcdWHcCY+/FM3VLzH9cYEsbdsoqrvzAKRhUZeRNhAZvB8OitQJ1TBed3yqWtdjzS6wJKBwg==}
@@ -1767,18 +1806,18 @@ snapshots:
 
   '@humanwhocodes/object-schema@2.0.3': {}
 
-  '@langchain/anthropic@1.4.0(@langchain/core@1.1.48(openai@6.42.0(zod@3.25.76)))':
+  '@langchain/anthropic@1.4.0(@langchain/core@1.1.48(@opentelemetry/api@1.9.1)(openai@6.42.0(zod@3.25.76)))':
     dependencies:
       '@anthropic-ai/sdk': 0.95.2(zod@3.25.76)
-      '@langchain/core': 1.1.48(openai@6.42.0(zod@3.25.76))
+      '@langchain/core': 1.1.48(@opentelemetry/api@1.9.1)(openai@6.42.0(zod@3.25.76))
       zod: 3.25.76
 
-  '@langchain/core@1.1.48(openai@6.42.0(zod@3.25.76))':
+  '@langchain/core@1.1.48(@opentelemetry/api@1.9.1)(openai@6.42.0(zod@3.25.76))':
     dependencies:
       '@cfworker/json-schema': 4.1.1
       '@standard-schema/spec': 1.1.0
       js-tiktoken: 1.0.21
-      langsmith: 0.7.6(openai@6.42.0(zod@3.25.76))
+      langsmith: 0.7.6(@opentelemetry/api@1.9.1)(openai@6.42.0(zod@3.25.76))
       mustache: 4.2.0
       p-queue: 6.6.2
       zod: 3.25.76
@@ -1789,38 +1828,38 @@ snapshots:
       - openai
       - ws
 
-  '@langchain/google-genai@2.1.31(@langchain/core@1.1.48(openai@6.42.0(zod@3.25.76)))':
+  '@langchain/google-genai@2.1.31(@langchain/core@1.1.48(@opentelemetry/api@1.9.1)(openai@6.42.0(zod@3.25.76)))':
     dependencies:
       '@google/generative-ai': 0.24.1
-      '@langchain/core': 1.1.48(openai@6.42.0(zod@3.25.76))
+      '@langchain/core': 1.1.48(@opentelemetry/api@1.9.1)(openai@6.42.0(zod@3.25.76))
 
-  '@langchain/langgraph-checkpoint-postgres@1.0.3(@langchain/core@1.1.48(openai@6.42.0(zod@3.25.76)))(@langchain/langgraph-checkpoint@1.1.0(@langchain/core@1.1.48(openai@6.42.0(zod@3.25.76))))':
+  '@langchain/langgraph-checkpoint-postgres@1.0.3(@langchain/core@1.1.48(@opentelemetry/api@1.9.1)(openai@6.42.0(zod@3.25.76)))(@langchain/langgraph-checkpoint@1.1.0(@langchain/core@1.1.48(@opentelemetry/api@1.9.1)(openai@6.42.0(zod@3.25.76))))':
     dependencies:
-      '@langchain/core': 1.1.48(openai@6.42.0(zod@3.25.76))
-      '@langchain/langgraph-checkpoint': 1.1.0(@langchain/core@1.1.48(openai@6.42.0(zod@3.25.76)))
+      '@langchain/core': 1.1.48(@opentelemetry/api@1.9.1)(openai@6.42.0(zod@3.25.76))
+      '@langchain/langgraph-checkpoint': 1.1.0(@langchain/core@1.1.48(@opentelemetry/api@1.9.1)(openai@6.42.0(zod@3.25.76)))
       pg: 8.21.0
     transitivePeerDependencies:
       - pg-native
 
-  '@langchain/langgraph-checkpoint@1.1.0(@langchain/core@1.1.48(openai@6.42.0(zod@3.25.76)))':
+  '@langchain/langgraph-checkpoint@1.1.0(@langchain/core@1.1.48(@opentelemetry/api@1.9.1)(openai@6.42.0(zod@3.25.76)))':
     dependencies:
-      '@langchain/core': 1.1.48(openai@6.42.0(zod@3.25.76))
+      '@langchain/core': 1.1.48(@opentelemetry/api@1.9.1)(openai@6.42.0(zod@3.25.76))
       uuid: 14.0.0
 
-  '@langchain/langgraph-sdk@1.9.21(@langchain/core@1.1.48(openai@6.42.0(zod@3.25.76)))':
+  '@langchain/langgraph-sdk@1.9.21(@langchain/core@1.1.48(@opentelemetry/api@1.9.1)(openai@6.42.0(zod@3.25.76)))':
     dependencies:
-      '@langchain/core': 1.1.48(openai@6.42.0(zod@3.25.76))
+      '@langchain/core': 1.1.48(@opentelemetry/api@1.9.1)(openai@6.42.0(zod@3.25.76))
       '@langchain/protocol': 0.0.16
       '@types/json-schema': 7.0.15
       p-queue: 9.3.0
       p-retry: 7.1.1
       uuid: 14.0.0
 
-  '@langchain/langgraph@1.4.1(@langchain/core@1.1.48(openai@6.42.0(zod@3.25.76)))(zod@3.25.76)':
+  '@langchain/langgraph@1.4.1(@langchain/core@1.1.48(@opentelemetry/api@1.9.1)(openai@6.42.0(zod@3.25.76)))(zod@3.25.76)':
     dependencies:
-      '@langchain/core': 1.1.48(openai@6.42.0(zod@3.25.76))
-      '@langchain/langgraph-checkpoint': 1.1.0(@langchain/core@1.1.48(openai@6.42.0(zod@3.25.76)))
-      '@langchain/langgraph-sdk': 1.9.21(@langchain/core@1.1.48(openai@6.42.0(zod@3.25.76)))
+      '@langchain/core': 1.1.48(@opentelemetry/api@1.9.1)(openai@6.42.0(zod@3.25.76))
+      '@langchain/langgraph-checkpoint': 1.1.0(@langchain/core@1.1.48(@opentelemetry/api@1.9.1)(openai@6.42.0(zod@3.25.76)))
+      '@langchain/langgraph-sdk': 1.9.21(@langchain/core@1.1.48(@opentelemetry/api@1.9.1)(openai@6.42.0(zod@3.25.76)))
       '@langchain/protocol': 0.0.16
       '@standard-schema/spec': 1.1.0
       uuid: 14.0.0
@@ -1831,9 +1870,9 @@ snapshots:
       - svelte
       - vue
 
-  '@langchain/openai@1.4.7(@langchain/core@1.1.48(openai@6.42.0(zod@3.25.76)))':
+  '@langchain/openai@1.4.7(@langchain/core@1.1.48(@opentelemetry/api@1.9.1)(openai@6.42.0(zod@3.25.76)))':
     dependencies:
-      '@langchain/core': 1.1.48(openai@6.42.0(zod@3.25.76))
+      '@langchain/core': 1.1.48(@opentelemetry/api@1.9.1)(openai@6.42.0(zod@3.25.76))
       js-tiktoken: 1.0.21
       openai: 6.42.0(zod@3.25.76)
       zod: 3.25.76
@@ -1841,6 +1880,22 @@ snapshots:
       - ws
 
   '@langchain/protocol@0.0.16': {}
+
+  '@langfuse/core@5.4.1(@opentelemetry/api@1.9.1)':
+    dependencies:
+      '@opentelemetry/api': 1.9.1
+
+  '@langfuse/langchain@5.4.1(@langchain/core@1.1.48(@opentelemetry/api@1.9.1)(openai@6.42.0(zod@3.25.76)))(@opentelemetry/api@1.9.1)':
+    dependencies:
+      '@langchain/core': 1.1.48(@opentelemetry/api@1.9.1)(openai@6.42.0(zod@3.25.76))
+      '@langfuse/core': 5.4.1(@opentelemetry/api@1.9.1)
+      '@langfuse/tracing': 5.4.1(@opentelemetry/api@1.9.1)
+      '@opentelemetry/api': 1.9.1
+
+  '@langfuse/tracing@5.4.1(@opentelemetry/api@1.9.1)':
+    dependencies:
+      '@langfuse/core': 5.4.1(@opentelemetry/api@1.9.1)
+      '@opentelemetry/api': 1.9.1
 
   '@nodelib/fs.scandir@2.1.5':
     dependencies:
@@ -1853,6 +1908,8 @@ snapshots:
     dependencies:
       '@nodelib/fs.scandir': 2.1.5
       fastq: 1.20.1
+
+  '@opentelemetry/api@1.9.1': {}
 
   '@pinojs/redact@0.4.0': {}
 
@@ -1966,8 +2023,9 @@ snapshots:
       esbuild: 0.25.12
       tsx: 4.22.4
 
-  drizzle-orm@0.45.2(bun-types@1.3.14)(pg@8.21.0)(postgres@3.4.9):
+  drizzle-orm@0.45.2(@opentelemetry/api@1.9.1)(bun-types@1.3.14)(pg@8.21.0)(postgres@3.4.9):
     optionalDependencies:
+      '@opentelemetry/api': 1.9.1
       bun-types: 1.3.14
       pg: 8.21.0
       postgres: 3.4.9
@@ -2241,10 +2299,11 @@ snapshots:
     dependencies:
       json-buffer: 3.0.1
 
-  langsmith@0.7.6(openai@6.42.0(zod@3.25.76)):
+  langsmith@0.7.6(@opentelemetry/api@1.9.1)(openai@6.42.0(zod@3.25.76)):
     dependencies:
       p-queue: 6.6.2
     optionalDependencies:
+      '@opentelemetry/api': 1.9.1
       openai: 6.42.0(zod@3.25.76)
 
   levn@0.4.1:
