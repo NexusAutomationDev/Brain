@@ -43,10 +43,10 @@ await sql.end();
 fi
 
 # Run Phase 1 migration via Drizzle Kit against brain_test.
-# EMBEDDING_DIMENSIONS=10 matches FakeEmbeddings dimensions for test compatibility
-# (see RESEARCH.md pitfall 6 and key finding 4 — FakeEmbeddings defaults to 10 dimensions).
+# EMBEDDING_DIMENSIONS=128 is the minimum valid value accepted by schema validation (128-4096).
+# SyntheticEmbeddings({ vectorSize: 128 }) is used in test files for compatible vectors.
 DATABASE_URL="postgres://$PGUSER:$PGPASSWORD@$PGHOST:$PGPORT/brain_test" \
-EMBEDDING_DIMENSIONS=10 \
+EMBEDDING_DIMENSIONS=128 \
 bunx drizzle-kit migrate --config packages/database/drizzle.config.ts
 
 echo "brain_test database ready."
