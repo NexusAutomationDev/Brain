@@ -76,11 +76,11 @@ Plans:
 **Plans**: 5 plans
 
 Plans:
-- [ ] 03-00-PLAN.md — Wave 0: packages/core scaffold (package.json, tsconfig), prompts table schema, Nyquist test stubs
-- [ ] 03-01-PLAN.md — Wave 1: IBrain interface + BrainBuildContext + BrainRegistry + ToolsRegistry (SDK-01, SDK-03)
-- [ ] 03-02-PLAN.md — Wave 1: Prompts loader (loadPrompts) + drizzle-kit migration generate (SDK-04)
-- [ ] 03-03-PLAN.md — Wave 2: BrainRunner lifecycle (init + run + refreshPrompts) com testes completos (SDK-02)
-- [ ] 03-04-PLAN.md — Wave 3: Barrel export + /reload-prompts endpoint + WebhookHandler wiring + checkpoint humano
+- [x] 03-00-PLAN.md — Wave 0: packages/core scaffold (package.json, tsconfig), prompts table schema, Nyquist test stubs
+- [x] 03-01-PLAN.md — Wave 1: IBrain interface + BrainBuildContext + BrainRegistry + ToolsRegistry (SDK-01, SDK-03)
+- [x] 03-02-PLAN.md — Wave 1: Prompts loader (loadPrompts) + drizzle-kit migration generate (SDK-04)
+- [x] 03-03-PLAN.md — Wave 2: BrainRunner lifecycle (init + run + refreshPrompts) com testes completos (SDK-02)
+- [x] 03-04-PLAN.md — Wave 3: Barrel export + /reload-prompts endpoint + WebhookHandler wiring + checkpoint humano
 
 ### Phase 4: Validation Brain
 **Goal**: A working `apps/brain-echo` Docker image exercises every package integration end-to-end, proving the SDK contract is correct and the distribution model works
