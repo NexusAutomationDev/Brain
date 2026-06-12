@@ -6,6 +6,21 @@ mock.module("@langchain/openai", () => ({
   ChatOpenAI: class MockChatOpenAI {
     constructor(public config: Record<string, unknown>) {}
   },
+  // Gap 3 fix: stub OpenAIEmbeddings to prevent mock collision with embeddings/factory.test.ts
+  // When both tests run together, bun test merges module mocks — partial mock (no OpenAIEmbeddings)
+  // was overwriting the embeddings test's complete mock, causing "undefined is not a constructor".
+  // The stub includes embedQuery/embedDocuments so it remains functional if this mock wins the race.
+  OpenAIEmbeddings: class MockOpenAIEmbeddingsStub {
+    constructor(public config: Record<string, unknown> = {}) {}
+    async embedQuery(_text: string): Promise<number[]> {
+      return Array(Number(process.env.EMBEDDING_DIMENSIONS) || 1536).fill(0.1);
+    }
+    async embedDocuments(texts: string[]): Promise<number[][]> {
+      return texts.map(() =>
+        Array(Number(process.env.EMBEDDING_DIMENSIONS) || 1536).fill(0.1),
+      );
+    }
+  },
 }));
 
 mock.module("@langchain/anthropic", () => ({
