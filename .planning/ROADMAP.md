@@ -73,7 +73,14 @@ Plans:
   2. `BrainRunner.run(event)` receives a `BrainEvent`, hydrates memory, invokes the LangGraph graph, persists memory layers after the turn, and returns the response — with no `MemorySaver` present anywhere in the call path
   3. `ToolsRegistry` enables a tool for Brain type "echo" and disables it for Brain type "other"; a call from "other" gets an error, a call from "echo" succeeds
   4. All prompts used by `BrainRunner` are loaded from the `prompts` database table via `promptKeys` at startup; no prompt strings appear in package source code
-**Plans**: TBD
+**Plans**: 5 plans
+
+Plans:
+- [ ] 03-00-PLAN.md — Wave 0: packages/core scaffold (package.json, tsconfig), prompts table schema, Nyquist test stubs
+- [ ] 03-01-PLAN.md — Wave 1: IBrain interface + BrainBuildContext + BrainRegistry + ToolsRegistry (SDK-01, SDK-03)
+- [ ] 03-02-PLAN.md — Wave 1: Prompts loader (loadPrompts) + drizzle-kit migration generate (SDK-04)
+- [ ] 03-03-PLAN.md — Wave 2: BrainRunner lifecycle (init + run + refreshPrompts) com testes completos (SDK-02)
+- [ ] 03-04-PLAN.md — Wave 3: Barrel export + /reload-prompts endpoint + WebhookHandler wiring + checkpoint humano
 
 ### Phase 4: Validation Brain
 **Goal**: A working `apps/brain-echo` Docker image exercises every package integration end-to-end, proving the SDK contract is correct and the distribution model works
@@ -95,5 +102,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 |-------|----------------|--------|-----------|
 | 1. Foundation | 0/7 | Not started | - |
 | 2. Domain Packages | 0/11 | Not started | - |
-| 3. Brain SDK | 0/TBD | Not started | - |
+| 3. Brain SDK | 0/5 | Not started | - |
 | 4. Validation Brain | 0/TBD | Not started | - |
