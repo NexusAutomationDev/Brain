@@ -8,13 +8,6 @@
       "when": 1781196570158,
       "tag": "0000_lyrical_scrambler",
       "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1781279723441,
-      "tag": "0001_lazy_deathstrike",
-      "breakpoints": true
     }
   ]
 }
