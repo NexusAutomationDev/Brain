@@ -16,7 +16,9 @@
     "@brain-pkg/database": "workspace:*",
     "@brain-pkg/transport": "workspace:*",
     "@brain-pkg/observability": "workspace:*",
-    "@brain-pkg/shared": "workspace:*"
+    "@brain-pkg/shared": "workspace:*",
+    "drizzle-orm": "0.45.2",
+    "postgres": "^3.4.9"
   },
   "devDependencies": {
     "@types/bun": "latest",
