@@ -17,6 +17,8 @@
     "@brain-pkg/transport": "workspace:*",
     "@brain-pkg/observability": "workspace:*",
     "@brain-pkg/shared": "workspace:*",
+    "@langchain/core": "^1.1.48",
+    "@langchain/langgraph": "^1.4.1",
     "drizzle-orm": "0.45.2",
     "hono": "^4.12.0",
     "postgres": "^3.4.9"
