@@ -50,7 +50,7 @@ Plans:
   3. A Webhook transport handler receives an HTTP POST, extracts the `BrainEvent`, deduplicates a replay of the same `X-Request-Id`, and returns 200 once and 409 on the duplicate
   4. Langfuse traces appear in the Langfuse dashboard when `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY` env vars are set and a graph executes
   5. `EMBEDDING_MODEL` and `EMBEDDING_DIMENSIONS` env vars configure the embedding provider and vector column size without any hardcoded values in package source
-**Plans**: 10 plans (8 original + 2 gap closure)
+**Plans**: 11 plans (8 original + 3 gap closure)
 
 Plans:
 - [x] 02-00-PLAN.md — Wave 0: Test DB setup (brain_test) and Nyquist test stubs for all domain packages
@@ -60,8 +60,9 @@ Plans:
 - [x] 02-05-PLAN.md — Wave 2: Memory layers (long-term readProfile/writeProfile, semantic upsertEmbedding/searchSimilar)
 - [x] 02-06-PLAN.md — Wave 3: Memory completion (short-term PostgresSaver delegation, MemoryManager 3-layer composition)
 - [x] 02-07-PLAN.md — Wave 4: Observability (createTracingCallbacks, Langfuse conditional integration)
-- [ ] 02-08-PLAN.md — Gap closure Wave 5: Add missing direct deps to packages/memory/package.json (drizzle-orm, postgres, @langchain/langgraph-checkpoint-postgres)
-- [ ] 02-09-PLAN.md — Gap closure Wave 5: Fix mock.module collision in AI tests + add test:integration script for PostgresSaver SC-1
+- [x] 02-08-PLAN.md — Gap closure Wave 5: Add missing direct deps to packages/memory/package.json (drizzle-orm, postgres, @langchain/langgraph-checkpoint-postgres)
+- [x] 02-09-PLAN.md — Gap closure Wave 5: Fix mock.module collision in AI tests + add test:integration script for PostgresSaver SC-1
+- [ ] 02-10-PLAN.md — Gap closure Wave 6: Fix EMBEDDING_DIMENSIONS=10 in .env.test and replace FakeEmbeddings with SyntheticEmbeddings (SC-2 blocker)
 
 ### Phase 3: Brain SDK
 **Goal**: `packages/core` exposes a stable `IBrain` contract, a `BrainRunner` that wires all domain packages, and a `ToolsRegistry` — ready for Brain implementations to be registered and executed
@@ -93,6 +94,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation | 0/7 | Not started | - |
-| 2. Domain Packages | 0/10 | Not started | - |
+| 2. Domain Packages | 0/11 | Not started | - |
 | 3. Brain SDK | 0/TBD | Not started | - |
 | 4. Validation Brain | 0/TBD | Not started | - |
