@@ -1,12 +1,12 @@
 ---
 phase: 02-domain-packages
-reviewed: 2026-06-12T00:00:00Z
+reviewed: 2026-06-12T04:00:00Z
 depth: standard
-files_reviewed: 34
+files_reviewed: 35
 files_reviewed_list:
   - packages/ai/package.json
-  - packages/ai/src/embeddings/factory.ts
   - packages/ai/src/embeddings/factory.test.ts
+  - packages/ai/src/embeddings/factory.ts
   - packages/ai/src/graph/checkpointer.test.ts
   - packages/ai/src/index.ts
   - packages/ai/src/llm/factory.test.ts
@@ -38,7 +38,7 @@ files_reviewed_list:
   - packages/transport/src/webhook/handler.test.ts
   - packages/transport/src/webhook/handler.ts
   - packages/transport/tsconfig.json
-  - pnpm-lock.yaml
+  - scripts/setup-test-db.sh
   - tsconfig.base.json
 findings:
   critical: 0
@@ -50,26 +50,28 @@ status: issues_found
 
 # Phase 02: Code Review Report
 
-**Reviewed:** 2026-06-12T00:00:00Z
+**Reviewed:** 2026-06-12T04:00:00Z
 **Depth:** standard
-**Files Reviewed:** 34
+**Files Reviewed:** 35
 **Status:** issues_found
 
 ## Summary
 
-All four domain packages (`ai`, `memory`, `transport`, `observability`) plus package configs and base TypeScript config were reviewed. The architecture is sound: factory pattern with env-based configuration, Zod validation on webhook input, per-user SQL isolation in both long-term and semantic memory, and documented fire-and-forget semantics in the semantic layer.
+All four domain packages (`ai`, `memory`, `transport`, `observability`) plus package configs, the shared `tsconfig.base.json`, and the test database setup script were reviewed at standard depth.
 
-No critical security vulnerabilities were found in the reviewed source files. Four warnings cover: an unawaited async call that breaks the ITransport stop contract; an unguarded `parseInt` that silently passes `NaN` to the OpenAI SDK; an unsafe double-cast in the memory layer that bypasses the type system; and a fire-and-forget call in `saveContext` that silently discards embedding write errors. Five informational items address: a test debug artifact left in the repository, a `Date.now` monkey-patch without teardown guard, a redundant union type, undispersed webhook event scaffolding, and a stack-documentation discrepancy between CLAUDE.md and the Langfuse implementation.
+The overall architecture is sound. The factory pattern with env-based configuration, Zod validation on every webhook request, per-user SQL isolation in both long-term (`readProfile`/`writeProfile`) and semantic memory (`searchSimilar`), documented fire-and-forget semantics, and conditional Langfuse integration are all correctly implemented. The test suite covers the public contracts at an appropriate level.
+
+No critical security vulnerabilities were found. Four warnings were identified: an unawaited `Bun.serve().stop()` that violates the `ITransport` contract; a silent `NaN` path when `EMBEDDING_DIMENSIONS` is non-numeric; an unsafe double-cast in `writeProfile` that suppresses type errors at the database boundary; and a fire-and-forget embedding write in `saveContext` that gives callers no signal on partial failure. Five informational items cover a committed `.bak` debug artifact, a `Date.now` monkey-patch without a teardown guard, a redundant `unknown | null` union type, undispersed webhook scaffolding without a forward-reference comment, and an undocumented divergence between the stated stack (LangSmith) and the actual implementation (Langfuse).
 
 ---
 
 ## Warnings
 
-### WR-01: Unawaited `server.stop()` in `WebhookTransport.stop()`
+### WR-01: Unawaited `server.stop()` breaks `ITransport.stop()` contract
 
-**File:** `packages/transport/src/webhook/handler.ts:66-70`
+**File:** `packages/transport/src/webhook/handler.ts:68`
 
-**Issue:** `Bun.serve().stop()` returns a `Promise<void>` that resolves when all active connections are drained. The current implementation calls `this.server.stop()` without `await`, so `stop()` returns before the server has actually halted. Any caller that `await`s `transport.stop()` will proceed while the port may still be bound and in-flight requests may still be processing. This violates the `ITransport` contract and can cause port-already-in-use errors in tests that cycle the transport.
+**Issue:** `Bun.serve().stop()` returns a `Promise<void>` that resolves only after all active connections are drained. The implementation calls `this.server.stop()` without `await`, so `WebhookTransport.stop()` resolves before the port is actually released. Any caller that `await`s `transport.stop()` will proceed while the port may still be bound and in-flight requests may still be processing. This is a correctness violation of the `ITransport` contract and can cause flaky "port already in use" failures in any test or runtime code that cycles the transport.
 
 **Fix:**
 ```typescript
@@ -81,11 +83,13 @@ async stop(): Promise<void> {
 }
 ```
 
-### WR-02: `parseInt(EMBEDDING_DIMENSIONS)` silently produces `NaN` on non-numeric input
+---
+
+### WR-02: `parseInt(EMBEDDING_DIMENSIONS)` silently passes `NaN` to the OpenAI SDK
 
 **File:** `packages/ai/src/embeddings/factory.ts:18-20`
 
-**Issue:** `parseInt(process.env.EMBEDDING_DIMENSIONS, 10)` returns `NaN` when the env var is set to a non-numeric string (e.g. `"1536px"` or a typo). `NaN` is then passed as `dimensions` to `OpenAIEmbeddings`. The SDK will either silently ignore it or send an invalid API request, producing a runtime error far from the root cause. There is no validation that the parsed value is a finite positive integer.
+**Issue:** `parseInt(process.env.EMBEDDING_DIMENSIONS, 10)` returns `NaN` when the env var is set to a non-numeric string (e.g., `"1536px"`, a typo, or an empty string after assignment). `NaN` is then assigned to `dimensions` and forwarded to `new OpenAIEmbeddings({ dimensions })`. The SDK may silently ignore the field or send an invalid API request, producing a runtime error far removed from the root cause. There is no guard that the parsed value is a finite positive integer.
 
 **Fix:**
 ```typescript
@@ -99,19 +103,21 @@ if (dimensions !== undefined && (!Number.isFinite(dimensions) || dimensions <= 0
 }
 ```
 
+---
+
 ### WR-03: Unsafe `unknown`-to-`Record<string, unknown>` cast in `writeProfile`
 
 **File:** `packages/memory/src/long-term.ts:56` and `packages/memory/src/long-term.ts:62`
 
-**Issue:** `value` is typed as `unknown` at the function boundary (correct), but is cast to `Record<string, unknown>` before passing to Drizzle. TypeScript accepts this without complaint at compile time, but at runtime a caller passing a primitive (`42`, `"string"`, `null`) or an array will hand the wrong type to the database column — the cast suppresses the type error rather than enforcing the contract.
+**Issue:** The `value` parameter is typed as `unknown` at the function boundary (appropriate for accepting any JSON), but is cast to `Record<string, unknown>` before passing to Drizzle via `value as Record<string, unknown>`. TypeScript silently accepts this double-cast. At runtime, a caller passing a primitive (`42`, `"string"`, `true`) or an array will hand the wrong shape to the database column — the cast suppresses the type error rather than enforcing the contract. The `readProfile` return type is `unknown | null`, which means round-tripped primitives would appear valid from the call site but fail at write time in Postgres.
 
-**Fix:** Tighten the function signature to reject non-object values at the type boundary:
+**Fix:** Tighten the function signature to the type that the database column actually accepts:
 ```typescript
 export async function writeProfile(
   db: PostgresJsDatabase,
   userId: string,
   key: string,
-  value: Record<string, unknown>   // remove `unknown` cast, enforce at call sites
+  value: Record<string, unknown>  // enforce object shape at call sites; remove internal cast
 ): Promise<void> {
   await db
     .insert(memories)
@@ -122,27 +128,31 @@ export async function writeProfile(
     });
 }
 ```
+Update `readProfile` return type to `Record<string, unknown> | null` for consistency.
 
-### WR-04: Fire-and-forget `upsertEmbedding` in `MemoryManager.saveContext` silently drops errors
+---
+
+### WR-04: Fire-and-forget `upsertEmbedding` in `MemoryManager.saveContext` silently drops errors with no observable signal
 
 **File:** `packages/memory/src/manager.ts:85`
 
-**Issue:** `upsertEmbedding` is intentionally fire-and-forget in `semantic.ts` (logged, not rethrown). However, `saveContext` calls it without any acknowledgement path or metric, so if the embedding write fails (e.g. vector dimension mismatch, schema constraint), the `saveContext` caller receives a successful `Promise<void>` resolution with no indication the semantic layer write was skipped. For production use this is an invisible data quality gap.
+**Issue:** `upsertEmbedding` is designed as fire-and-forget in `semantic.ts` — errors are logged but not rethrown, which is the correct choice to avoid blocking agent turns. However, `saveContext` calls it with no return value or side-channel acknowledgement. If the embedding write fails (e.g., vector dimension mismatch, pgvector constraint violation, network error), `saveContext` resolves with `undefined` and the caller has no way to distinguish "both layers saved" from "profile saved, embedding silently skipped." This creates an invisible data-quality gap in production — semantic search will quietly degrade without any observable signal at the call site.
 
-The underlying design choice (fire-and-forget to avoid blocking agent turns) is reasonable, but callers of `saveContext` have no way to distinguish "both layers saved" from "only profile saved."
-
-**Fix:** Return a structured result or expose the promise for optional inspection:
+**Fix (minimal):** Document the contract in JSDoc and return a structured result so callers can at least observe that the embedding was queued:
 ```typescript
+/**
+ * @returns { embeddingQueued } — true if an embedding write was initiated.
+ * Embedding errors are logged by upsertEmbedding but do NOT propagate here.
+ */
 async saveContext(input: MemorySaveInput): Promise<{ embeddingQueued: boolean }> {
   await writeProfile(this.db, input.userId, input.profileKey, input.profileValue);
   if (input.embedding) {
-    upsertEmbedding(this.db, input.embedding); // fire-and-forget, errors logged
+    upsertEmbedding(this.db, input.embedding); // fire-and-forget; errors logged in semantic.ts
     return { embeddingQueued: true };
   }
   return { embeddingQueued: false };
 }
 ```
-At minimum, document the silent-skip contract in the JSDoc.
 
 ---
 
@@ -152,24 +162,27 @@ At minimum, document the silent-skip contract in the JSDoc.
 
 **File:** `packages/ai/src/graph/checkpointer.test.ts.bak`
 
-**Issue:** An exact copy of `checkpointer.test.ts` exists as a `.bak` file in the source tree. It was presumably created during debugging of the known PostgresSaver hang (Gap 2). It is not referenced from any script, not excluded from the TypeScript compiler's `include` glob, and not listed in `.gitignore`. It will be compiled into the `dist` output and adds noise to the repository.
+**Issue:** An exact copy of `checkpointer.test.ts` exists as a `.bak` file in the source tree. It was presumably created during debugging of the known PostgresSaver hang (Gap 2). It is not referenced from any script, it is not excluded from the TypeScript compiler's `include` glob (`src/**/*`), and it is not listed in `.gitignore`. It will add noise to `tsc` output and the repository history.
 
-**Fix:** Delete the file and add `*.bak` to `.gitignore` to prevent recurrence:
+**Fix:**
 ```bash
 rm packages/ai/src/graph/checkpointer.test.ts.bak
 echo "*.bak" >> .gitignore
 ```
 
-### IN-02: `Date.now` monkey-patch in `dedup.test.ts` lacks teardown guard
+---
+
+### IN-02: `Date.now` monkey-patch in `dedup.test.ts` lacks a teardown guard
 
 **File:** `packages/transport/src/webhook/dedup.test.ts:26-40`
 
-**Issue:** `Date.now` is replaced with a stub and manually restored at line 40. If the `expect(result).toBe(true)` assertion on line 37 throws before restoration, all subsequent tests in the suite run with a permanently frozen `Date.now`, producing non-deterministic results.
+**Issue:** `Date.now` is replaced with a stub at line 28 and manually restored at line 40. If the `expect` assertion at line 37 throws before line 40 is reached, all subsequent tests in the suite run with a permanently frozen `Date.now`, producing non-deterministic failures that are difficult to diagnose.
 
-**Fix:** Wrap the patch in `try/finally`:
+**Fix:** Use `try/finally` to guarantee restoration:
 ```typescript
 it("expired entry after TTL is treated as new (returns true again)", () => {
   const originalNow = Date.now;
+  const baseTime = Date.now();
   try {
     Date.now = () => baseTime;
     cache.claim("req-005");
@@ -181,40 +194,49 @@ it("expired entry after TTL is treated as new (returns true again)", () => {
 });
 ```
 
-### IN-03: `MemoryContext.profile` typed as `unknown | null` — union is imprecise
+---
+
+### IN-03: `MemoryContext.profile` typed as `unknown | null` — union is redundant and misleading
 
 **File:** `packages/memory/src/manager.ts:15`
 
-**Issue:** `unknown | null` simplifies to `unknown` because `unknown` already encompasses all values including `null`. The union is harmless at runtime but is misleading: it suggests the intent was to distinguish between "no profile" (null) and "structured data" (something), which would be more precisely expressed as `Record<string, unknown> | null`.
+**Issue:** `unknown | null` simplifies to `unknown` because `unknown` already encompasses `null`. The union does not restrict the type; it conveys a false intent. The actual value stored and retrieved is always a JSON object (from the `memories.value` column), so `Record<string, unknown> | null` is the precise type.
 
 **Fix:**
 ```typescript
-profile: Record<string, unknown> | null;
+export interface MemoryContext {
+  profile: Record<string, unknown> | null;
+  // ...
+}
 ```
-This also aligns with what `readProfile` actually returns from the database.
-
-### IN-04: Validated `_event` in webhook handler is unused scaffolding without a TODO comment
-
-**File:** `packages/transport/src/webhook/handler.ts:42`
-
-**Issue:** The `_event: BrainEvent` variable is declared to capture the validated payload but is immediately discarded. The `_` prefix signals intent to the compiler, but there is no comment linking this to the Phase 3 BrainRunner wiring. Future readers may treat this as dead code.
-
-**Fix:** Add an explicit forward reference:
-```typescript
-const _event: BrainEvent = parsed.data;
-// Phase-3: dispatch _event to BrainRunner once wired
-```
-
-### IN-05: `CLAUDE.md` specifies LangSmith; implementation uses Langfuse
-
-**File:** `packages/observability/src/tracing.ts:1`
-
-**Issue:** The project's technology stack in `CLAUDE.md` lists LangSmith as the observability tool with explicit rationale ("first-class LangGraph integration; automatic trace nesting; no instrumentation code needed in nodes"). The implementation imports `@langfuse/langchain` (Langfuse). The discrepancy is undocumented — it is unclear whether LangSmith was evaluated and rejected, or whether the stack document was not updated when the implementation choice was made.
-
-**Fix:** Document the decision. Either update `CLAUDE.md`'s Alternatives Considered section to record why Langfuse was chosen over LangSmith, or open a follow-up task to migrate the implementation to align with the stated stack. The code itself is correct; the gap is documentation of the architectural decision.
+This also aligns with the corrected `readProfile` return type suggested in WR-03.
 
 ---
 
-_Reviewed: 2026-06-12T00:00:00Z_
+### IN-04: Validated `_event` in webhook handler discards payload without a Phase-3 forward reference
+
+**File:** `packages/transport/src/webhook/handler.ts:42`
+
+**Issue:** The `_event: BrainEvent` variable captures the fully validated payload but is immediately discarded. The `_` prefix suppresses the unused-variable warning, but there is no inline comment linking this placeholder to the Phase 3 BrainRunner wiring. Future readers or automated tools may treat this as dead code and remove it.
+
+**Fix:** Add an explicit forward reference comment:
+```typescript
+const _event: BrainEvent = parsed.data;
+// TODO(Phase-3): dispatch _event to BrainRunner once the runner is wired
+```
+
+---
+
+### IN-05: Stack documentation specifies LangSmith; implementation uses Langfuse — decision is undocumented
+
+**File:** `packages/observability/src/tracing.ts:1`
+
+**Issue:** `CLAUDE.md`'s technology stack table lists LangSmith as the observability tool with explicit rationale ("first-class LangGraph integration; automatic trace nesting; no instrumentation code needed in nodes"). The implementation imports `@langfuse/langchain` (Langfuse) and the `observability` package depends on `@langfuse/langchain ^5.4.1`. The divergence is undocumented — it is unclear whether LangSmith was evaluated and rejected, or whether the stack document was not updated when the implementation choice was finalized.
+
+**Fix:** Document the decision. Either update `CLAUDE.md`'s stack table and "Alternatives Considered" section to record why Langfuse was chosen over LangSmith, or open a follow-up task to migrate the implementation. The code itself is correct; the gap is in architectural decision traceability.
+
+---
+
+_Reviewed: 2026-06-12T04:00:00Z_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
