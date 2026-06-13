@@ -37,11 +37,17 @@ Uma infraestrutura de agentes modular onde novos Brains são criados definindo a
 
 ## Context
 
+**Estado v1.0 (shipped 2026-06-13):** ~7.094 linhas TypeScript, 8 pacotes (shared, database, observability, ai, memory, transport, core + brain-echo app), 234 commits, 23 dias de desenvolvimento.
+
+Stack validado: Bun + Hono + Drizzle (postgres.js driver) + LangGraph + PostgresSaver + pgvector + Pino + Langfuse.
+
 O sistema foi projetado para suportar múltiplos tipos de Brain, cada um com prompts, tools, embeddings e fluxos próprios. Todos os prompts ficam no banco de dados para permitir atualização sem deploy. O cliente usa apenas a imagem do Brain contratado.
 
 O Brain SDR tem uma arquitetura com sub-agente de qualificação: o Brain principal conversa com leads e aciona o sub-agente quando chega o momento de qualificar (identificar perfil, orçamento, necessidade, momento de compra). O resultado volta para o Brain principal continuar a conversa.
 
 Brains planejados para o futuro: SDR, Suporte, Customer Success, Cobrança, RH, Jurídico, E-commerce, Agendamento.
+
+**Tech debt v1.0 para v2:** MEM-03 (semantic write path inativo), OBS-02 (transport status no /health), WebhookTransport.start() sem runner injection, TenantPoolManager não ativado em produção, lint scripts ausentes nos pacotes. Ver `.planning/milestones/v1.0-MILESTONE-AUDIT.md` para detalhes completos.
 
 ## Constraints
 
@@ -56,12 +62,14 @@ Brains planejados para o futuro: SDR, Suporte, Customer Success, Cobrança, RH, 
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Hono sobre Express | Melhor integração com Bun, zero deps, performance superior | — Pending |
-| Drizzle sobre Prisma | Lightweight, TypeScript nativo, sem geração de client, melhor com Bun | — Pending |
-| Brain SDK no core desde v1 | Consistência no registro de Brains; evita refatoração quando criar o primeiro Brain | — Pending |
-| 1 banco por cliente (inicial) | Isolamento simples agora; migrar para tenant_id quando escala demandar | — Pending |
-| Tools Registry por tipo de Brain | Cada tipo define seu conjunto base de tools no código | — Pending |
-| v1 = só infraestrutura core | Nenhum Brain específico no v1; garantir base sólida antes de implementar SDR/Suporte | — Pending |
+| Hono sobre Express | Melhor integração com Bun, zero deps, performance superior | ✓ Good — sem fricção em nenhuma das 4 fases; roteamento de sub-apps em brain-echo trivial |
+| Drizzle sobre Prisma | Lightweight, TypeScript nativo, sem geração de client, melhor com Bun | ✓ Good — migrations funcionaram; único ajuste: usar `postgres.js` como driver (não `bun:sql`) por bug de conexão após constraint errors |
+| Brain SDK no core desde v1 | Consistência no registro de Brains; evita refatoração quando criar o primeiro Brain | ✓ Good — brain-echo integrou sem atrito; BrainRegistry exportado mas brain-echo passa objeto diretamente (arch decision, não regressão) |
+| 1 banco por cliente (inicial) | Isolamento simples agora; migrar para tenant_id quando escala demandar | ⚠️ Revisit — TenantPoolManager implementado mas brain-echo usa DATABASE_URL direto; multi-tenancy via DATABASE_NAME é infrastructure-ready mas inativo em produção |
+| Tools Registry por tipo de Brain | Cada tipo define seu conjunto base de tools no código | ✓ Good — whitelist Map<brainType, Set<toolName>> funcionou; brain-echo registrado sem tools sem problemas |
+| v1 = só infraestrutura core | Nenhum Brain específico no v1; garantir base sólida antes de implementar SDR/Suporte | ✓ Good — decisão validada; base sólida com 28/30 requirements satisfeitos e SC-2/SC-3 verificados |
+| postgres.js como driver Drizzle (não bun:sql) | Bug de conexão travada após constraint errors no bun:sql | ✓ Good — zero problemas com postgres.js durante todo o desenvolvimento |
+| WebhookTransport bypassed em brain-echo | brain-echo usa createWebhookApp(runner) diretamente (GAP-1 workaround) | ⚠️ Revisit — WebhookTransport.start() ainda cria app sem injeção de runner; classe não usada em produção mas é latent trap via ITransport interface |
 
 ## Evolution
 
@@ -81,4 +89,4 @@ Este documento evolui nas transições de fase e marcos de milestone.
 4. Atualizar Context com estado atual
 
 ---
-*Last updated: 2026-06-13 — Phase 4 (validation brain) complete — Brain Core v1 SDK validado end-to-end*
+*Last updated: 2026-06-13 after v1.0 milestone — Brain Core MVP shipped, 4 phases, 28/30 requirements satisfied, SC-2/SC-3 human verified*

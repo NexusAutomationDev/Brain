@@ -1,81 +1,62 @@
 ---
 gsd_state_version: 1.0
 milestone: v1.0
-milestone_name: milestone
-status: executing
-stopped_at: Phase 4 context gathered
-last_updated: "2026-06-13T17:40:22.040Z"
-last_activity: 2026-06-13 -- Phase 4 planning complete
+milestone_name: MVP
+status: complete
+stopped_at: Milestone v1.0 archived
+last_updated: "2026-06-13T00:00:00.000Z"
+last_activity: 2026-06-13 -- v1.0 milestone complete
 progress:
   total_phases: 4
-  completed_phases: 3
-  total_plans: 27
-  completed_plans: 23
-  percent: 85
+  completed_phases: 4
+  total_plans: 28
+  completed_plans: 28
+  percent: 100
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-06-11)
+See: .planning/PROJECT.md (updated 2026-06-13 after v1.0 milestone)
 
-**Core value:** Modular AI agent infrastructure where new Brains are created by defining prompts, tools, embeddings, and flows — without rewriting the base
-**Current focus:** Phase 1 — Foundation
+**Core value:** Infraestrutura de agentes modular onde novos Brains são criados definindo apenas prompts, tools, embeddings e fluxos — sem reescrever a base
+**Current focus:** Milestone v1.0 completo — iniciar `/gsd-new-milestone` para v2
 
 ## Current Position
 
-Phase: 2 of 4 (domain packages)
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-06-13 -- Phase 4 planning complete
+Phase: 4/4 (all complete)
+Status: Milestone complete — ready for next milestone
+Last activity: 2026-06-13 — v1.0 MVP archived
 
-Progress: [░░░░░░░░░░] 0%
-
-## Performance Metrics
-
-**Velocity:**
-
-- Total plans completed: 7
-- Average duration: —
-- Total execution time: 0 hours
-
-**By Phase:**
-
-| Phase | Plans | Total | Avg/Plan |
-|-------|-------|-------|----------|
-| 01 | 7 | - | - |
-
-**Recent Trend:**
-
-- Last 5 plans: —
-- Trend: —
-
-*Updated after each plan completion*
+Progress: [██████████] 100%
 
 ## Accumulated Context
 
 ### Decisions
 
-Decisions are logged in PROJECT.md Key Decisions table.
-Recent decisions affecting current work:
+Ver PROJECT.md Key Decisions table para decisões completas com outcomes.
 
-- Roadmap: Use pnpm for workspace management (not `bun install`) — January 2026 Bun workspace regression
-- Roadmap: Use `postgres.js` as Drizzle driver (not `bun:sql`) — stuck-connection bug after constraint errors
-- Roadmap: Webhook-only transport in v1; RabbitMQ deferred to v2 — `amqplib-bun` Bun stream compat issues
-- Roadmap: OBS-01/02 (logging + health check) in Phase 1; OBS-03 (Langfuse) in Phase 2 after LangChain packages exist
+Decisões críticas para v2:
+- Usar `postgres.js` como Drizzle driver (não `bun:sql`) — bug de conexão após constraint errors
+- Usar `pnpm` para workspace management (não `bun install`) — regressão Janeiro 2026
+- WebhookTransport.start() precisa ser corrigido em v2 — latent trap via ITransport interface
+- TenantPoolManager precisa ser ativado em produção em v2 (atualmente bypassed em brain-echo)
 
-### Pending Todos
+### Known Tech Debt (v2 priority)
 
-None yet.
+1. **MEM-03 / AI-04**: BrainRunner.run() nunca gera embeddings — semantic write path é dead code
+2. **OBS-02**: GET /health sem campo transport status (deferido per D-15)
+3. **WebhookTransport.start()**: sem runner injection — classe inerte mas latent trap
+4. **DB-03/DB-04**: TenantPoolManager não ativado em produção
+5. **INFRA-04**: lint scripts ausentes em todos os 7 pacotes
 
 ### Blockers/Concerns
 
-- LangSmith `AsyncLocalStorage` propagation on Bun needs early validation (Bun `node:async_hooks` gaps) — test before relying on it in Phase 2
-- Embedding dimension must be locked before first migration — irreversible without re-embedding
+Nenhum — milestone completo.
 
 ## Session Continuity
 
-Last session: 2026-06-13T17:11:30.373Z
-Stopped at: Phase 4 context gathered
-Resume file: .planning/phases/04-validation-brain/04-CONTEXT.md
+Last session: 2026-06-13
+Stopped at: Milestone v1.0 archived — git tag v1.0 pendente
+Resume: Executar `/gsd-new-milestone` para iniciar v2
