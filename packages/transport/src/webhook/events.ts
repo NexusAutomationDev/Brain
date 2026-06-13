@@ -1,18 +1,20 @@
 import { z } from "zod";
 
 /**
- * TRANS-02, T-2-02: BrainEvent schema validated with zod on every webhook request.
+ * TRP-02, D-01, D-04: BrainEvent schema — campos padronizados para WhatsApp/CRM.
  *
- * ASVS V5 Input Validation: validate structure before any processing.
- * This prevents prompt injection via malformed event fields.
+ * Campos anteriores (conversationId, stepIndex, userId, content, metadata) REMOVIDOS (D-02).
+ * Sem deprecation shim — quebra intencional para forçar atualização dos consumidores.
+ *
+ * ASVS V5 Input Validation: valida estrutura antes de qualquer processamento.
+ * T-05-01: Zod safeParse valida {Name, Message, Numero, IDLead} todos como string.min(1) —
+ * campos ausentes ou tipo errado retornam 400 antes de qualquer processamento.
  */
 export const BrainEventSchema = z.object({
-  conversationId: z.string().min(1, "conversationId is required"),
-  stepIndex: z.number().int().nonnegative("stepIndex must be a non-negative integer"),
-  userId: z.string().min(1, "userId is required"),
-  content: z.string().min(1, "content is required"),
-  // Optional metadata — plain object only, no nested functions
-  metadata: z.record(z.unknown()).optional(),
+  Name: z.string().min(1, "Name is required"),
+  Message: z.string().min(1, "Message is required"),
+  Numero: z.string().min(1, "Numero is required"),
+  IDLead: z.string().min(1, "IDLead is required"),
 });
 
 export type BrainEvent = z.infer<typeof BrainEventSchema>;
