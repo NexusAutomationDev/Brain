@@ -91,7 +91,14 @@ Plans:
   2. An HTTP POST to the running container's webhook endpoint produces a response that traverses transport → BrainRunner → LangGraph → all three memory layers → response, confirmed by structured log output
   3. Stopping and restarting the container mid-conversation (after turn 1, before turn 2) produces a turn-2 response that references context from turn 1, proving `PostgresSaver` durable state works
   4. Running 10 simultaneous simulated tenants (10 different `DATABASE_NAME` values) keeps `pg_stat_activity` connection count below the LRU cap limit (max 20 pools × pool size)
-**Plans**: TBD
+**Plans**: 5 plans
+
+Plans:
+- [ ] 04-00-PLAN.md — Wave 0: runMigrations refactor (exportável), workspace apps/brain-echo scaffold, Nyquist test stubs
+- [ ] 04-01-PLAN.md — Wave 1: EchoBrain IBrain implementation, server.ts (3 sub-apps Hono), index.ts (startup sequencial)
+- [ ] 04-02-PLAN.md — Wave 2: Migration SQL seed do system prompt (0002) + Dockerfile multi-stage
+- [ ] 04-03-PLAN.md — Wave 2: Testes de integração completos (SC-2 webhook, SC-3 restart, SC-4 multi-tenant)
+- [ ] 04-04-PLAN.md — Wave 3: Checkpoint humano — smoke test container + suite completa de integração
 
 ## Progress
 
@@ -103,4 +110,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | 1. Foundation | 0/7 | Not started | - |
 | 2. Domain Packages | 0/11 | Not started | - |
 | 3. Brain SDK | 0/5 | Not started | - |
-| 4. Validation Brain | 0/TBD | Not started | - |
+| 4. Validation Brain | 0/5 | Not started | - |
