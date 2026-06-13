@@ -19,6 +19,16 @@ export class ToolsRegistry {
   private registry = new Map<string, Set<string>>();
 
   /**
+   * Register a brainType with no tools (for brains that use tools: []).
+   * No-op if already registered.
+   */
+  registerBrainType(brainType: string): void {
+    if (!this.registry.has(brainType)) {
+      this.registry.set(brainType, new Set());
+    }
+  }
+
+  /**
    * Register a brainType with an allowed tool.
    * Creates the brainType entry if it does not exist.
    */

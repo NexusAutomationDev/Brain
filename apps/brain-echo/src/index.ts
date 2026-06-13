@@ -39,6 +39,8 @@ async function main() {
   // Passo 2: Inicializa BrainRunner
   // runner.init() chama process.exit(1) internamente se promptKey 'system' não existir no DB
   const toolsRegistry = new ToolsRegistry();
+  // D-02: EchoBrain tem tools: [] — registrar o brainType sem tools para satisfazer o ToolsRegistry
+  toolsRegistry.registerBrainType(echoBrain.brainType);
   const runner = new BrainRunner({ brain: echoBrain, sql, toolsRegistry });
   await runner.init();
   logger.info({}, "BrainRunner initialized");
