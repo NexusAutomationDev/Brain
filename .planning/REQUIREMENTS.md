@@ -73,23 +73,23 @@
 
 | REQ-ID | Phase | Status |
 |--------|-------|--------|
-| TRP-01 | — | pending |
-| TRP-02 | — | pending |
-| TRP-03 | — | pending |
-| TRP-04 | — | pending |
-| TRP-05 | — | pending |
-| TRP-06 | — | pending |
-| LEAD-01 | — | pending |
-| LEAD-02 | — | pending |
-| LEAD-03 | — | pending |
-| LEAD-04 | — | pending |
-| HIST-01 | — | pending |
-| HIST-02 | — | pending |
-| HIST-03 | — | pending |
-| SDR-01 | — | pending |
-| SDR-02 | — | pending |
-| SDR-03 | — | pending |
-| SDR-04 | — | pending |
-| SDR-05 | — | pending |
-| INFRA-01 | — | pending |
-| INFRA-02 | — | pending |
+| TRP-01 | Phase 7 | pending |
+| TRP-02 | Phase 5 | pending |
+| TRP-03 | Phase 7 | pending |
+| TRP-04 | Phase 7 | pending |
+| TRP-05 | Phase 7 | pending |
+| TRP-06 | Phase 7 | pending |
+| LEAD-01 | Phase 6 | pending |
+| LEAD-02 | Phase 7 | pending |
+| LEAD-03 | Phase 7 | pending |
+| LEAD-04 | Phase 6 | pending |
+| HIST-01 | Phase 8 | pending |
+| HIST-02 | Phase 8 | pending |
+| HIST-03 | Phase 8 | pending |
+| SDR-01 | Phase 9 | pending |
+| SDR-02 | Phase 9 | pending |
+| SDR-03 | Phase 9 | pending |
+| SDR-04 | Phase 9 | pending |
+| SDR-05 | Phase 9 | pending |
+| INFRA-01 | Phase 9 | pending |
+| INFRA-02 | Phase 5 | pending |
