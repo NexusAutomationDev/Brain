@@ -1,257 +1,199 @@
 # Project Research Summary
 
-**Project:** Brain Core — Modular AI Agent Platform
-**Domain:** B2B SaaS agentic infrastructure platform (TypeScript/Bun monorepo)
-**Researched:** 2026-06-11
+**Project:** Brain Core v1.1 — RabbitMQ Transport + Brain SDR + Lead Management
+**Domain:** Modular AI agent platform — async transport, lead identity, WhatsApp SDR conversations
+**Researched:** 2026-06-13
 **Confidence:** HIGH
 
 ## Executive Summary
 
-Brain Core is a plugin-host infrastructure platform: a stable set of shared packages forms the base, and individual Brain implementations (SDR, Support, CS, etc.) are assembled by wiring a `BrainConfig` into the SDK host. The reference architecture is a layered monorepo — `packages/shared` → `packages/database` → domain packages (`memory`, `embeddings`, `ai`, `transport`) → `packages/core` (SDK host) → `apps/brain-*` (concrete Brains). This dependency order is the correct build sequence. Every shortcut that inverts this graph creates downstream coupling that forces rewrites. The Brain SDK contract (`IBrain` interface + `BrainConfig`) must be stable from day one because changing it later forces a rewrite of every Brain ever built on it.
+Brain Core v1.1 is an incremental build on top of a validated v1.0 foundation. The work centers on three interlocked concerns: (1) plugging a second transport into the existing `ITransport` interface (RabbitMQ via `rabbitmq-client`), (2) replacing the generic `users` table with a domain-specific `leads` table that drives conversation thread anchoring, and (3) shipping the first real Brain — Brain SDR — which qualifies leads over WhatsApp using LangGraph-orchestrated conversations. No new packages are needed beyond the RabbitMQ client, and no version bumps are required in the current lockfile.
 
-The recommended stack has no surprises: Bun runtime, Hono HTTP, LangGraph 1.3.7 for orchestration, Drizzle ORM 0.45.x on PostgreSQL 16 with pgvector 0.8.x. LangGraph beats Mastra for this project because it targets Docker deployments (not Vercel), needs explicit stateful graph workflows (not a Next.js DX story), and the sub-agent pattern for SDR qualification maps directly to LangGraph's subgraph-as-node. Two non-obvious deviations from naive choices: use `pnpm` for package management (not `bun install`) to avoid a January 2026 regression, and use `postgres.js` as the Drizzle driver (not Bun's native `bun:sql`) to avoid a stuck-connection bug after constraint errors.
+The critical architectural decision for v1.1 is that `leads.unique_id` (mapped from `IDLead` in incoming messages) becomes the `thread_id` for all LangGraph checkpoints. This single mapping — set once in `BrainRunner.run()` — gives every Brain persistent, lead-scoped conversation memory automatically. Everything downstream (context recovery, qualification state continuity) derives from getting this binding right. The stack also contains two existing gaps (GAP-1 in WebhookTransport runner injection, and the `amqplib-bun` vs `rabbitmq-client` package decision) that must be resolved before any new feature work begins.
 
-The single most dangerous risk category is Phase 1 state design decisions that become permanent. LangGraph state schemas, embedding dimension, and checkpoint table strategy are all one-way doors — they cannot be changed without migrating production data or breaking in-flight conversations. The mitigation is to make these decisions explicitly, document them as constants, and add startup assertions that crash loudly if configuration drifts. Secondary risks are operational: connection pool explosion in multi-tenant mode and checkpoint table unbounded growth will both surface within weeks of real usage if not addressed in the foundation phase.
+The highest risks in v1.1 are operational, not architectural: RabbitMQ consumer crashes from unhandled channel errors (INT-01), unacked messages freezing the queue on LangGraph exceptions (INT-02), and concurrent startup races in Drizzle migrations (INT-08). These are all preventable with established patterns. Brain SDR's qualification logic is the highest-effort work but follows proven patterns. The recommended approach is to ship a single-graph SDR in v1.1 and extract the qualification sub-agent to v1.2 once the conversation flow is validated.
 
 ---
 
 ## Key Findings
 
-### Recommended Stack
+### Stack Additions
 
-The stack is highly validated with no major deviations from the project constraints. The only actionable deviations from what a developer would reach for by default are: (1) prefer `pnpm` over `bun install` for monorepo package management due to a documented Bun workspace performance regression; (2) use `amqplib-bun` (not `amqplib`) for RabbitMQ, or defer RabbitMQ entirely to v2 in favor of PostgreSQL `LISTEN/NOTIFY` which eliminates the Bun stream compatibility risk; (3) use `postgres.js` as the Drizzle DB driver rather than `bun:sql` to avoid a stuck-connection bug after constraint violations.
+The v1.0 stack is unchanged and validated. The only new dependency is `rabbitmq-client@^5.0.8`, which supersedes the CLAUDE.md constraint naming `amqplib-bun`. The swap is warranted: `rabbitmq-client` is zero-production-dependencies, imports cleanly in Bun 1.3.2, provides built-in auto-reconnect, and avoids the `node:stream` compatibility issue (Bun #5627) that still affects `amqplib-bun`. No version bumps required — langgraph@1.4.1, checkpoint-postgres@1.0.3, drizzle-orm@0.45.2, postgres@3.4.9 are all current stable.
 
-**Core technologies:**
+**New dependencies:**
+- `rabbitmq-client@^5.0.8`: RabbitMQ async transport — zero deps, Bun-compatible, built-in auto-reconnect; replaces `amqplib-bun`
 
-| Technology | Version | Purpose | Why |
-|-----------|---------|---------|-----|
-| Bun | 1.x (runtime only) | TypeScript execution, test runner | Project constraint; fast cold starts, native TS |
-| pnpm | latest | Monorepo package management | Bun workspace has January 2026 perf regression |
-| Hono | 4.12.x | HTTP framework | Zero deps, Bun-native, RPC support |
-| `@langchain/langgraph` | 1.3.7 | Agent graph orchestration | Explicit state machines, subgraph support, Postgres checkpointer |
-| `@langchain/langgraph-checkpoint-postgres` | 1.0.1 | Durable agent state | Persists checkpoint to existing PG; required for production |
-| drizzle-orm | 0.45.x (stable) | ORM + query builder | Lightweight, Bun-compatible, TS-native; pin to 0.45.x (v1 RC is unstable) |
-| postgres.js | latest | Drizzle DB driver | Use instead of `bun:sql`; avoids stuck-connection bug |
-| PostgreSQL | 16.x | Primary datastore | Vector support via pgvector, JSONB agent state |
-| pgvector | 0.8.x extension + 0.3.0 npm | Semantic memory / RAG | Avoids separate vector DB; native PG |
-| Turborepo | latest | Build orchestration + caching | Task ordering for 8-10 packages; Bun workspaces handle linking |
-| pino | ^9.x | Structured logging | 5-7x faster than Winston; Bun-compatible |
-| LangSmith | SDK ^0.x | Agent trace visualization | Zero-code LangGraph integration; env-var only config |
-| `bun test` | built-in | Unit + integration testing | Jest-compatible, 10x faster cold start than Vitest |
+**New structural elements (code only, no packages):**
+- `IBrainRunnerLike` promoted to `packages/transport/src/runner-contract.ts` (shared by both transports)
+- `ILeadGate` in `packages/transport/src/lead-gate.ts` (allows transport to call lead lookup without importing from `core`)
 
-**Defer or avoid:** Winston (Bun incompatibility), Vitest (Bun compatibility issues), Mastra (Vercel/Next.js DX story), Prisma (client generation overhead), TypeORM (decorators, poor Bun compat), Pinecone/Qdrant (unnecessary infrastructure when PG is in the stack).
+**What NOT to add:** `amqplib` vanilla, `amqp-connection-manager`, `@langchain/community`, `bullmq`, any stream-dependent AMQP library.
 
 ---
 
-### Expected Features
+### Feature Table Stakes
 
-**Table stakes — must ship in v1 (infrastructure core):**
+**RabbitMQ Consumer (non-negotiable):**
+- Manual ack (`autoAck: false`) — ack only after BrainRunner returns; `nack(requeue=false)` for permanent failures
+- `prefetch(1)` — one LLM call saturates a worker; `prefetch=0` causes unbounded heap growth
+- Graceful SIGTERM shutdown — cancel consumer tag, wait for in-flight, then close
+- Dead Letter Queue (DLQ) configured at queue assertion — never defer to v2
+- Queue assertion with `{ durable: true }` on startup — fail fast if RabbitMQ unreachable
 
-| Feature | Why non-negotiable |
-|---------|-------------------|
-| Brain SDK / `IBrain` interface + `BrainRegistry` | Without this contract, every Brain is a snowflake; changing it later rewrites everything |
-| PostgreSQL schema (agent_state, memories, embeddings, prompts) | All memory layers, prompt storage, and checkpointing depend on this |
-| 3-layer memory: short-term (LangGraph checkpointer), long-term (structured DB rows), semantic (PGVector) | Agents without long-term memory forget clients between sessions; semantic memory enables RAG |
-| Tools Registry with per-Brain enable/disable scoping | Least-privilege tooling is a production expectation; binary enable/disable sufficient for v1 |
-| Transport layer: Webhook + RabbitMQ, ENV-selected | Agents that block HTTP for LLM reasoning timeout; async transport is required for reliability |
-| Sub-agent spawning via LangGraph subgraph-as-node | Required for SDR qualification flow — parent Brain → qualification subgraph → result merge |
-| Prompt storage in database | Updates without redeploy; unacceptable for business users to require CI/CD for prompt tuning |
-| Multi-tenancy: 1 DB per client via `DATABASE_NAME` env | Data isolation is non-negotiable for B2B; database-per-tenant is the simplest correct isolation |
-| Structured logging + health check endpoint | Required for Docker/K8s liveness probes; debugging agent failures without logs is impossible |
-| Docker packaging per Brain | This IS the distribution model — not optional |
+**Leads Schema (non-negotiable):**
+- Auto-registration on first message via `INSERT ... ON CONFLICT (numero) DO NOTHING` + re-fetch
+- `ia_ativada` checked as the FIRST gate after lead lookup — before any LangGraph invocation
+- UNIQUE constraint on `leads.numero` in the migration SQL (not only Drizzle schema)
+- `IDLead` → `unique_id` as stable cross-system identifier
 
-**Differentiators for v2+:**
+**Conversation History (non-negotiable):**
+- `thread_id = event.IDLead` — derived server-side, never from incoming payload
+- `trimMessages` context window management from day one — SDR conversations span 30-80 turns; cannot retrofit
+- No cross-lead thread_id leakage — always derive `thread_id` from `leads.unique_id` after DB lookup
 
-- Vertical Brain implementations (SDR, Support, CS) — these are what customers actually buy
-- Domain-specific embedding models per Brain type — improves task performance substantially
-- Flows as database artifacts — runtime reconfiguration without redeploy
-- Brain composition / routing orchestrator — Brain-of-Brains pattern
-- Full OpenTelemetry tracing — LangSmith + structured logging is sufficient for v1
-- Evaluation suite — needs production data before evals are meaningful
+**Brain SDR (non-negotiable):**
+- One message per response (WhatsApp UX) — enforce via system prompt
+- Qualification signals in LangGraph state fields, not only in message history
+- `handoff_requested` flag in state when lead requests human or sufficient signals captured
+- System prompt fetched from DB at runtime — qualification criteria must not be hardcoded
 
-**Explicit anti-features for v1 (do not build):**
+**Defer to v1.2:** qualification sub-agent as isolated subgraph; adaptive BANT/CHAMP routing; CRM write operations.
 
-- Management UI — no validated users; add in v3+
-- LICENSE_KEY enforcement — no billing yet; add when first Brain is in production
-- Row-level multi-tenancy (tenant_id columns) — correct implementation has huge surface area; 1-DB-per-tenant gives equivalent isolation now
-- Multi-LLM provider switching at runtime — no customer need; hard-pin to one provider
-- Real-time streaming UI — batch response via Webhook/MQ is sufficient
-- Custom orchestration layer competing with LangGraph
+**Estimated effort:** ~9-12 days: RabbitMQ (2d), leads schema + service (1d), conversation history (1-2d), Brain SDR simplified (4-5d), GAP-1 fix (0.5d).
 
 ---
 
 ### Architecture Approach
 
-Brain Core follows a strict layered plugin-host architecture with unidirectional dependencies. `packages/shared` (types, Zod schemas, errors) has no inbound dependencies. `packages/database` depends only on `shared`. Domain packages (`memory`, `embeddings`, `ai`, `transport`, `observability`) depend on `database` and `shared`. `packages/core` (SDK host: `IBrain`, `BrainRegistry`, `BrainRunner`, `ToolsRegistry`) depends on all domain packages. Apps (`apps/brain-*`) depend only on `core` — never on each other. The rule "apps never import from other apps" is critical for independent Docker builds.
+v1.1 adds components within existing packages — no new packages, no new dep edges. The dep graph `apps/* → core → ai, memory, transport, database, observability, shared` is preserved. The key structural element is `ILeadGate` living in `packages/transport`, which allows both transports to call lead lookup without importing `LeadService` from `packages/core` (which would create a cycle).
 
-**Major components and responsibilities:**
+**New components:**
+1. `packages/transport/src/rabbitmq/handler.ts` — `RabbitMQTransport implements ITransport`; constructor-injected runner + leadGate; manual ack/nack
+2. `packages/transport/src/runner-contract.ts` + `lead-gate.ts` — duck-type interfaces preventing circular deps
+3. `packages/database/src/schema/leads.ts` + migration — `leads` table; UNIQUE on `numero`; do NOT drop `users`
+4. `packages/core/src/leads/service.ts` — `LeadService` with `findOrCreate` via `ON CONFLICT`
+5. `apps/brain-sdr/` — new app parallel to `brain-echo`; LangGraph state with qualification fields
 
-| Component | Responsibility |
-|-----------|---------------|
-| `packages/shared` | Domain types, Zod schemas, error classes — no dependencies |
-| `packages/database` | Drizzle schema, migrations, per-tenant connection pool cache (Map with LRU cap) |
-| `packages/observability` | Pino structured logger, health check, OTEL spans |
-| `packages/embeddings` | PGVector store, embed-text, similarity search |
-| `packages/memory` | `MemoryManager`: short-term (LangGraph checkpointer, automatic), long-term (explicit DB rows), semantic (explicit PGVector ops) |
-| `packages/transport` | `TransportAdapter` interface; `WebhookAdapter` (Hono) and `RabbitMQAdapter` (`amqplib-bun`); normalized `BrainEvent` |
-| `packages/ai` | LangGraph `StateGraph` factory, tool helpers, `PostgresSaver` checkpointer wiring |
-| `packages/core` | `IBrain` interface, `BrainRegistry`, `BrainRunner` (wires all packages), `ToolsRegistry` |
-| `apps/brain-*` | Declares `BrainConfig` (id, promptKeys, tools, `buildGraph()`, `memoryConfig`); one Dockerfile per Brain |
+**Modified components:**
+- `packages/transport/src/webhook/events.ts` — breaking schema change: `{Name, Message, Numero, IDLead}` replaces `{conversationId, stepIndex, userId, content}`; all test fixtures must update in the same PR
+- `packages/transport/src/webhook/handler.ts` — GAP-1 fix: runner + leadGate constructor injection
+- `packages/transport/src/factory.ts` — updated signature: `createTransport(runner, leadGate?, type?)`
+- `packages/core/src/runner/runner.ts` — field mapping: `event.IDLead → threadId`, `event.Numero → userId`
 
-**Key architectural decisions validated by research:**
-
-1. `BrainEvent` normalizes across transports — `sessionId` → `thread_id`, `tenantId` → `DATABASE_NAME`
-2. Short-term memory (Layer 1) is owned entirely by LangGraph's `PostgresSaver` — never replicate this manually
-3. Long-term memory (Layer 2) and semantic memory (Layer 3) are explicit `MemoryManager` calls in `BrainRunner` before/after graph invocation
-4. `sessionId` (new UUID per conversation) maps to `thread_id`; `userId` maps to Layer 2 profile — these are distinct concepts
-5. Sub-agent pattern: qualification subgraph invoked as a node in the parent SDR graph; parent state includes a `qualificationResult` channel with last-write-wins reducer
-6. Per-tenant connection pool: `Map<tenantId, DrizzleDB>` with LRU eviction cap — never create a pool per request
+**Build order (dependency-enforced):**
+- Step 1: BrainEvent schema + transport infrastructure (GAP-1, shared interfaces, factory)
+- Step 2: Leads schema + Drizzle migration (schema file + generated SQL committed together)
+- Step 3: LeadService in `packages/core`
+- Step 4: RabbitMQ transport (can run parallel to Step 3 once ILeadGate is defined)
+- Step 5: BrainRunner field mapping (can merge with Step 1)
+- Step 6: Brain SDR (depends on all prior steps)
 
 ---
 
 ### Critical Pitfalls
 
-**Top 5 pitfalls that will block the project if not addressed in Phase 1:**
+**v1.1-specific (highest severity):**
 
-1. **LangGraph state serialization failures** — State schemas with `Set`, `Map`, `Date`, `Buffer`, or custom class instances crash checkpointing with opaque errors. Prevention: use only JSON-safe primitives in all state definitions (`string[]` not `Set<string>`, ISO strings not `Date`). Add a CI test that calls `JSON.stringify()` on every state type. Define this rule before writing any state schema.
+1. **INT-01: Unhandled channel closure crashes Bun process (CRITICAL)** — Attach `connection.on('error')` and `channel.on('error')` listeners; reconnect in `close` handler. Without this, any RabbitMQ blip kills the container and corrupts in-flight LangGraph checkpoints.
 
-2. **MemorySaver in non-local environments** — LangGraph examples default to `MemorySaver`. In any deployed environment it wipes all conversation state on container restart. Prevention: `PostgresSaver` (`@langchain/langgraph-checkpoint-postgres`) must be the only checkpointer in all non-test code from day one. Use `MemorySaver` only in `beforeEach()` test setup.
+2. **INT-02: LangGraph throw leaves message unacked — queue freezes (CRITICAL)** — Wrap all consumer processing in `try/catch`; always call ack or nack. `nack(false, false)` for deterministic failures; `nack(false, true)` for transient only. DLX must be configured in the same phase as the consumer.
 
-3. **PGVector embedding dimension lock-in** — The embedding column dimension is baked into the schema (`vector(1536)`). Switching providers mid-deployment without a schema migration causes hard write failures. Prevention: decide on a single provider and dimension before writing any migration. Document it as a constant (`EMBEDDING_DIM = 1536`). Add a startup assertion that queries `pg_attribute` and crashes loudly if the configured dimension mismatches the column.
+3. **INT-05: Concurrent upsert creates duplicate lead rows (HIGH)** — Use `INSERT ... ON CONFLICT (numero) DO UPDATE` as a single statement then re-fetch. UNIQUE constraint on `numero` must be in migration SQL, not only Drizzle schema.
 
-4. **LangGraph state schema evolution breaking existing threads** — Renaming a field, removing a field, or adding a required field without a default silently produces `undefined` values in active threads. LangGraph has no migration layer. Prevention: add `schema_version: number` to every state definition from the start. Treat state changes like DB migrations — write a transformation function. Always add new fields with defaults, never rename.
+4. **INT-04: `users` table migration breaks existing data (HIGH)** — Add `leads` additively; do NOT drop `users` in v1.1. Existing EchoBrain checkpoints used UUID-format thread_ids that won't resolve via the new IDLead-based lookup.
 
-5. **Per-tenant connection pool explosion** — A `Map<tenantId, Pool>` without a cap opens `tenants × pool_size` connections. At 50 tenants with default pool sizes, this hits PostgreSQL's connection limit. Prevention: implement the tenant pool cache with an LRU cap (max 20 pools), size each pool at 2-5 connections, add a global connection count metric before writing the first request handler.
+5. **INT-08: Concurrent startup race in Drizzle migrations (MEDIUM)** — Add `pg_advisory_lock(7246842)` around `runMigrations()`. Safe with postgres.js directly (not PgBouncer).
 
-**Additional high-priority pitfalls (implement in Phase 1):**
+6. **INT-10: Context window overflow breaks long SDR conversations (MEDIUM)** — Implement `trimMessages` from day one in Brain SDR graph node. Once a thread overflows it becomes permanently unresponsive.
 
-- **Drizzle client recreation per request** — calling `drizzle(new Pool(...))` inside a request handler leaks connections. Cache Drizzle instances at module level in a `Map<tenantId, DrizzleDB>`.
-- **TypeScript path aliases broken at runtime** — `tsconfig.json` `paths` are not resolved by Bun at runtime. Use `bunfig.toml` `[alias]` section or Node.js subpath imports. Establish this before aliases proliferate.
-- **LangChain peer dependency version drift** — pin exact versions for all `@langchain/*` packages. Never use caret ranges. Update all `@langchain/*` packages together in a single commit.
-- **Bun workspace install performance regression** — use `pnpm` for package management (not `bun install`). This is a documented January 2026 regression in Bun's workspace install.
+7. **INT-11: GAP-1 WebhookTransport runner not injected (MEDIUM)** — Fix constructor injection before changing BrainEvent field names. Without this fix, webhook returns `{status: "accepted"}` with no LLM call.
+
+**v1.0 pitfalls still relevant for SDR:**
+- Pitfall 4 (LangGraph state schema evolution) — add `schema_version` field and default values for all Brain SDR state fields from day one
+- Pitfall 9 (recursion limit) — set `recursionLimit: 100` for SDR; default 25 is too low for qualification patterns
+- Pitfall 19 (subgraph checkpointer inheritance) — relevant when extracting qualification sub-agent in v1.2
 
 ---
 
 ## Implications for Roadmap
 
-The architecture research defines the correct build order explicitly. Each phase's output is a hard prerequisite for the next. Skipping steps or building in parallel across layers creates integration debt that manifests as rewrites.
+### Phase 1: Transport Foundation + Schema Contract
 
-### Phase 1: Monorepo Foundation + Database Layer
+**Rationale:** Every downstream component depends on the canonical `BrainEvent` shape and the corrected `createTransport()` factory. GAP-1 must be fixed before new field names are introduced. Migration race condition (INT-08) and PostgresSaver setup race (INT-09) must also be addressed here — they block safe multi-instance deployment of everything that follows.
 
-**Rationale:** `packages/shared` and `packages/database` are zero-dependency roots. Every other package imports from them. The connection pool architecture, state schema conventions, and embedding dimension must be locked here — all are one-way doors.
+**Delivers:** Correct WebhookTransport constructor injection; standardized BrainEvent schema (`{Name, Message, Numero, IDLead}`); shared `IBrainRunnerLike` and `ILeadGate` interfaces; advisory lock in `runMigrations()`; updated `createTransport()` factory.
 
-**Delivers:** Working monorepo with Turborepo + pnpm workspaces, TypeScript config with runtime-safe path aliases, Drizzle schema with all tables (agent_state, memories, embeddings/PGVector, prompts, user_profiles), per-tenant connection pool cache, database migrations, `packages/observability` (pino logger + health check endpoint).
+**Addresses:** INT-11 (GAP-1), INT-03 (schema divergence between transports), INT-08 (migration race), INT-09 (PostgresSaver setup race)
 
-**Must address (pitfall prevention):**
-- Establish JSON-safe state schema conventions and CI test
-- Choose and document embedding dimension as a constant
-- Implement per-tenant connection pool with LRU cap
-- Set path alias resolution via `bunfig.toml` (not just tsconfig)
-- Pin exact `@langchain/*` versions in root package.json
-- Configure `pnpm` as package manager, `bun` as runtime only
-
-**Research flag:** Standard patterns — no additional research needed.
+**Constraint:** BrainEvent field rename and test fixture updates must be in the same PR — atomic change.
 
 ---
 
-### Phase 2: Domain Packages (Memory, Embeddings, AI, Transport)
+### Phase 2: Leads Schema + Migration
 
-**Rationale:** These packages depend on the foundation layer but are independent of each other and can be built in parallel within the phase. They must exist before `packages/core` can wire them together.
+**Rationale:** LeadService depends on the leads schema. The migration file must be committed before any Brain starts up against a real DB. Cannot build the RabbitMQ consumer or Brain SDR without `leads` table.
 
-**Delivers:**
-- `packages/embeddings`: PGVector store with HNSW index (`m=16, ef_construction=200`), embed-text, similarity search
-- `packages/memory`: `MemoryManager` with all 3 layers; Layer 1 via `PostgresSaver` (not `MemorySaver`); Layers 2 and 3 via explicit DB ops
-- `packages/ai`: LangGraph `StateGraph` factory with `PostgresSaver` wired; sub-agent pattern (subgraph-as-node); tool helpers
-- `packages/transport`: `TransportAdapter` interface; `WebhookAdapter` (Hono); `RabbitMQAdapter` (`amqplib-bun`) with transport selected by `TRANSPORT` env; idempotency key handling on Webhook
+**Delivers:** `packages/database/src/schema/leads.ts` with UNIQUE on `numero`; Drizzle-generated migration SQL committed alongside schema; schema exported from database barrel.
 
-**Must address (pitfall prevention):**
-- Only embed semantically rich content in PGVector — never raw conversation messages
-- Set `recursionLimit` explicitly in all graph configurations (50 for simple agents, 100 for agents with subgraphs)
-- Define reducers for all state keys that could be written by parallel nodes
-- Implement tool retry with hard cap (max 3 retries) and structured error returns to LLM
-- Pass parent checkpointer to qualification subgraph — do not compile subgraph independently
+**Addresses:** INT-04 (additive migration strategy — no DROP users), INT-05 (UNIQUE constraint in migration SQL)
 
-**Research flag:** `amqplib-bun` Bun stream compatibility needs validation during implementation. If issues arise, fall back to PostgreSQL `LISTEN/NOTIFY` for v1.
+**Constraint:** Migration SQL file must be committed in the same PR as the schema file. Do not drop `users`.
 
 ---
 
-### Phase 3: Brain SDK Core + Tools Registry
+### Phase 3: LeadService + RabbitMQ Consumer
 
-**Rationale:** `packages/core` is the integration layer. It depends on all domain packages and cannot be built before they exist. This is the most architecturally sensitive package — the `IBrain` interface defined here is the contract that all future Brains must implement.
+**Rationale:** Both depend on Phase 2 (leads table) and Phase 1 (ILeadGate interface). Can develop in parallel — LeadService and RabbitMQ handler each implement/satisfy ILeadGate independently.
 
-**Delivers:**
-- `IBrain` interface + `BrainConfig` type (id, name, promptKeys, tools, `buildGraph()`, optional `memoryConfig`)
-- `BrainRegistry` — Map-based registry with `register()` and `resolve()` by Brain ID
-- `BrainRunner` — wires transport event → memory hydration → graph execution → memory persistence → response
-- `ToolsRegistry` — per-Brain tool registration with binary enable/disable; tool call tracking in state for loop detection
-- Prompt loading from DB at startup via `promptKeys`
+**Delivers:** `packages/core/src/leads/service.ts` with upsert via `ON CONFLICT`; `packages/transport/src/rabbitmq/handler.ts` using `rabbitmq-client`; manual ack/nack with DLX; graceful SIGTERM shutdown; integration test against real RabbitMQ.
 
-**Must address (pitfall prevention):**
-- `IBrain` interface stability is paramount — any change after this phase forces rewrite of all Brains
-- `BrainRunner` must not use `MemorySaver` under any circumstances
-- `BrainEvent.sessionId` and `userId` must remain distinct concepts throughout
+**Addresses:** INT-01 (unhandled channel closure), INT-02 (unacked message), INT-05 (concurrent upsert via ON CONFLICT), FEATURES.md anti-features (requeue=true, autoAck, unlimited prefetch)
 
-**Research flag:** Standard patterns (LangGraph plugin patterns are well-documented). No additional research needed.
+**Stack note:** Use `rabbitmq-client` (zero deps, Bun-tested) not `amqplib-bun`.
 
 ---
 
-### Phase 4: Validation Brain + Docker Packaging
+### Phase 4: BrainRunner Field Mapping + Conversation History
 
-**Rationale:** A minimal `apps/brain-echo` or `apps/brain-test` that implements `IBrain` and exercises every package integration end-to-end. This is not a production Brain — it is an integration test harness that proves the SDK contract works. Docker packaging belongs here because it is the distribution model and must be validated before any real Brain is built.
+**Rationale:** Mechanically simple but sequentially required. `BrainRunner.run()` must map `event.IDLead → threadId` before Brain SDR can use persistent memory. Context window trimming must be implemented here — cannot be retrofitted after Brain SDR ships.
 
-**Delivers:**
-- `apps/brain-echo` — minimal Brain that registers a tool, uses memory, handles a webhook event, and returns a response
-- Multi-stage Dockerfile per Brain (from `oven/bun:1`)
-- Full integration test coverage: transport → BrainRunner → LangGraph → memory layers → response
-- Checkpoint table pruning job (scheduled DELETE of rows older than 30 days)
-- Startup assertion: embedding dimension matches `EMBEDDING_DIM` env var
+**Delivers:** `BrainRunner.run()` field mapping update; `thread_id = event.IDLead`; `trimMessages` context window management utility; updated integration tests.
 
-**Must address (pitfall prevention):**
-- Deploy to staging, restart mid-conversation, verify agent resumes correctly (validates `PostgresSaver`)
-- Load test with 10+ simulated tenants and watch `pg_stat_activity` connection counts
-- Monitor `checkpoints` table row count — pruning job must be confirmed working
+**Addresses:** INT-10 (context window overflow), INT-03 (consistent field mapping), FEATURES.md anti-feature (per-session thread_id)
 
-**Research flag:** Docker multi-stage build for Bun is well-documented. No additional research needed.
+---
+
+### Phase 5: Brain SDR Application
+
+**Rationale:** Terminal feature — consumes all prior phases. Correct approach: green test suite for Phases 1-4 before writing brain-sdr code.
+
+**Delivers:** `apps/brain-sdr/` with Dockerfile; LangGraph state schema with qualification fields (`qualificado`, `budget_hint`, `need_hint`, `timeline_hint`, `handoff_requested`); structured LLM output for qualification signal extraction; personalized greeting via `nome`; prompts seed SQL for `brain_type="sdr"`; integration test for full message flow including `ia_ativada` skip path.
+
+**Addresses:** INT-10 (trimMessages in graph node), FEATURES.md anti-features (scripted BANT sequence, multiple messages per response, hardcoded criteria, CRM writes)
+
+**Scope boundary:** Single-graph SDR. Qualification sub-agent extraction → v1.2. CRM integration → v2.
 
 ---
 
 ### Phase Ordering Rationale
 
-- **Dependencies are strict:** `shared` → `database` → domain packages → `core` → apps. No phase can be usefully built without the previous being stable.
-- **Phase 1 locks the one-way doors:** embedding dimension, state schema conventions, connection pool architecture, TypeScript alias resolution, and LangChain version pinning. All are cheap to do correctly the first time and expensive to change after.
-- **Phase 2 builds in parallel within the phase:** `memory`, `embeddings`, `ai`, and `transport` are independent of each other and can be developed concurrently once `database` and `shared` exist.
-- **Phase 3 is the integration test for Phase 2:** if the `BrainRunner` cannot wire all packages cleanly, the package boundaries defined in Phase 2 need adjustment. This is cheaper to discover here than after apps are built.
-- **Phase 4 validates the entire stack under production conditions:** container restart, multi-tenant load, and checkpoint growth are all tested before any real Brain exists.
+- Phase 1 must be first: both transports share BrainEvent schema — a partial change creates a window where webhook and RabbitMQ diverge
+- Phase 2 can technically parallel Phase 1 (schema has no dep on events.ts) but is ordered second so migration SQL exists before Phase 3 integration tests run
+- Phase 3 can begin once ILeadGate is defined (end of Phase 1), even while LeadService is in progress
+- Phase 4 depends only on Phase 1 (BrainEvent shape) — could merge with Phase 1 to reduce PR count
+- Phase 5 depends on all previous phases — no shortcuts
 
 ### Research Flags
 
-**Needs validation during implementation:**
-- `amqplib-bun` Bun stream compatibility (Phase 2 transport) — open GitHub issues exist; may need to fall back to PG `LISTEN/NOTIFY`
-- LangSmith `AsyncLocalStorage` propagation on Bun (Phase 1 observability) — Bun's `node:async_hooks` has gaps; must be tested before relying on it
-- `bun:sql` vs `postgres.js` driver (Phase 1 database) — research confirms the stuck-connection bug; use `postgres.js` from the start
+**Standard patterns — skip `/gsd-research-phase`:**
+- Phase 1 (transport refactor, schema standardization) — internal codebase changes; all patterns clear from ARCHITECTURE.md
+- Phase 2 (Drizzle schema + migration) — established pattern already in use; `drizzle-kit generate` is the only command needed
+- Phase 4 (field mapping in BrainRunner) — single-file change with known target values
 
-**Standard patterns (skip research-phase):**
-- LangGraph subgraph-as-node pattern (Phase 2/3) — well-documented, high confidence
-- Drizzle ORM + pgvector integration (Phase 1/2) — official docs, high confidence
-- Hono + Bun HTTP (Phase 2/3 transport) — well-documented, official support
-- Docker multi-stage Bun builds (Phase 4) — official `oven/bun:1` image, no surprises
-- Turborepo + pnpm workspaces (Phase 1) — well-documented, stable tooling
-
----
-
-## Open Questions Requiring Decisions Before Planning
-
-These are not gaps in research confidence — they are decisions the team must make explicitly because they affect multiple downstream phases:
-
-1. **Embedding provider and dimension:** Must choose before writing any schema migration. Recommendation: `text-embedding-3-small` at 1536 dimensions (OpenAI, well-supported by LangGraph). If a lighter model is needed, `all-MiniLM-L6-v2` at 384 dims is the alternative. This is irreversible without re-embedding all data.
-
-2. **RabbitMQ in v1 vs PostgreSQL LISTEN/NOTIFY:** Research shows `amqplib-bun` has open Bun stream compatibility issues. Recommendation: ship v1 with Webhook + PG `LISTEN/NOTIFY` as the async transport, add RabbitMQ in v2 once Bun's stream compatibility matures. Transport interface remains identical — the swap is a 1-file change.
-
-3. **LangSmith vs self-hosted observability:** LangSmith requires an API key and network access. For air-gapped deployments, OpenTelemetry + Jaeger/Grafana Tempo is the fallback but requires manual instrumentation. Decide before building observability package.
-
-4. **Initial Brain for Phase 4 validation:** `brain-echo` (simple echo Brain) vs `brain-sdr-minimal` (scaffolded SDR Brain with sub-agent pattern but no real prompts). The SDR-minimal approach validates the sub-agent pattern earlier at the cost of more Phase 4 complexity.
-
-5. **pnpm as package manager:** Research recommends `pnpm` over `bun install` for workspace management due to a January 2026 performance regression. Team alignment needed: the monorepo uses `pnpm install` but `bun run` / `bun test` — a split tooling model.
+**May benefit from targeted research spike during planning:**
+- Phase 3 (`rabbitmq-client` Consumer API) — package is new to codebase; confirm `createConsumer` + ack/nack method signatures from v5.0.8 docs before writing handler
+- Phase 5 (Brain SDR graph design) — LangGraph state schema for qualification signals and `trimMessages` integration warrant a design spike before implementation to avoid Pitfall 4 (state schema evolution)
 
 ---
 
@@ -259,54 +201,46 @@ These are not gaps in research confidence — they are decisions the team must m
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | All technologies verified against official docs and npm releases (June 2026). Version numbers confirmed. `amqplib-bun` is the only MEDIUM item due to open Bun issues. |
-| Features | HIGH | Cross-validated against LangGraph, CrewAI, AutoGen, and production guides. Table stakes are consistent across all frameworks. |
-| Architecture | HIGH | LangGraph TypeScript docs are authoritative. Monorepo pattern validated against multiple production examples. Data flow derived directly from official patterns. |
-| Pitfalls | HIGH | All critical pitfalls verified against GitHub issues, official docs, or multiple independent production reports — not speculation. |
+| Stack | HIGH | Packages verified in lockfile; `rabbitmq-client` import tested in Bun 1.3.2; no version bumps needed confirmed |
+| Features | HIGH | RabbitMQ behaviors from official docs; LangGraph thread_id from PostgresSaver internals; WhatsApp SDR from production guides |
+| Architecture | HIGH | Direct codebase analysis of all v1.0 source files; dep graph and component boundaries from actual code |
+| Pitfalls | HIGH | All critical pitfalls traced to GitHub issues, official docs, or verified production incidents |
 
-**Overall confidence: HIGH**
+**Overall confidence:** HIGH
 
-### Gaps to Address During Implementation
+### Gaps to Address
 
-- **`amqplib-bun` actual compatibility:** Research confirms issues exist but fork status may have improved. Test Bun 1.x + `amqplib-bun` explicitly on first use. Have PG `LISTEN/NOTIFY` as a ready fallback.
-- **LangSmith on Bun:** `AsyncLocalStorage` gaps in Bun's `node:async_hooks` could break LangSmith trace propagation. Validate with a minimal LangGraph graph + LangSmith in Bun before building observability into core.
-- **Drizzle v1.0 GA timeline:** Currently at v1.0-rc.4. If GA ships during the build, evaluate upgrade path. Pin to `0.45.x` until then.
+- **`rabbitmq-client` Consumer API shape (Phase 3):** Package is installed but handler not written. Confirm exact `createConsumer` + ack/nack API from v5.0.8 before implementation — do not guess at method signatures.
+- **Brain SDR qualification state schema (Phase 5):** Field names are defined but LangGraph state annotation + reducer design needs a short design spike. Once committed, treat as a one-way door (Pitfall 4).
+- **`users` table deprecation timeline:** The additive migration strategy leaves `users` as dead weight. Capture deprecation decision as a task before v1.2 planning.
+- **TenantPoolManager activation:** Scoped for v1.1 in PROJECT.md but flagged as a distraction risk (ARCHITECTURE.md Risk 5). Treat as isolated task; do not block Phase 5 on it.
+- **DLQ monitoring:** v1.1 scoped to log-only; automated alerting deferred to v2. Document this boundary explicitly so ops is not surprised.
 
 ---
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- `@langchain/langgraph` npm v1.3.7 — https://www.npmjs.com/package/@langchain/langgraph
-- `@langchain/langgraph-checkpoint-postgres` v1.0.1 — https://www.npmjs.com/package/@langchain/langgraph-checkpoint-postgres
-- LangGraph TypeScript multi-agent guide — https://langgraphjs.guide/multi-agent/
-- LangGraph TypeScript persistence guide — https://langgraphjs.guide/persistence/
-- LangGraph hierarchical agents — https://langchain-ai.github.io/langgraph/tutorials/multi_agent/hierarchical_agent_teams/
-- Hono v4.12.16 + Bun — https://hono.dev/docs/getting-started/bun
-- Drizzle ORM pgvector guide — https://orm.drizzle.team/docs/guides/vector-similarity-search
-- Drizzle ORM Bun SQL — https://orm.drizzle.team/docs/connect-bun-sql
-- pgvector-node v0.3.0 Bun support — https://github.com/pgvector/pgvector-node
-- Bun test runner — https://bun.com/docs/test
-- Bun workspace configuration — https://bun.com/docs/guides/install/workspaces
+- Direct codebase analysis: `packages/transport/src/`, `packages/core/src/`, `packages/database/src/schema/`, `apps/brain-echo/src/`
+- `pnpm-lock.yaml` — all installed package versions confirmed
+- `rabbitmq-client` v5.0.8 — zero deps confirmed, Bun 1.3.2 import tested
+- RabbitMQ Consumer Acknowledgements official docs — https://www.rabbitmq.com/docs/confirms
+- RabbitMQ Dead Letter Exchanges official docs — https://www.rabbitmq.com/docs/dlx
+- `@langchain/langgraph-checkpoint-postgres` (v1.0.3) — PostgresSaver thread_id behavior
+- LangGraph PR #2494 — PostgresSaver race condition fix
 
 ### Secondary (MEDIUM confidence)
-- amqplib Bun incompatibility (open issue) — https://github.com/oven-sh/bun/issues/5627
-- amqplib-bun fork — https://socket.dev/npm/package/amqplib-bun
-- Bun workspace performance regression — https://github.com/oven-sh/bun/issues/25799
-- Bun `bun:sql` stuck-connection bug — https://www.pkgpulse.com/guides/bun-sql-vs-postgres-js-vs-drizzle-postgres-stack-2026
-- LangGraph checkpoint unbounded growth — https://github.com/langchain-ai/langgraphjs/issues/1138
-- LangGraph state serialization — https://markaicode.com/errors/langgraph-json-parse-error-fix/
-- PGVector dimension mismatch (June 2026) — https://dbadataverse.com/tech/postgresql/2026/05/pgvector-gotchas-dimension-mismatch-casting-errors-and-alter-table-solved-2026
-- Mastra vs LangGraph comparison 2026 — https://particula.tech/blog/mastra-vs-langgraph-vs-vercel-ai-sdk-typescript-agents
-- Turborepo structuring guide — https://turborepo.dev/docs/crafting-your-repository/structuring-a-repository
-- Multi-tenant connection pooling — https://oneuptime.com/blog/post/2026-01-27-nodejs-multi-tenancy/view
+- LangGraph issue #2040 — cross-thread checkpoint contamination report
+- CloudAMQP RabbitMQ Best Practices — prefetch sizing for LLM workloads
+- Zylos Research 2026 — context window management for long-running agents
+- WhatsApp SDR qualification pattern research (trypeach.ai, monday.com, setsmart.io, trengo.com)
+- Drizzle ORM migrations in production (advisory lock pattern) — dev.to
 
-### Tertiary (referenced, lower weight)
-- LangSmith TypeScript tracing — https://docs.smith.langchain.com/tracing/integrations/typescript
-- AI agent memory architecture (2026) — https://tacnode.io/post/ai-agent-memory-architecture-explained
-- Multi-tenant AI agent architecture — https://fast.io/resources/ai-agent-multi-tenant-architecture/
-- IVFFlat vs HNSW in pgvector — https://dev.to/philip_mcclarence_2ef9475/ivfflat-vs-hnsw-in-pgvector-which-index-should-you-use-305p
+### Tertiary (LOW confidence — needs implementation validation)
+- `trimMessages` token counting accuracy with `bun test` — needs integration test verification
+- DLQ routing behavior with `rabbitmq-client` v5 — needs smoke test against real RabbitMQ
 
 ---
-*Research completed: 2026-06-11*
+
+*Research completed: 2026-06-13*
 *Ready for roadmap: yes*

@@ -1,12 +1,379 @@
 # Domain Pitfalls
 
 **Domain:** TypeScript AI Agent Platform (LangGraph + PostgreSQL/PGVector + Bun + Drizzle ORM, multi-tenant)
-**Researched:** 2026-06-11
+**Researched:** 2026-06-11 (v1.0) · Updated 2026-06-13 (v1.1 addendum)
 **Overall confidence:** HIGH — all pitfalls verified against official docs, GitHub issues, or multiple production reports
 
 ---
 
-## Critical Pitfalls
+## v1.1 Addendum: Integration Pitfalls
+
+> These pitfalls are specific to adding RabbitMQ transport, leads schema (replacing users), and Brain SDR to the existing v1.0 system. Generic pitfalls from v1.0 are preserved below in their original sections. Do not repeat the known risks already documented (amqplib-bun, bun:sql driver, RabbitMQ 4.1.0 amqplib version requirement) — reference them inline only.
+
+---
+
+### INT-01: Unhandled Channel Closure Crashes the Bun Process
+
+**Severity:** CRITICAL
+
+**What goes wrong:** When a RabbitMQ connection drops (network blip, broker restart, broker-side timeout), amqplib emits an `error` event on the `Connection` object and a `close` event on the `Channel`. If no `error` listener is attached to either, Node.js/Bun throws `UnhandledPromiseRejection` and kills the process. Any in-flight LangGraph invocations at that moment are interrupted mid-graph — their PostgresSaver checkpoints are partially written, leaving the thread in an indeterminate state.
+
+**Why it happens:** amqplib's event model requires explicit `connection.on('error', ...)` and `channel.on('error', ...)` listeners. There is no default swallowing. Bun's behavior matches Node.js: unhandled promise rejections crash the process in production mode.
+
+**Warning signs:**
+- Container exits with code 1 after a RabbitMQ restart or network event
+- `UnhandledPromiseRejection: Channel ended` in logs
+- Pino shows a clean startup followed by a sudden silence — no error log before exit
+- PostgresSaver checkpoint rows with `created_at` matching the crash time but no corresponding `checkpoint_writes` row (truncated write)
+
+**Prevention:**
+```typescript
+// REQUIRED pattern for RabbitMQ consumer in Bun
+const conn = await amqp.connect(url);
+conn.on('error', (err) => logger.error({ err }, 'RabbitMQ connection error'));
+conn.on('close', () => { scheduleReconnect(); });
+
+const ch = await conn.createChannel();
+ch.on('error', (err) => logger.error({ err }, 'RabbitMQ channel error'));
+ch.on('close', () => logger.warn({}, 'RabbitMQ channel closed'));
+
+// prefetch = 1 ensures at-most-one in-flight message per consumer
+// if the channel dies mid-process, only one message is re-queued
+await ch.prefetch(1);
+```
+- Reconnection must be implemented in the `close` handler, not as a crash recovery — Bun Docker containers restart after a crash but lose the consumer tag, causing a 5-10s gap in message consumption
+- The consumer tag returned by `ch.consume()` must be stored to enable graceful cancel before close
+
+**Phase to address:** Phase 1 of v1.1 (RabbitMQ transport implementation). This must be implemented before any integration testing.
+
+---
+
+### INT-02: Message Not Acked After LangGraph Throws — Infinite Redelivery Loop
+
+**Severity:** CRITICAL
+
+**What goes wrong:** The consumer callback calls `runner.run(event)` which invokes LangGraph. If LangGraph throws (LLM API error, DB constraint error, recursion limit hit), the message is never acked or nacked. RabbitMQ keeps the message as "unacked" for the duration of the consumer's session. On channel close or reconnect, RabbitMQ redelivers it. If the error is deterministic (e.g., a malformed payload that LangGraph always rejects), this creates an infinite redelivery loop that saturates the consumer.
+
+**Why it happens:** amqplib uses manual acknowledgement. If the code throws before `ch.ack(msg)` or `ch.nack(msg)`, the broker assumes the consumer is still processing. With `prefetch(1)`, the queue appears frozen — no new messages are delivered while one is "in-flight."
+
+**Warning signs:**
+- RabbitMQ management UI shows 1 "Unacked" message indefinitely
+- New messages pile up in "Ready" state while consumer shows connected
+- Same `IDLead` appears in logs multiple times within seconds after a reconnect
+- `x-death` count on a message exceeds 1 (visible via message inspection in management UI)
+
+**Prevention:**
+```typescript
+ch.consume(queue, async (msg) => {
+  if (!msg) return; // consumer cancelled
+  try {
+    const event = parseAndValidate(msg.content);
+    await runner.run(event);
+    ch.ack(msg);
+  } catch (err) {
+    logger.error({ err }, 'Consumer processing error');
+    // nack with requeue=false sends to DLX — do NOT requeue transient errors blindly
+    // requeue=true only for known transient failures (network timeout, not parse errors)
+    const isTransient = isTransientError(err);
+    ch.nack(msg, false, isTransient);
+  }
+});
+```
+- Configure a Dead Letter Exchange (DLX) on the queue so permanently-failed messages land in a dead letter queue instead of being lost
+- Log the full message payload on nack — dead letter queues are silent without logging
+- `isTransientError` must NOT return true for payload parse failures — those must go to DLX immediately
+
+**Phase to address:** Phase 1 of v1.1 (RabbitMQ transport). Implement DLX in the same phase as the consumer — never defer it.
+
+---
+
+### INT-03: BrainEvent Schema Mismatch Between Webhook and RabbitMQ Paths
+
+**Severity:** HIGH
+
+**What goes wrong:** The current `BrainEventSchema` uses `{ conversationId, stepIndex, userId, content, metadata }`. The v1.1 spec introduces external fields `{ Name, Message, Numero, IDLead }`. If the Webhook and RabbitMQ transports each have their own parsing logic, they can silently diverge: a field mapped in one transport is ignored in the other, and the BrainRunner receives inconsistent events. The SDR Brain is written against one contract; when a message arrives via the other transport, it silently operates with `userId = undefined` or `conversationId = undefined`.
+
+**Why it happens:** It's tempting to write a separate Zod schema per transport to handle field name differences, then "translate" to BrainEvent. If the translation layer is tested with one transport but not the other, the bug ships silently.
+
+**Warning signs:**
+- `BrainRunner.run()` receives events where `userId` is the string `"undefined"` (coercion artifact)
+- Leads are created with `unique_id = ""` or `numero = null` after a message via one transport
+- LangGraph thread_id is undefined or constant (same checkpoint loaded for all users)
+
+**Prevention:**
+- Define a single canonical `IncomingMessage` type: `{ Name: string, Message: string, Numero: string, IDLead: string }`
+- Write a single `normalizeToEvent(raw: IncomingMessage): BrainEvent` function used by BOTH transports
+- The Zod validation schema for IncomingMessage is shared between webhook handler and RabbitMQ consumer
+- Add an integration test that sends the same logical message via both transports and asserts the BrainRunner receives identical `BrainEvent` objects
+
+**Phase to address:** Phase 1 of v1.1, when standardizing transport fields. The canonical schema must be defined before either transport implementation starts.
+
+---
+
+### INT-04: `users` Table Drop Breaks PostgresSaver If Foreign Keys Exist
+
+**Severity:** HIGH
+
+**What goes wrong:** Replacing `users` with `leads` via a Drizzle migration that drops the `users` table will fail if any Drizzle-managed table has a foreign key referencing `users.id`. More critically, the `agent_state` table in the current schema does not have a FK to `users` (verified in `0000_lyrical_scrambler.sql`), but the `memories` table uses `user_id TEXT` — which is a bare text column, not a FK. This means a DROP TABLE succeeds, but any application code that inserts into `memories` with a user_id referencing the old users.id format will silently persist orphaned rows.
+
+**Additionally:** PostgresSaver creates its own tables (`checkpoints`, `checkpoint_writes`, `checkpoint_blobs`) outside of Drizzle's migration system. These tables use `thread_id TEXT` — no FK to users. They are safe. But if v1.1 code passes `thread_id` values derived from the old `users.id` (UUID format), and v1.1 also introduces `leads.unique_id` (likely a different format), existing checkpoints from v1.0 tests become unreachable via the new `thread_id` derivation logic.
+
+**Warning signs:**
+- `ERROR: relation "users" does not exist` in migration log (FK constraint from another table)
+- Old EchoBrain test conversations no longer reachable after migration (thread_id format changed)
+- `memories` table contains rows with `user_id` in UUID format while new code looks up by `leads.unique_id`
+
+**Prevention:**
+- Before writing the migration, run: `SELECT conname, conrelid::regclass FROM pg_constraint WHERE confrelid = 'users'::regclass` — verify zero FKs reference `users`
+- Migration strategy: ADD `leads` table first → backfill → switch app code → DROP `users` in a later migration (separate deploy)
+- Document the `thread_id` format explicitly: `leads.unique_id` as the thread_id key. Add a migration comment explaining the mapping
+- Clean `memories` table: decide whether existing memories (keyed by UUID user_id) are migrated or dropped — do not leave orphaned rows silently
+
+**Phase to address:** Phase 2 of v1.1 (schema migration). Verify zero FKs before executing. The migration must be a two-step additive sequence, not a single DROP/CREATE.
+
+---
+
+### INT-05: `unique_id` Format Choice Creates Unintended thread_id Collisions
+
+**Severity:** HIGH
+
+**What goes wrong:** `leads.unique_id` will be used as the `thread_id` for LangGraph checkpoints (one conversation thread per lead). If `unique_id` is generated from external data (e.g., `IDLead` from the RabbitMQ message), two leads from different clients could have the same `IDLead` if the generating CRM does not guarantee global uniqueness. In a single-tenant database this is acceptable. In the multi-tenant model (1 DB per client), it is also safe — collisions would only occur within the same client's database. However, if Brain SDR is ever shared across clients in one database (even temporarily, during a migration), thread_ids will collide and conversations will be contaminated.
+
+**A separate, more immediate risk:** If `unique_id` is app-generated (nanoid or UUID), the generation must happen on the FIRST upsert, not on every call. If two RabbitMQ messages arrive simultaneously for the same `Numero` (WhatsApp message retry), two concurrent INSERT attempts run simultaneously — without a proper UNIQUE constraint + ON CONFLICT clause, two rows are created for the same lead.
+
+**Warning signs:**
+- Two `leads` rows with the same `numero` after a load test
+- LangGraph checkpoint for lead A contains messages addressed to lead B (cross-contamination)
+- `SELECT COUNT(*) FROM leads WHERE numero = '+5511999999999'` returns > 1
+
+**Prevention:**
+```typescript
+// Correct upsert pattern — single SQL statement, not SELECT-then-INSERT
+await db.insert(leads)
+  .values({ unique_id: nanoid(), nome: name, numero, ia_ativada: true })
+  .onConflictDoUpdate({
+    target: leads.numero,  // UNIQUE constraint on numero
+    set: { nome: name }    // update name if changed
+  });
+// THEN fetch the persisted unique_id (may have been set on original insert)
+const lead = await db.select().from(leads).where(eq(leads.numero, numero)).limit(1);
+const threadId = lead[0].unique_id;
+```
+- Add `UNIQUE` constraint on `leads.numero` in the migration — not just in the Drizzle schema
+- `unique_id` must be generated once at insert time and never overwritten by the upsert set clause
+
+**Phase to address:** Phase 2 of v1.1 (leads schema) and Phase 3 of v1.1 (lead registration flow). The UNIQUE constraint and upsert pattern must be in place before the first message is processed in any environment.
+
+---
+
+### INT-06: `ia_ativada` Check Placed After Expensive Operations
+
+**Severity:** HIGH
+
+**What goes wrong:** If the `ia_ativada = false` check is performed AFTER memory retrieval, prompt loading, or LangGraph invocation, the system wastes resources and introduces latency on every message for leads that should be silently ignored. More critically, if the check is inside the LangGraph graph (as a node condition), the BrainRunner still invokes the graph, which creates a new checkpoint entry for a thread that should not have been processed. This pollutes the checkpoint table and slightly degrades the lead's context on re-activation.
+
+**A race condition variant:** If `ia_ativada` is checked once at the start of the webhook/consumer handler, then a concurrent UPDATE sets `ia_ativada = false` mid-execution, the response is sent before the flag is honored. For SDR use cases (e.g., a human operator disabling the bot mid-conversation), this is an acceptable race with low impact. But if `ia_ativada = false` means "human is taking over," a response from the bot arriving after the flag is cleared causes confusion.
+
+**Warning signs:**
+- LangGraph checkpoint table grows with entries for leads where `ia_ativada = false`
+- Average response latency does not decrease for inactive leads (check is too late in the pipeline)
+- Duplicate responses in WhatsApp when operator takes over (race condition)
+
+**Prevention:**
+- Check `ia_ativada` as the FIRST operation after lead lookup, before any LangGraph invocation
+- If `ia_ativada = false`, ack the RabbitMQ message immediately and return without invoking BrainRunner
+- The check should be synchronous against the DB result, not a second query:
+```typescript
+const lead = await findOrCreateLead(numero, name);
+if (!lead.ia_ativada) {
+  ch.ack(msg);
+  return; // no BrainRunner.run(), no checkpoint created
+}
+await runner.run(event);
+ch.ack(msg);
+```
+- For the race condition: accept it as a known limitation in v1.1. Document that `ia_ativada` is eventually consistent with a window of one message round-trip.
+
+**Phase to address:** Phase 3 of v1.1 (lead registration flow). The `ia_ativada` check placement must be reviewed in the flow design phase, not implementation.
+
+---
+
+### INT-07: `thread_id` Collision When Same Lead Messages From Two Channels Simultaneously
+
+**Severity:** MEDIUM
+
+**What goes wrong:** LangGraph's PostgresSaver uses `thread_id` as the primary isolation key. If `thread_id = leads.unique_id`, and the same lead sends a message via WhatsApp (RabbitMQ consumer) and via the webhook simultaneously (e.g., a CRM integration triggers a webhook while the WhatsApp message is in-flight), both invocations will call `compiledGraph.invoke({ ... }, { configurable: { thread_id: sameLeadId } })` concurrently. PostgresSaver uses PostgreSQL transactions for checkpoint writes, but there is a documented race condition in PostgresSaver (langgraphjs issue #2040) where concurrent invocations on the same thread_id can produce cross-contaminated state.
+
+**Warning signs:**
+- LangGraph responds with a reply that references context from a different conversation channel
+- `checkpoint_writes` table shows overlapping timestamps for the same `thread_id`
+- Lead receives two replies in rapid succession after sending one message
+
+**Prevention:**
+- For v1.1 scope: the system only has one active transport per deployment (`TRANSPORT` env var). Webhook and RabbitMQ do not both run simultaneously. This pitfall is deferred to when multi-transport is introduced.
+- If multi-transport ever runs in the same process: use `thread_id = `${leads.unique_id}:${transportType}`` to namespace per channel
+- Alternatively: use a per-lead mutex (Redis or PostgreSQL advisory lock) before invoking `compiledGraph.invoke()` — only one invocation per lead at a time
+
+**Phase to address:** Phase 3 of v1.1 (conversation history). Document the single-transport constraint as a design assumption. Flag for v2 when multi-transport is activated.
+
+---
+
+### INT-08: Drizzle Migration Race Condition on Simultaneous Startup
+
+**Severity:** MEDIUM
+
+**What goes wrong:** The current `runMigrations()` implementation calls `migrate(db, { migrationsFolder })` with no locking mechanism. When multiple Brain SDR containers start simultaneously (e.g., Docker Compose scale, Kubernetes rolling update, or CI running two containers in parallel), each instance attempts to apply the same pending migrations at the same time. Drizzle tracks applied migrations in the `__drizzle_migrations` table, but the check-then-insert is not atomic. Two instances can both read "migration X not applied," both execute it, and one fails with a PostgreSQL duplicate key or unique constraint error.
+
+**Why this is worse for v1.1:** The `leads` table migration (adding a new table, dropping `users`) is a multi-step migration that is not idempotent — running it twice on an already-migrated DB will fail or silently corrupt data.
+
+**Warning signs:**
+- `ERROR: relation "leads" already exists` in one container's startup log
+- Container startup fails and Docker restarts it, causing the healthy container to now encounter a broken DB state
+- `__drizzle_migrations` table has duplicate rows for the same migration file
+
+**Prevention:**
+- Use PostgreSQL advisory locks to serialize migration execution:
+```typescript
+export async function runMigrations(sql: Sql, migrationsFolder: string): Promise<void> {
+  const db = drizzle(sql);
+  // Advisory lock key: any consistent integer — use a hash of 'brain-migrations'
+  await sql`SELECT pg_advisory_lock(7246842)`;
+  try {
+    await sql`CREATE EXTENSION IF NOT EXISTS vector`;
+    await migrate(db, { migrationsFolder });
+  } finally {
+    await sql`SELECT pg_advisory_unlock(7246842)`;
+  }
+}
+```
+- **Important caveat:** Advisory locks are session-scoped and incompatible with PgBouncer transaction pooling mode. Since the stack uses `postgres.js` directly (not PgBouncer), this is safe for v1.1.
+- Alternative (simpler, no locking): Run migrations as a one-time init container in Docker Compose/Kubernetes, not on every app startup. Only use the in-process migration for development convenience.
+
+**Phase to address:** Phase 1 of v1.1 (auto-migrate startup). Implement the advisory lock before deploying multiple instances.
+
+---
+
+### INT-09: PostgresSaver `setup()` Called Concurrently With Drizzle Migrations
+
+**Severity:** MEDIUM
+
+**What goes wrong:** The current startup sequence is: `runMigrations()` → `runner.init()` → `_compileGraph()` → `createCheckpointer()` → `checkpointer.setup()`. PostgresSaver's `setup()` creates its own tables (`checkpoints`, `checkpoint_writes`, `checkpoint_blobs`) using CREATE TABLE IF NOT EXISTS internally. This is safe in isolation. However, if multiple instances start simultaneously and all call `checkpointer.setup()` at the same time, PostgresSaver's internal setup (which uses `pg` directly, not the postgres.js Sql instance) can encounter the same race condition as Drizzle migrations.
+
+**A documented real bug:** langgraphjs issue #2040 and PR #2494 show that concurrent `setup()` calls with the same connection string have produced "table already exists" errors that crash the instance.
+
+**Warning signs:**
+- `ERROR: relation "checkpoints" already exists` in startup log
+- Container dies immediately after migrations succeed (dies in `runner.init()`)
+- Only reproducible when two containers start within ~500ms of each other
+
+**Prevention:**
+- Since `checkpointer.setup()` is called inside `_compileGraph()` which is called inside `runner.init()`, and `runner.init()` is called AFTER `runMigrations()` (which holds the advisory lock), the timing window for the race is already narrow.
+- Additionally, since `setup()` uses `CREATE TABLE IF NOT EXISTS`, duplicate calls are safe in PostgreSQL — the error is typically from a CREATE INDEX IF NOT EXISTS race, not the table itself.
+- Practical mitigation: add a `try/catch` around `checkpointer.setup()` that ignores "already exists" errors and retries once after a 100ms delay. This is a known pattern in LangGraph production deployments.
+- Long-term: call `checkpointer.setup()` once in the migration step rather than in every BrainRunner init.
+
+**Phase to address:** Phase 1 of v1.1 (auto-migrate startup). The advisory lock in INT-08 reduces but does not eliminate this window.
+
+---
+
+### INT-10: SDR Context Window Overflow for Long Leads
+
+**Severity:** MEDIUM
+
+**What goes wrong:** LangGraph appends all messages to the state's `messages` array. Each `compiledGraph.invoke()` call loads the full checkpoint (all prior messages) and sends them to the LLM. For a lead who has been in conversation for 50+ turns, the messages array grows to exceed the LLM's context window (GPT-4o: 128K tokens; Claude Sonnet: 200K tokens). The LLM API returns a 400 error (`context_length_exceeded`), LangGraph throws, and the entire conversation thread becomes unresponsive — every subsequent message fails with the same error.
+
+**Why this is worse than expected:** SDR conversations are typically longer than support conversations. A qualification flow (first contact → rapport → discovery → objection handling → close attempt) can span 30-80 messages over multiple days, with each message including role-play context and CRM data injected into the system prompt.
+
+**Warning signs:**
+- `Error: This model's maximum context length is 128000 tokens. Your messages have X tokens` in Langfuse traces
+- A specific lead's thread consistently fails while others work fine
+- The failing lead has had > 40 conversation turns
+
+**Prevention:**
+- Implement message trimming at the graph level using LangGraph's `trimMessages` utility:
+```typescript
+import { trimMessages } from '@langchain/core/messages';
+// In the graph node, before LLM call:
+const trimmed = await trimMessages(state.messages, {
+  maxTokens: 90000,      // leave headroom for system prompt + response
+  strategy: 'last',     // keep most recent messages
+  tokenCounter: llm,    // use LLM's tokenizer for accurate counts
+  includeSystem: true,  // always keep system prompt
+  allowPartial: false,
+});
+```
+- Implement a summarization node that triggers when messages exceed a token threshold: summarize the first 60% of the conversation into a single "conversation summary" message, then drop the original messages
+- For the SDR use case, the summarization node should specifically preserve: lead qualification data, stated objections, and agreed next steps — these are more important than small talk
+
+**Phase to address:** Phase 4 of v1.1 (Brain SDR implementation). Must be implemented before any real SDR conversation goes to production. Can be deferred from Phase 4 only if a hard limit on conversation turns is enforced instead.
+
+---
+
+### INT-11: WebhookTransport GAP-1 Still Latent After v1.1 Webhook Standardization
+
+**Severity:** MEDIUM
+
+**What goes wrong:** `WebhookTransport.start()` creates the Hono app via `createWebhookApp()` with NO runner injected. The class is in the codebase, exported, and satisfies `ITransport`. If v1.1 work standardizes the webhook fields (Name, Message, Numero, IDLead) and migrates `createWebhookApp()` to accept the new schema, but GAP-1 is not fixed simultaneously, anyone calling `new WebhookTransport().start()` via the `createTransport()` factory will silently get a webhook that accepts requests but never invokes the BrainRunner (returns `{ status: "accepted" }` forever with no LLM response).
+
+**Why it happens:** The factory returns `new WebhookTransport()` but the runner injection happens in `brain-echo/src/index.ts` which bypasses the transport class entirely (uses `createWebhookApp(runner)` directly). The gap is invisible until someone uses the factory as documented.
+
+**Warning signs:**
+- POST to `/api/v1/webhook` returns `{ "status": "accepted" }` instead of `{ "status": "ok", "reply": "..." }`
+- No entries in Langfuse/LangSmith — runner.run() was never called
+- Health check passes, server is up, but all messages are silently dropped
+
+**Prevention:**
+- Fix GAP-1 as part of v1.1: `WebhookTransport` must accept a runner in its constructor and pass it to `createWebhookApp(runner)`
+- The fix: `class WebhookTransport { constructor(private runner?: IBrainRunnerLike) {} async start(port = 3000) { const app = createWebhookApp(this.runner); ... } }`
+- Update `createTransport()` factory to accept and pass the runner
+- Add a test that creates a WebhookTransport via `createTransport()`, starts it, sends a POST, and asserts the response is `{ status: "ok" }` — not `{ status: "accepted" }`
+
+**Phase to address:** Phase 1 of v1.1 (Webhook standardization / GAP-1 fix). This is a prerequisite for any field standardization work — fixing the field schema without fixing the runner injection means the webhook still doesn't call the Brain.
+
+---
+
+### INT-12: Docker Image Size Bloat From `amqplib-bun` and LangChain Deps
+
+**Severity:** LOW
+
+**What goes wrong:** brain-echo was 419MB. Brain SDR adds `amqplib-bun` and potentially additional LangChain tools. `@langchain/langgraph`, `@langchain/core`, and their transitive dependencies (particularly `@aws-sdk/*` pulled in by some LangChain tools, `zod`, `ml-matrix`) add 30-80MB. The multi-stage Dockerfile already strips devDependencies, but the `node_modules` COPY approach copies per-package `node_modules/` directories wholesale — including any packages that could be deduped but are not because of pnpm's hoisting strategy.
+
+**Warning signs:**
+- Brain SDR image exceeds 600MB
+- Docker layer for `packages/ai/node_modules` or `packages/core/node_modules` exceeds 100MB
+- Build time exceeds 5 minutes on CI
+
+**Prevention:**
+- Audit what `@aws-sdk/*` packages appear in the final image: `docker run brain-sdr find /app -name "package.json" -path "*/aws-sdk/*" | wc -l`. If > 0, find which LangChain package pulls them and consider a tree-shaking bundler step
+- For the `amqplib-bun` package specifically: it is a fork of vanilla `amqplib` and adds minimal size overhead (< 5MB)
+- The largest size contributor is the `@langchain/*` ecosystem — no direct mitigation without bundling. Accept 500-600MB as the realistic target for Brain SDR
+- Use `docker history brain-sdr` to identify the largest layers and target those specifically
+- Consider `bun build --compile` (single binary) for a future optimization: reduces image to ~50MB but requires all imports to be statically resolvable — incompatible with the current dynamic prompt loading approach
+
+**Phase to address:** Phase 5 of v1.1 (Docker packaging). Profile the image after the Brain SDR implementation is complete, not before.
+
+---
+
+## Phase-Specific Warnings (v1.1)
+
+| Phase | Topic | Pitfall | Mitigation |
+|-------|-------|---------|------------|
+| Phase 1 | RabbitMQ transport | INT-01: Unhandled channel closure crashes process | Attach error/close listeners; implement reconnection |
+| Phase 1 | RabbitMQ transport | INT-02: Unacked message causes infinite redelivery | Always ack/nack in try/catch; configure DLX |
+| Phase 1 | Webhook standardization | INT-11: GAP-1 still latent | Fix runner injection before field changes |
+| Phase 1 | Auto-migrate startup | INT-08: Concurrent startup race condition | Add PostgreSQL advisory lock in runMigrations() |
+| Phase 1 | Auto-migrate startup | INT-09: PostgresSaver setup() race | Add try/catch around setup(); consider moving to migration step |
+| Phase 2 | Leads schema | INT-04: users table drop breaks FKs or orphans data | Verify zero FKs; use additive two-step migration |
+| Phase 2 | Leads schema | INT-05: unique_id collision from concurrent upsert | Add UNIQUE on numero; use ON CONFLICT upsert pattern |
+| Phase 3 | Lead registration flow | INT-06: ia_ativada check placed too late | Check before any LangGraph invocation |
+| Phase 3 | Lead registration flow | INT-03: BrainEvent schema mismatch between transports | Single canonical IncomingMessage type + shared normalizer |
+| Phase 3 | Conversation history | INT-07: Same lead via two channels simultaneously | Document single-transport assumption; defer multi-channel to v2 |
+| Phase 4 | Brain SDR | INT-10: Context window overflow for long conversations | Implement trimMessages or summarization node before production |
+| Phase 5 | Docker packaging | INT-12: Image size bloat from LangChain deps | Profile after SDR complete; accept 500-600MB as realistic target |
+
+---
+
+## Critical Pitfalls (v1.0 — preserved)
 
 Mistakes that cause rewrites, data loss, or production outages.
 
@@ -165,7 +532,7 @@ Mistakes that cause rewrites, data loss, or production outages.
 
 ---
 
-## Moderate Pitfalls
+## Moderate Pitfalls (v1.0 — preserved)
 
 ---
 
@@ -246,8 +613,6 @@ Mistakes that cause rewrites, data loss, or production outages.
 
 **What goes wrong:** `@langchain/core`, `@langchain/langgraph`, and `langchain` share peer dependencies but are versioned independently. Installing `@langchain/langgraph@1.3.x` with an incompatible `@langchain/core@0.x` causes silent type errors, runtime failures in message serialization, and "duck-typed" incompatibilities that are extremely hard to trace.
 
-**Why it happens:** LangChain's npm packages version independently. Package managers can resolve incompatible combinations when version constraints are loose.
-
 **Prevention:**
 - Pin exact versions for all `@langchain/*` packages in `package.json` — do not use caret (`^`) ranges
 - Use pnpm's `peerDependencyRules` to enforce consistent peer resolution
@@ -263,8 +628,6 @@ Mistakes that cause rewrites, data loss, or production outages.
 ### Pitfall 15: Tool Call Infinite Loop Under Rate Limiting
 
 **What goes wrong:** LLM API rate limits cause tool calls to fail with transient errors. Naive retry logic retries the same tool call indefinitely, which — combined with LangGraph's loop structure — creates a feedback loop that burns through the recursion limit, generates enormous token usage, and may trigger secondary rate limits.
-
-**Why it happens:** Retry logic and agent loops are implemented independently. The retry handler doesn't know it's inside an agent loop that is also retrying. The result is exponential blast — M retries × N agent iterations.
 
 **Prevention:**
 - Implement tool-level retry with exponential backoff and a hard cap (max 3 retries per tool call)
@@ -282,8 +645,6 @@ Mistakes that cause rewrites, data loss, or production outages.
 
 **What goes wrong:** Storing every conversation message in the vector store (PGVector) as an embedding is the most common memory architecture mistake. It creates retrieval noise (small talk, filler phrases, acknowledgements returning as "relevant" context), inflates storage, and makes semantic search progressively less useful as volume grows.
 
-**Why it happens:** "Semantic memory" sounds like it should contain everything. The distinction between working memory (current context window), episodic memory (conversation history), and semantic memory (distilled knowledge) is not obvious.
-
 **Prevention:**
 - Only embed semantically rich content: user-stated facts, preferences, goals, documents, and knowledge base entries
 - Keep conversation history as structured records in PostgreSQL (not PGVector) — retrieve it with time-based queries, not similarity search
@@ -296,7 +657,7 @@ Mistakes that cause rewrites, data loss, or production outages.
 
 ---
 
-## Minor Pitfalls
+## Minor Pitfalls (v1.0 — preserved)
 
 ---
 
@@ -330,25 +691,30 @@ Mistakes that cause rewrites, data loss, or production outages.
 
 ---
 
-## Phase-Specific Warnings
-
-| Phase Topic | Likely Pitfall | Mitigation |
-|-------------|---------------|------------|
-| Phase 1: State schema design | Serialization failures, schema lock-in, dimension lock-in | Use JSON-safe types, add `schema_version`, fix embedding provider early |
-| Phase 1: Database layer | Connection pool explosion, Drizzle client leaks | Implement tenant pool cache with LRU cap before first request handler |
-| Phase 1: Monorepo TS config | Path aliases broken at runtime | Use Bun alias config or subpath imports, not just tsconfig paths |
-| Phase 1: LangChain packages | Version drift across @langchain/* packages | Pin exact versions, lock all @langchain/* together |
-| Phase 1: Checkpointing | MemorySaver in non-local env | Enforce PostgresSaver in all non-test environments from day one |
-| Phase 2: Agent graph | Recursion limit too low, parallel reducer conflicts | Set explicit recursionLimit, define reducers for all shared keys |
-| Phase 2: Tool registry | Infinite loop under rate limiting | Implement tool retry caps and structured error returns |
-| Phase 2: Memory architecture | Embedding all messages | Separate embedding strategy: only embed distilled facts, not raw messages |
-| Phase 3: Performance | HNSW memory surprise | Use conservative m=16 defaults, benchmark before increasing |
-| Phase 3: Checkpoint growth | Unbounded checkpoint table | Implement pruning job, monitor table sizes |
-
----
-
 ## Sources
 
+### v1.1 Sources
+- amqplib unhandled rejection on channel close: [amqplib issue #250 — Channel ended, no reply will be forthcoming](https://github.com/amqp-node/amqplib/issues/250)
+- amqplib connection close uncatchable: [amqplib issue #334 — connection.close causes process to die](https://github.com/squaremo/amqp.node/issues/334)
+- RabbitMQ auto-reconnect Node.js: [Ecostack — RabbitMQ Auto Reconnect Node.js](https://ecostack.dev/posts/rabbitmq-auto-reconnect-nodejs/)
+- RabbitMQ graceful shutdown: [KiritoA Blog — Shutdown RabbitMQ consumer gracefully](https://kiritox.me/shutdown-rabbitmq-consumer-gracefully/)
+- RabbitMQ DLX Node.js: [Elest.io — RabbitMQ + Node.js with Dead Letter Queues](https://blog.elest.io/rabbitmq-node-js-build-resilient-event-driven-microservices-with-dead-letter-queues/)
+- RabbitMQ best practices (connection/channel): [CloudAMQP — RabbitMQ Best Practices](https://www.cloudamqp.com/blog/part1-rabbitmq-best-practice.html)
+- RabbitMQ 13 common errors: [CloudAMQP — 13 Common RabbitMQ Mistakes](https://www.cloudamqp.com/blog/part4-rabbitmq-13-common-errors.html)
+- LangGraph thread_id cross-contamination: [langgraphjs issue #2040 — Cross-thread checkpoint data contamination](https://github.com/langchain-ai/langgraphjs/issues/2040)
+- LangGraph PostgresSaver race condition fix: [LangGraph PR #2494 — Fix race condition in PostgresSaver](https://github.com/langchain-ai/langgraph/pull/2494)
+- LangGraph mixed thread_id formats bug: [LangGraph issue #6623 — Partial Graph State Missing Due to Mixed thread_id Formats](https://github.com/langchain-ai/langgraph/issues/6623)
+- LangGraph context window management 2026: [Zylos Research — Context Window Management and Session Lifecycle](https://zylos.ai/research/2026-03-31-context-window-management-session-lifecycle-long-running-agents/)
+- LangGraph trim_messages: [LangChain Docs — Short-term memory](https://docs.langchain.com/oss/python/langchain/short-term-memory)
+- Context window overflow Redis 2026: [Redis Blog — Context Window Overflow in 2026](https://redis.io/blog/context-window-overflow/)
+- Drizzle migration concurrent instances: [DEV — Drizzle ORM Migrations in Production: Zero-Downtime Schema Changes](https://dev.to/whoffagents/drizzle-orm-migrations-in-production-zero-downtime-schema-changes-e71)
+- Drizzle column rename/drop safety: [DEV — Zero-Downtime Postgres Migrations with Drizzle ORM](https://dev.to/whoffagents/zero-downtime-postgres-migrations-with-drizzle-orm-22ga)
+- PostgreSQL advisory locks: [Leapcell — Orchestrating Distributed Tasks with PostgreSQL Advisory Locks](https://leapcell.io/blog/orchestrating-distributed-tasks-with-postgresql-advisory-locks)
+- Advisory lock PgBouncer incompatibility: [IBM mcp-context-forge issue #4051](https://github.com/IBM/mcp-context-forge/issues/4051)
+- NanoID vs UUID collision risk: [Toolsbase — UUID v4 vs v7 vs NanoID vs CUID2](https://toolsbase.dev/en/blog/uuid-comparison-guide)
+- Docker image size reduction Bun/Node: [Better Stack — Reducing Docker Image Sizes](https://betterstack.com/community/guides/scaling-docker/reducing-docker-image-size/)
+
+### v1.0 Sources
 - LangGraph serialization: [Fix LangGraph JSON Serialization Error](https://markaicode.com/errors/langgraph-json-parse-error-fix/)
 - LangGraph state management undocumented issues: [LangGraph State Management Guide](https://altersquare.io/langgraph-state-management-undocumented-issues-after-commit/)
 - LangGraph checkpointing best practices: [Mastering LangGraph Checkpointing 2025](https://sparkco.ai/blog/mastering-langgraph-checkpointing-best-practices-for-2025/)
