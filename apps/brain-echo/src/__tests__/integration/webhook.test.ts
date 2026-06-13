@@ -7,27 +7,23 @@ import { describe, test, expect } from "bun:test";
 const BASE_URL = process.env.ECHO_URL;
 const RUN_INTEGRATION = !!BASE_URL;
 
-// Helper para criar um BrainEvent válido
-function makeBrainEvent(content: string, conversationId = `test-sc2-${Date.now()}`) {
+// Helper para criar um BrainEvent válido com campos padronizados (TRP-02)
+function makeBrainEvent(message: string, numero = `num-${Date.now()}`) {
   return {
-    conversationId,
-    stepIndex: 0,
-    userId: "test-user-sc2",
-    content,
+    Name: "Test User SC2",
+    Message: message,
+    Numero: numero,
+    IDLead: `lead-sc2-${Date.now()}`,
   };
 }
 
 // Helper para fazer POST ao webhook
 async function postWebhook(
   body: unknown,
-  requestId?: string
 ): Promise<{ status: number; data: unknown }> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
-  if (requestId) {
-    headers["X-Request-Id"] = requestId;
-  }
 
   const res = await fetch(`${BASE_URL}/api/v1/webhook`, {
     method: "POST",
@@ -46,38 +42,20 @@ describe("SC-2: POST /api/v1/webhook end-to-end", () => {
 
   const itOrSkip = RUN_INTEGRATION ? test : test.skip;
 
-  itOrSkip("sem X-Request-Id retorna 400", async () => {
-    const { status } = await postWebhook(makeBrainEvent("hello"), undefined);
-    expect(status).toBe(400);
-  });
-
-  itOrSkip("body inválido (sem conversationId) retorna 400", async () => {
+  itOrSkip("body inválido (sem Name, Numero, IDLead) retorna 400", async () => {
     const { status, data } = await postWebhook(
-      { content: "hello" }, // falta conversationId, stepIndex, userId
-      `test-invalid-${Date.now()}`
+      { Message: "hello" }, // falta Name, Numero, IDLead
     );
     expect(status).toBe(400);
     expect((data as any).error).toBe("Invalid BrainEvent");
   });
 
-  itOrSkip("mesmo X-Request-Id em duas requests retorna 409 na segunda", async () => {
-    const requestId = `test-dedup-${Date.now()}`;
-    const event = makeBrainEvent("hello dedup", `conv-dedup-${Date.now()}`);
-
-    const first = await postWebhook(event, requestId);
-    expect(first.status).toBe(200);
-
-    const second = await postWebhook(event, requestId);
-    expect(second.status).toBe(409);
-  });
-
   itOrSkip(
     "POST válido retorna 200 com { status: 'ok', reply: string }",
     async () => {
-      const requestId = `test-valid-${Date.now()}`;
       const event = makeBrainEvent("Olá! Qual é 2+2?", `conv-${Date.now()}`);
 
-      const { status, data } = await postWebhook(event, requestId);
+      const { status, data } = await postWebhook(event);
 
       expect(status).toBe(200);
       expect((data as any).status).toBe("ok");

@@ -80,10 +80,10 @@ describe("BrainRunner Integration", () => {
 
     // Test run()
     const event: BrainEvent = {
-      conversationId: "conv-integration-1",
-      stepIndex: 0,
-      userId: "user-integration",
-      content: "hello",
+      Name: "Test User Integration",
+      Message: "hello",
+      Numero: "5511999990001",
+      IDLead: "lead-integration-1",
     };
 
     const result = await runner.run(event);
@@ -97,11 +97,12 @@ describe("BrainRunner Integration", () => {
     console.log("✓ run() returned:", result);
 
     // Test memory persistence (second call with same thread_id)
+    // mesmo Numero = mesmo thread (Phase 8: substituir por lead.unique_id)
     const event2: BrainEvent = {
-      conversationId: "conv-integration-1", // same thread
-      stepIndex: 1,
-      userId: "user-integration",
-      content: "remember that",
+      Name: "Test User Integration",
+      Message: "remember that",
+      Numero: "5511999990001", // mesmo Numero = mesmo thread
+      IDLead: "lead-integration-1",
     };
 
     const result2 = await runner.run(event2);

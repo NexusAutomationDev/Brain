@@ -125,23 +125,24 @@ export class BrainRunner {
       );
     }
 
-    const threadId = event.conversationId;
+    // Phase 8: substituir por lead.unique_id (após LeadService criar unique_id derivado do Numero)
+    const threadId = event.Numero;
 
     // Step 1: Hydrate memory — retrieve context from all 3 layers (MEM-04)
     // Pass empty queryVector to skip semantic search in v1 (no embedding of input yet)
-    await this.memoryManager.getContext(threadId, event.userId, []);
+    await this.memoryManager.getContext(threadId, event.IDLead, []);
 
     // Step 2: Invoke compiled graph with thread_id + Langfuse callbacks
     const callbacks = createTracingCallbacks({
       sessionId: threadId,
-      userId: event.userId,
+      userId: event.IDLead,
       brainId: this.brain.id,
     });
 
     const result = await this.compiledGraph.invoke(
       {
-        messages: [{ role: "human", content: event.content }],
-        userId: event.userId,
+        messages: [{ role: "human", content: event.Message }],
+        userId: event.IDLead,
         sessionId: threadId,
       },
       {
@@ -160,7 +161,7 @@ export class BrainRunner {
     // Step 4: Persist long-term memory after the turn (MEM-04)
     // Fire-and-forget is NOT used here — we await to ensure persistence before responding
     await this.memoryManager.saveContext({
-      userId: event.userId,
+      userId: event.IDLead,
       profileKey: "context",
       profileValue: { lastReply: reply, conversationId: threadId },
     });

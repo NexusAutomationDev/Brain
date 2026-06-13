@@ -3,7 +3,7 @@ import { createTransport } from "./factory.js";
 import { WebhookTransport } from "./webhook/handler.js";
 import { ConfigurationError } from "@brain-pkg/shared";
 
-describe("createTransport factory (TRANS-04)", () => {
+describe("createTransport factory (TRANS-04, TRP-02)", () => {
   beforeEach(() => {
     delete process.env.TRANSPORT;
   });
@@ -12,23 +12,37 @@ describe("createTransport factory (TRANS-04)", () => {
     delete process.env.TRANSPORT;
   });
 
-  it("createTransport('webhook') returns a WebhookTransport instance", () => {
-    const transport = createTransport("webhook");
+  it("createTransport(runner) returns a WebhookTransport instance with runner injected", () => {
+    const mockRunner = { run: async () => ({ reply: "ok" }) };
+    const transport = createTransport(mockRunner);
     expect(transport).toBeInstanceOf(WebhookTransport);
   });
 
-  it("createTransport with unknown value throws ConfigurationError", () => {
-    expect(() => createTransport("rabbitmq")).toThrow(ConfigurationError);
+  it("createTransport() without runner returns WebhookTransport with runner undefined", () => {
+    const transport = createTransport();
+    expect(transport).toBeInstanceOf(WebhookTransport);
   });
 
-  it("createTransport reads TRANSPORT env var when no argument provided", () => {
+  it("WebhookTransport.start() without runner throws ConfigurationError (T-05-02)", async () => {
+    const transport = createTransport(); // no runner
+    expect(transport.start(9999)).rejects.toThrow(ConfigurationError);
+  });
+
+  it("createTransport with unknown TRANSPORT env throws ConfigurationError", () => {
+    process.env.TRANSPORT = "rabbitmq";
+    expect(() => createTransport()).toThrow(ConfigurationError);
+  });
+
+  it("createTransport reads TRANSPORT env var when set to webhook", () => {
     process.env.TRANSPORT = "webhook";
-    const transport = createTransport();
+    const mockRunner = { run: async () => ({ reply: "ok" }) };
+    const transport = createTransport(mockRunner);
     expect(transport).toBeInstanceOf(WebhookTransport);
   });
 
   it("createTransport defaults to webhook when TRANSPORT env is not set", () => {
-    const transport = createTransport();
+    const mockRunner = { run: async () => ({ reply: "ok" }) };
+    const transport = createTransport(mockRunner);
     expect(transport).toBeInstanceOf(WebhookTransport);
   });
 });

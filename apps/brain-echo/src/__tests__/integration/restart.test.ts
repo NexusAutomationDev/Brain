@@ -10,23 +10,22 @@ const CONTAINER_NAME = process.env.ECHO_CONTAINER_NAME;
 const RUN_INTEGRATION = !!(BASE_URL && CONTAINER_NAME);
 
 // ID único para esta conversa — preservado entre turnos 1 e 2
+// Numero é usado como threadId temporário (Phase 8: substituir por lead.unique_id)
 const CONVERSATION_ID = `test-sc3-restart-${Date.now()}`;
 // Nome único para identificar o contexto a ser recuperado
 const CONTEXT_MARKER = `TestUser-${Date.now()}`;
 
-async function sendMessage(content: string, stepIndex: number): Promise<string> {
-  const requestId = `sc3-${CONVERSATION_ID}-step${stepIndex}`;
+async function sendMessage(message: string, stepIndex: number): Promise<string> {
   const res = await fetch(`${BASE_URL}/api/v1/webhook`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "X-Request-Id": requestId,
     },
     body: JSON.stringify({
-      conversationId: CONVERSATION_ID,
-      stepIndex,
-      userId: "test-user-sc3",
-      content,
+      Name: "Test User SC3",
+      Message: message,
+      Numero: CONVERSATION_ID, // O mesmo Numero faz o LangGraph carregar o checkpoint do turno anterior
+      IDLead: "lead-sc3-restart",
     }),
   });
   const body = await res.json() as { status: string; reply: string };
@@ -75,7 +74,7 @@ describe("SC-3: PostgresSaver persistence across container restart", () => {
       await waitForContainer();
 
       // Turno 2: verificar que o contexto foi preservado pelo PostgresSaver
-      // O mesmo conversationId faz o LangGraph carregar o checkpoint do turno 1
+      // O mesmo Numero faz o LangGraph carregar o checkpoint do turno 1
       const turn2Reply = await sendMessage("Qual é o meu nome de teste?", 1);
 
       expect(turn2Reply).toBeTruthy();

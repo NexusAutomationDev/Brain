@@ -71,10 +71,10 @@ function makeBrain(promptKeys = ["system"]): IBrain {
 
 function makeEvent(): BrainEvent {
   return {
-    conversationId: "conv-1",
-    stepIndex: 0,
-    userId: "user-1",
-    content: "hello",
+    Name: "Test User",
+    Message: "hello",
+    Numero: "5511999990001",
+    IDLead: "lead-test-1",
   };
 }
 
