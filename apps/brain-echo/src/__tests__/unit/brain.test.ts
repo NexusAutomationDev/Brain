@@ -1,18 +1,42 @@
-// Wave 0 stub — IBrain contract tests for EchoBrain
-// Stubs criados antes da implementação (Nyquist compliance)
-// Implementação completa ocorre no plano 04-02 (Wave 1)
-
-import { describe, test, expect } from "bun:test";
+import { describe, test, expect, mock } from "bun:test";
 
 describe("EchoBrain — IBrain contract", () => {
   test("placeholder: arquivo existe e é parseável", () => {
     expect(true).toBe(true);
   });
 
-  test.todo("echoBrain.id é 'brain-echo'");
-  test.todo("echoBrain.brainType é 'echo'");
-  test.todo("echoBrain.promptKeys contém 'system'");
-  test.todo("echoBrain.tools é array vazio");
-  test.todo("echoBrain.buildGraph(ctx) retorna StateGraph não compilado");
-  test.todo("buildGraph retorna objeto com método addNode (StateGraph interface)");
+  test("echoBrain.id é 'brain-echo'", async () => {
+    const mod = await import("../../brain.js");
+    expect(mod.echoBrain.id).toBe("brain-echo");
+  });
+
+  test("echoBrain.brainType é 'echo'", async () => {
+    const mod = await import("../../brain.js");
+    expect(mod.echoBrain.brainType).toBe("echo");
+  });
+
+  test("echoBrain.promptKeys contém ['system']", async () => {
+    const mod = await import("../../brain.js");
+    expect(mod.echoBrain.promptKeys).toEqual(["system"]);
+  });
+
+  test("echoBrain.tools é array vazio", async () => {
+    const mod = await import("../../brain.js");
+    expect(mod.echoBrain.tools).toEqual([]);
+  });
+
+  test("buildGraph(ctx) retorna StateGraph (tem método addNode)", async () => {
+    const mod = await import("../../brain.js");
+    // Mock mínimo de BrainBuildContext
+    const ctx = {
+      llm: { invoke: mock(async () => ({ content: "ok" })) },
+      prompts: { system: "Você é um assistente útil." },
+      tools: [],
+    };
+    const graph = mod.echoBrain.buildGraph(ctx as any);
+    // StateGraph retorna objeto com métodos de grafo — não deve ser null
+    expect(graph).toBeTruthy();
+    expect(typeof graph.addNode).toBe("function");
+    expect(typeof graph.compile).toBe("function");
+  });
 });

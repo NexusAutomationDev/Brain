@@ -11,10 +11,12 @@
     "start": "bun dist/index.js"
   },
   "dependencies": {
+    "@brain-pkg/ai": "workspace:*",
     "@brain-pkg/core": "workspace:*",
     "@brain-pkg/database": "workspace:*",
     "@brain-pkg/observability": "workspace:*",
     "@brain-pkg/transport": "workspace:*",
+    "@langchain/langgraph": "^1.4.1",
     "hono": "^4.12.0",
     "postgres": "^3.4.9",
     "drizzle-orm": "0.45.2"
