@@ -168,6 +168,9 @@ importers:
       '@brain-pkg/database':
         specifier: workspace:*
         version: link:../database
+      '@brain-pkg/observability':
+        specifier: workspace:*
+        version: link:../observability
       '@brain-pkg/shared':
         specifier: workspace:*
         version: link:../shared

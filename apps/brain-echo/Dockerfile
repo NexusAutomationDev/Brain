@@ -52,15 +52,25 @@ WORKDIR /app
 # node_modules do root — contém symlinks pnpm para workspace packages
 COPY --from=builder /app/node_modules ./node_modules
 
-# Workspace packages compilados (dist/) — os symlinks em node_modules apontam para esses paths
-# Pitfall 3: estrutura de diretórios DEVE ser idêntica ao builder para symlinks funcionarem
+# Workspace packages compilados (dist/) + package.json — os symlinks em node_modules apontam
+# para packages/<name>/, e o runtime lê package.json para resolver o campo "main".
+# Pitfall 3: estrutura de diretórios DEVE ser idêntica ao builder para symlinks funcionarem.
+# Pitfall: package.json de cada workspace é obrigatório — sem ele o runtime falha em
+# "Cannot find module" mesmo com o dist presente.
 COPY --from=builder /app/packages/ai/dist ./packages/ai/dist
+COPY --from=builder /app/packages/ai/package.json ./packages/ai/package.json
 COPY --from=builder /app/packages/core/dist ./packages/core/dist
+COPY --from=builder /app/packages/core/package.json ./packages/core/package.json
 COPY --from=builder /app/packages/database/dist ./packages/database/dist
+COPY --from=builder /app/packages/database/package.json ./packages/database/package.json
 COPY --from=builder /app/packages/memory/dist ./packages/memory/dist
+COPY --from=builder /app/packages/memory/package.json ./packages/memory/package.json
 COPY --from=builder /app/packages/observability/dist ./packages/observability/dist
+COPY --from=builder /app/packages/observability/package.json ./packages/observability/package.json
 COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
+COPY --from=builder /app/packages/shared/package.json ./packages/shared/package.json
 COPY --from=builder /app/packages/transport/dist ./packages/transport/dist
+COPY --from=builder /app/packages/transport/package.json ./packages/transport/package.json
 
 # node_modules por package — pnpm coloca deps externas não-workspace aqui
 COPY --from=builder /app/packages/ai/node_modules ./packages/ai/node_modules
