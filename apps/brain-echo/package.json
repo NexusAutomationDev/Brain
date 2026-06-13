@@ -1,0 +1,26 @@
+{
+  "name": "@brain-app/echo",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "test": "bun test src/__tests__/unit",
+    "test:integration": "bun test src/__tests__/integration",
+    "typecheck": "tsc --noEmit",
+    "start": "bun dist/index.js"
+  },
+  "dependencies": {
+    "@brain-pkg/core": "workspace:*",
+    "@brain-pkg/database": "workspace:*",
+    "@brain-pkg/observability": "workspace:*",
+    "@brain-pkg/transport": "workspace:*",
+    "hono": "^4.12.0",
+    "postgres": "^3.4.9",
+    "drizzle-orm": "0.45.2"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.0.0"
+  }
+}
