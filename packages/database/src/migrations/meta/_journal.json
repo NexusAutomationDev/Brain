@@ -15,6 +15,13 @@
       "when": 1781279723441,
       "tag": "0001_lazy_deathstrike",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1781352331000,
+      "tag": "0002_echo_brain_seed",
+      "breakpoints": true
     }
   ]
 }
