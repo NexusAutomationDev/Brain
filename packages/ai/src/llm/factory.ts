@@ -41,11 +41,11 @@ export async function createLLM(options: LLMOptions = {}): Promise<BaseChatModel
   switch (provider) {
     case "openai": {
       const { ChatOpenAI } = await import("@langchain/openai");
-      return new ChatOpenAI({ model: modelStr, openAIApiKey: apiKeyStr, ...options });
+      return new ChatOpenAI({ model: modelStr, apiKey: apiKeyStr, ...options });
     }
     case "anthropic": {
       const { ChatAnthropic } = await import("@langchain/anthropic");
-      return new ChatAnthropic({ model: modelStr, anthropicApiKey: apiKeyStr, ...options });
+      return new ChatAnthropic({ model: modelStr, apiKey: apiKeyStr, ...options });
     }
     case "gemini": {
       const { ChatGoogleGenerativeAI } = await import("@langchain/google-genai");
@@ -56,7 +56,7 @@ export async function createLLM(options: LLMOptions = {}): Promise<BaseChatModel
       // D-08: OpenRouter is OpenAI-compatible with a custom baseURL
       return new ChatOpenAI({
         model: modelStr,
-        openAIApiKey: apiKeyStr,
+        apiKey: apiKeyStr,
         configuration: { baseURL: "https://openrouter.ai/api/v1" },
         ...options,
       });
