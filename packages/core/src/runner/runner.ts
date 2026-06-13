@@ -6,7 +6,7 @@
 // AI-01: PostgresSaver ONLY in production — see packages/ai/src/graph/checkpointer.ts.
 // Anti-pattern: NEVER call .compile() inside buildGraph() — BrainRunner owns compilation.
 
-import { createCheckpointer, createLLM, BrainStateAnnotation } from "@brain-pkg/ai";
+import { createCheckpointer, createLLM } from "@brain-pkg/ai";
 import type { LLMOptions } from "@brain-pkg/ai";
 import { MemoryManager } from "@brain-pkg/memory";
 import { createTracingCallbacks } from "@brain-pkg/observability";

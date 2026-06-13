@@ -7,11 +7,12 @@
   "types": "./dist/index.d.ts",
   "scripts": {
     "build": "tsc",
-    "test": "bun test",
-    "typecheck": "tsc --noEmit",
-    "db:push": "drizzle-kit push",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "bun src/migrate.ts"
+    "db:migrate": "bun src/migrate.ts",
+    "db:push": "drizzle-kit push",
+    "lint": "eslint src/ --ext .ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@brain-pkg/shared": "workspace:*",

@@ -38,6 +38,7 @@ export class TenantPoolManager {
         database: databaseName,
         max: this.baseConfig.max,
         idle_timeout: this.baseConfig.idle_timeout,
+        // eslint-disable-next-line @typescript-eslint/no-empty-function
         onnotice: () => {},
       });
 
