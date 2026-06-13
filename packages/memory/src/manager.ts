@@ -1,5 +1,5 @@
 import type { PostgresSaver } from "@langchain/langgraph-checkpoint-postgres";
-import type { CheckpointTuple } from "@langchain/langgraph-checkpoint";
+import type { CheckpointTuple } from "@langchain/langgraph";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import { readProfile, writeProfile } from "./long-term.js";
 import { upsertEmbedding, searchSimilar } from "./semantic.js";
