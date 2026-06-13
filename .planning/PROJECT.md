@@ -16,15 +16,17 @@ Uma infraestrutura de agentes modular onde novos Brains são criados definindo a
 - [x] Schema PostgreSQL + PGVector (users, memories, agent_state, embeddings) — Validated in Phase 1: foundation
 - [x] Multi-tenancy: 1 banco por cliente, seleção via `DATABASE_NAME` env (TenantPoolManager, LRU max 20) — Validated in Phase 1: foundation
 - [x] Observabilidade básica (health check GET /health, logging estruturado com Pino) — Validated in Phase 1: foundation
+- [x] `apps/` directory com Brain packages — Validated in Phase 4: apps/brain-echo (IBrain + BrainRunner end-to-end)
+- [x] Brain SDK: IBrain interface + BrainRunner lifecycle (init → run) + ToolsRegistry — Validated in Phase 4: EchoBrain exercita contrato completo com LLM real
+- [x] Transport layer (Webhook): POST /api/v1/webhook traversa BrainRunner → LangGraph → resposta — Validated in Phase 4: SC-2 smoke test com LLM real
+- [x] Tools Registry: registerBrainType + enableTool por tipo de Brain — Validated in Phase 4: EchoBrain registrado sem tools
+- [x] Docker: multi-stage Dockerfile (node:22-slim builder + oven/bun:1 runner), imagem por Brain — Validated in Phase 4: brain-echo-test 419MB, startup fail-fast, migrations na imagem
+- [x] PostgresSaver: estado LangGraph persistido no PostgreSQL, dura container restart — Validated in Phase 4: SC-3 (MARKER_BRAINCORE_42 sobreviveu docker restart)
 
 ### Active
 
-- [ ] `apps/` directory com Brain packages (SDR, Suporte, etc.)
-- [ ] Brain SDK: interface de plugin no core para registro e declaração de Brains
-- [ ] Transport layer: Webhook e RabbitMQ, selecionados via `ENV=TRANSPORT`
-- [ ] Tools Registry: habilitar/desabilitar ferramentas por tipo de Brain
-- [ ] Arquitetura de memória em 3 camadas: short-term, long-term, semantic (embeddings)
-- [ ] Docker: runtime Bun, estrutura para imagens por Brain
+- [ ] Transport layer (RabbitMQ): seleção via `TRANSPORT=rabbitmq` env
+- [ ] Arquitetura de memória semântica (embeddings + RAG): busca por similaridade em produção
 
 ### Out of Scope
 
@@ -79,4 +81,4 @@ Este documento evolui nas transições de fase e marcos de milestone.
 4. Atualizar Context com estado atual
 
 ---
-*Last updated: 2026-06-11 — Phase 1 (foundation) complete*
+*Last updated: 2026-06-13 — Phase 4 (validation brain) complete — Brain Core v1 SDK validado end-to-end*

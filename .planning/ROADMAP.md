@@ -94,11 +94,11 @@ Plans:
 **Plans**: 5 plans
 
 Plans:
-- [ ] 04-00-PLAN.md — Wave 0: runMigrations refactor (exportável), workspace apps/brain-echo scaffold, Nyquist test stubs
-- [ ] 04-01-PLAN.md — Wave 1: EchoBrain IBrain implementation, server.ts (3 sub-apps Hono), index.ts (startup sequencial)
-- [ ] 04-02-PLAN.md — Wave 2: Migration SQL seed do system prompt (0002) + Dockerfile multi-stage
-- [ ] 04-03-PLAN.md — Wave 2: Testes de integração completos (SC-2 webhook, SC-3 restart, SC-4 multi-tenant)
-- [ ] 04-04-PLAN.md — Wave 3: Checkpoint humano — smoke test container + suite completa de integração
+- [x] 04-00-PLAN.md — Wave 0: runMigrations refactor (exportável), workspace apps/brain-echo scaffold, Nyquist test stubs
+- [x] 04-01-PLAN.md — Wave 1: EchoBrain IBrain implementation, server.ts (3 sub-apps Hono), index.ts (startup sequencial)
+- [x] 04-02-PLAN.md — Wave 2: Migration SQL seed do system prompt (0002) + Dockerfile multi-stage
+- [x] 04-03-PLAN.md — Wave 2: Testes de integração completos (SC-2 webhook, SC-3 restart, SC-4 multi-tenant)
+- [x] 04-04-PLAN.md — Wave 3: Checkpoint humano — smoke test container + suite completa de integração
 
 ## Progress
 
