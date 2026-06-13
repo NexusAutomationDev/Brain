@@ -33,7 +33,7 @@ export function upsertEmbedding(db: PostgresJsDatabase, input: EmbeddingInput): 
       userId: input.userId,
       sessionId: input.sessionId,
       content: input.content,
-      embedding: input.embedding as unknown as string, // pgvector serialization
+      embedding: input.embedding, // pgvector accepts number[] via drizzle-orm/pg-core vector type
       metadata: input.metadata ?? {},
     })
     .catch((err) => {

@@ -171,6 +171,12 @@ importers:
       '@brain-pkg/shared':
         specifier: workspace:*
         version: link:../shared
+      '@langchain/langgraph':
+        specifier: ^1.4.1
+        version: 1.4.1(@langchain/core@1.1.48(@opentelemetry/api@1.9.1)(openai@6.42.0(zod@3.25.76)))(zod@3.25.76)
+      '@langchain/langgraph-checkpoint-postgres':
+        specifier: ^1.0.3
+        version: 1.0.3(@langchain/core@1.1.48(@opentelemetry/api@1.9.1)(openai@6.42.0(zod@3.25.76)))(@langchain/langgraph-checkpoint@1.1.0(@langchain/core@1.1.48(@opentelemetry/api@1.9.1)(openai@6.42.0(zod@3.25.76))))
       drizzle-orm:
         specifier: ^0.45.2
         version: 0.45.2(@opentelemetry/api@1.9.1)(bun-types@1.3.14)(pg@8.21.0)(postgres@3.4.9)
@@ -181,9 +187,6 @@ importers:
       '@langchain/core':
         specifier: ^1.1.48
         version: 1.1.48(@opentelemetry/api@1.9.1)(openai@6.42.0(zod@3.25.76))
-      '@langchain/langgraph-checkpoint-postgres':
-        specifier: ^1.0.3
-        version: 1.0.3(@langchain/core@1.1.48(@opentelemetry/api@1.9.1)(openai@6.42.0(zod@3.25.76)))(@langchain/langgraph-checkpoint@1.1.0(@langchain/core@1.1.48(@opentelemetry/api@1.9.1)(openai@6.42.0(zod@3.25.76))))
       '@types/bun':
         specifier: latest
         version: 1.3.14

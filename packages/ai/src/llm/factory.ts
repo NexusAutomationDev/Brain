@@ -32,25 +32,31 @@ export async function createLLM(options: LLMOptions = {}): Promise<BaseChatModel
     throw new ConfigurationError("LLM_PROVIDER env var is required", { provider: "missing" });
   }
 
+  // model and apiKey may be undefined — each LLM constructor handles its own validation
+  // Cast to string to satisfy TypeScript; missing values will surface as runtime errors
+  // from the provider SDK (never logging apiKey — T-2-03)
+  const modelStr = model as string;
+  const apiKeyStr = apiKey as string;
+
   switch (provider) {
     case "openai": {
       const { ChatOpenAI } = await import("@langchain/openai");
-      return new ChatOpenAI({ model, openAIApiKey: apiKey, ...options });
+      return new ChatOpenAI({ model: modelStr, openAIApiKey: apiKeyStr, ...options });
     }
     case "anthropic": {
       const { ChatAnthropic } = await import("@langchain/anthropic");
-      return new ChatAnthropic({ model, anthropicApiKey: apiKey, ...options });
+      return new ChatAnthropic({ model: modelStr, anthropicApiKey: apiKeyStr, ...options });
     }
     case "gemini": {
       const { ChatGoogleGenerativeAI } = await import("@langchain/google-genai");
-      return new ChatGoogleGenerativeAI({ model, apiKey, ...options });
+      return new ChatGoogleGenerativeAI({ model: modelStr, apiKey: apiKeyStr, ...options });
     }
     case "openrouter": {
       const { ChatOpenAI } = await import("@langchain/openai");
       // D-08: OpenRouter is OpenAI-compatible with a custom baseURL
       return new ChatOpenAI({
-        model,
-        openAIApiKey: apiKey,
+        model: modelStr,
+        openAIApiKey: apiKeyStr,
         configuration: { baseURL: "https://openrouter.ai/api/v1" },
         ...options,
       });

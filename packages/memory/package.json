@@ -14,11 +14,12 @@
     "@brain-pkg/shared": "workspace:*",
     "@brain-pkg/database": "workspace:*",
     "@brain-pkg/ai": "workspace:*",
+    "@langchain/langgraph": "^1.4.1",
+    "@langchain/langgraph-checkpoint-postgres": "^1.0.3",
     "drizzle-orm": "^0.45.2",
     "postgres": "^3.4.9"
   },
   "devDependencies": {
-    "@langchain/langgraph-checkpoint-postgres": "^1.0.3",
     "@langchain/core": "^1.1.48",
     "@types/bun": "latest",
     "typescript": "^5.0.0"

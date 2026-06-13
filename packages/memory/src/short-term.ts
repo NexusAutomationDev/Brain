@@ -1,5 +1,5 @@
 import type { PostgresSaver } from "@langchain/langgraph-checkpoint-postgres";
-import type { CheckpointTuple } from "@langchain/langgraph-checkpoint";
+import type { CheckpointTuple } from "@langchain/langgraph";
 
 /**
  * MEM-01: Short-term memory wrapper around PostgresSaver.
