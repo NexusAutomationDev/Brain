@@ -192,7 +192,56 @@ Plataforma monorepo para construção de agentes de IA especializados (Brains). 
 <!-- GSD:conventions-start source:CONVENTIONS.md -->
 ## Conventions
 
-Conventions not yet established. Will populate as patterns emerge during development.
+### Organização de Testes
+
+Todos os arquivos de teste devem ficar em uma pasta dedicada `__tests__/` dentro do pacote correspondente, nunca ao lado dos arquivos de implementação.
+
+**Estrutura obrigatória:**
+```
+packages/<pacote>/src/
+  __tests__/
+    unit/          # testes unitários (sem I/O externo)
+    integration/   # testes que tocam banco, fila ou rede
+  <código de produção>
+```
+
+**Regras:**
+- Arquivos de teste usam o sufixo `.test.ts`
+- Nunca criar arquivos `*.test.ts` fora de `__tests__/`
+- Arquivos de teste manual/exploratório (ex: `test-*.ts`) ficam em `/tmp` ou são removidos antes do commit — não ficam na raiz do repo ou dos pacotes
+
+### Arquivos de Teste Manual
+
+Arquivos de teste manual (scripts exploratórios, provas de conceito, sandboxes) ficam em `manual/` na raiz do repo.
+
+**Estrutura:**
+```
+manual/
+  <nome-descritivo>.ts    # ex: test-brain-runner.ts, pg-vector-poc.ts
+```
+
+**Regras:**
+- Nunca criar arquivos de teste manual na raiz do repo ou dentro de pacotes
+- `manual/` está no `.gitignore` — esses arquivos não são commitados
+- Se o script virar algo útil de verdade, migra para `__tests__/integration/`
+
+### Documentação
+
+Toda documentação técnica fica em `docs/` na raiz do repo, organizada por categoria.
+
+**Estrutura:**
+```
+docs/
+  architecture/    # decisões de arquitetura, diagramas
+  guides/          # guias de uso, onboarding, how-tos
+  api/             # referência de API dos pacotes
+  adr/             # Architecture Decision Records (ADR-NNNN-titulo.md)
+```
+
+**Regras:**
+- Nunca criar arquivos `.md` de documentação na raiz do repo (exceto `README.md`, `CLAUDE.md`, `CHANGELOG.md`)
+- ADRs seguem o padrão `ADR-0001-titulo-kebab-case.md`
+- Documentação de fase/planejamento fica em `.planning/` (gerenciado pelo GSD)
 <!-- GSD:conventions-end -->
 
 <!-- GSD:architecture-start source:ARCHITECTURE.md -->
