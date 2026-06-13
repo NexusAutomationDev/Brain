@@ -7,7 +7,7 @@
   "types": "./dist/index.d.ts",
   "scripts": {
     "build": "tsc",
-    "lint": "eslint src/",
+    "lint": "eslint src/ --ext .ts",
     "test": "bun test src/llm src/embeddings src/graph/subgraph.test.ts src/graph/state.test.ts",
     "test:integration": "TEST_DATABASE_URL=$TEST_DATABASE_URL bun run src/graph/checkpointer.test.ts",
     "typecheck": "tsc --noEmit"
