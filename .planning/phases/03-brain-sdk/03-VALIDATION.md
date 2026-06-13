@@ -1,10 +1,11 @@
 ---
 phase: 3
 slug: brain-sdk
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: complete
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-06-12
+audited: 2026-06-13
 ---
 
 # Phase 3 — Validation Strategy
@@ -38,12 +39,13 @@ created: 2026-06-12
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 3-01-01 | 01 | 1 | SDK-01 | — | IBrain contract enforced at compile time | unit | `bun test packages/core --filter IBrain` | ❌ W0 | ⬜ pending |
-| 3-01-02 | 01 | 1 | SDK-01 | — | BrainRegistry resolves registered brain by ID | unit | `bun test packages/core --filter BrainRegistry` | ❌ W0 | ⬜ pending |
-| 3-02-01 | 02 | 2 | SDK-02 | — | BrainRunner.run() returns reply string | unit | `bun test packages/core --filter BrainRunner` | ❌ W0 | ⬜ pending |
-| 3-02-02 | 02 | 2 | SDK-02 | — | No MemorySaver in call path | unit | `bun test packages/core --filter BrainRunner` | ❌ W0 | ⬜ pending |
-| 3-03-01 | 03 | 2 | SDK-03 | — | ToolsRegistry blocks disallowed brainType | unit | `bun test packages/core --filter ToolsRegistry` | ❌ W0 | ⬜ pending |
-| 3-04-01 | 04 | 1 | SDK-04 | — | prompts table migration applies cleanly | integration | `bun test packages/database` | ❌ W0 | ⬜ pending |
+| 3-01-01 | 01 | 1 | SDK-01 | — | IBrain contract enforced at compile time | unit | `bun test packages/core/src/brain/__tests__/brain-registry.test.ts` | ✅ | ✅ green |
+| 3-01-02 | 01 | 1 | SDK-01 | — | BrainRegistry resolves registered brain by ID | unit | `bun test packages/core/src/brain/__tests__/brain-registry.test.ts` | ✅ | ✅ green |
+| 3-02-01 | 02 | 2 | SDK-02 | — | BrainRunner.run() returns reply string | unit | `bun test packages/core/src/runner/__tests__/brain-runner.test.ts` | ✅ | ✅ green |
+| 3-02-02 | 02 | 2 | SDK-02 | — | No MemorySaver in call path | unit | `bun test packages/core/src/runner/__tests__/brain-runner.test.ts` | ✅ | ✅ green |
+| 3-03-01 | 03 | 2 | SDK-03 | — | ToolsRegistry blocks disallowed brainType | unit | `bun test packages/core/src/tools/__tests__/tools-registry.test.ts` | ✅ | ✅ green |
+| 3-04-01 | 04 | 1 | SDK-04 | — | prompts table schema (brainType+key unique, all columns NOT NULL) | unit | `bun test packages/database/src/schema/tables.test.ts` | ✅ | ✅ green |
+| 3-04-02 | 04 | 3 | SDK-04 | T-3-04-01 T-3-04-02 | POST /reload-prompts: 401 / 200 / 503 auth behaviors | unit | `bun test packages/core/src/__tests__/server.test.ts` | ✅ | ✅ green |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -51,12 +53,14 @@ created: 2026-06-12
 
 ## Wave 0 Requirements
 
-- [ ] `packages/core/src/__tests__/brain-registry.test.ts` — stubs for SDK-01
-- [ ] `packages/core/src/__tests__/brain-runner.test.ts` — stubs for SDK-02
-- [ ] `packages/core/src/__tests__/tools-registry.test.ts` — stubs for SDK-03
-- [ ] `packages/database/src/__tests__/prompts-migration.test.ts` — stubs for SDK-04
+- [x] `packages/core/src/brain/__tests__/brain-registry.test.ts` — SDK-01 BrainRegistry
+- [x] `packages/core/src/runner/__tests__/brain-runner.test.ts` — SDK-02 BrainRunner
+- [x] `packages/core/src/tools/__tests__/tools-registry.test.ts` — SDK-03 ToolsRegistry
+- [x] `packages/core/src/prompts/__tests__/loader.test.ts` — SDK-04 loadPrompts
+- [x] `packages/database/src/schema/tables.test.ts` — SDK-04 prompts schema
+- [x] `packages/core/src/__tests__/server.test.ts` — SDK-04 /reload-prompts auth
 
-*Existing bun test infrastructure in workspace covers all phase requirements.*
+*All wave 0 requirements fulfilled.*
 
 ---
 
@@ -70,11 +74,21 @@ created: 2026-06-12
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 30s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have automated verify
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all requirements
+- [x] No watch-mode flags
+- [x] Feedback latency < 30s
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** ✅ 2026-06-13
+
+---
+
+## Validation Audit 2026-06-13
+
+| Metric | Count |
+|--------|-------|
+| Gaps found | 2 |
+| Resolved | 2 |
+| Escalated | 0 |
