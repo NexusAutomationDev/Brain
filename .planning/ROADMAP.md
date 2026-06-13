@@ -38,7 +38,10 @@
   2. WebhookTransport.start() injetado via construtor resolve o runner corretamente, não lança exceção nem retorna vazio
   3. `bun run lint` passa sem erros em todos os pacotes do monorepo (shared, database, observability, ai, memory, transport, core)
   4. Fixtures de teste do webhook atualizadas para o novo schema de campos — todos os testes existentes passam com os novos nomes de campo
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 05-01-PLAN.md — BrainEvent schema + runner injection + atualização de todos os consumidores e testes
+- [ ] 05-02-PLAN.md — ESLint @typescript-eslint deps no root + script lint nos 7 pacotes
 
 ### Phase 6: Leads Schema + Migration
 **Goal**: Tabela `leads` existe no banco com constraint UNIQUE em `numero`, e o Brain verifica/cria tabelas automaticamente na inicialização — nunca aceita mensagens sem schema pronto
@@ -94,7 +97,7 @@
 | 2. Domain Packages | v1.0 | 11/11 | Complete | 2026-06-13 |
 | 3. Brain SDK | v1.0 | 5/5 | Complete | 2026-06-13 |
 | 4. Validation Brain | v1.0 | 5/5 | Complete | 2026-06-13 |
-| 5. Transport Foundation | v1.1 | 0/? | Not started | - |
+| 5. Transport Foundation | v1.1 | 0/2 | Planned | - |
 | 6. Leads Schema + Migration | v1.1 | 0/? | Not started | - |
 | 7. LeadService + RabbitMQ Transport | v1.1 | 0/? | Not started | - |
 | 8. BrainRunner + Conversation History | v1.1 | 0/? | Not started | - |
