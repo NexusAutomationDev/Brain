@@ -22,6 +22,13 @@
       "when": 1781352331000,
       "tag": "0002_echo_brain_seed",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1781353000000,
+      "tag": "0003_memories_unique_user_key",
+      "breakpoints": true
     }
   ]
 }

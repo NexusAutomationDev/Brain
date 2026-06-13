@@ -29,7 +29,7 @@ export const memories = pgTable('memories', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 }, (table) => ({
-  userKeyIdx: index('memories_user_key_idx').on(table.userId, table.key),
+  userKeyIdx: uniqueIndex('memories_user_key_idx').on(table.userId, table.key),
 }));
 
 // DB-01: Agent state table — persists LangGraph checkpoint state per thread
