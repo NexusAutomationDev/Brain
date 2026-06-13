@@ -1,33 +1,34 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: MVP
-status: complete
-stopped_at: Milestone v1.0 archived
+milestone: v1.1
+milestone_name: Brain SDR + Infraestrutura Produção
+status: in_progress
+stopped_at: —
 last_updated: "2026-06-13T00:00:00.000Z"
-last_activity: 2026-06-13 -- v1.0 milestone complete
+last_activity: 2026-06-13 -- Milestone v1.1 started
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 28
-  completed_plans: 28
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-06-13 after v1.0 milestone)
+See: .planning/PROJECT.md (updated 2026-06-13 — milestone v1.1 iniciado)
 
 **Core value:** Infraestrutura de agentes modular onde novos Brains são criados definindo apenas prompts, tools, embeddings e fluxos — sem reescrever a base
-**Current focus:** Milestone v1.0 completo — iniciar `/gsd-new-milestone` para v2
+**Current focus:** Milestone v1.1 — Brain SDR + Infraestrutura Produção
 
 ## Current Position
 
-Phase: 4/4 (all complete)
-Status: Milestone complete — ready for next milestone
-Last activity: 2026-06-13 — v1.0 MVP archived
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-06-13 — Milestone v1.1 started
 
 Progress: [██████████] 100%
 

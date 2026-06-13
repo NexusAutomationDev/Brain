@@ -8,6 +8,20 @@ Plataforma monorepo para construção de agentes de IA especializados (Brains). 
 
 Uma infraestrutura de agentes modular onde novos Brains são criados definindo apenas prompts, tools, embeddings e fluxos — sem reescrever a base.
 
+## Current Milestone: v1.1 Brain SDR + Infraestrutura Produção
+
+**Goal:** Implementar o primeiro Brain real (SDR) sobre a infraestrutura consolidada — com transport RabbitMQ, schema de leads, fluxo de atendimento e correções estruturais pendentes do v1.0.
+
+**Target features:**
+- Transport RabbitMQ + Webhook com campos padronizados (Name, Message, Numero, IDLead)
+- Auto-migrate na inicialização do Brain (verifica e cria tabelas se não existirem)
+- Schema: tabela `leads` (id, unique_id, nome, numero, ia_ativada, fullpp) substituindo `users`
+- Fluxo de cadastro automático de leads na primeira mensagem + verificação `ia_ativada`
+- Histórico de conversas vinculado ao lead com recuperação de contexto
+- Correção do WebhookTransport.start() (bug de runner injection)
+- Revisão e ativação do Multi-tenant via TenantPoolManager
+- Brain SDR: primeiro atendimento de leads com contexto de conversa, respeito ao `ia_ativada`, registro de interações
+
 ## Requirements
 
 ### Validated
@@ -25,15 +39,25 @@ Uma infraestrutura de agentes modular onde novos Brains são criados definindo a
 
 ### Active
 
-- [ ] Transport layer (RabbitMQ): seleção via `TRANSPORT=rabbitmq` env
+- [ ] Transport layer (RabbitMQ): seleção via `TRANSPORT=rabbitmq` env com campos padronizados (Name, Message, Numero, IDLead) — v1.1
+- [ ] Webhook: campos de entrada obrigatórios padronizados (Name, Message, Numero, IDLead) — v1.1
+- [ ] Schema: tabela `leads` (id, unique_id, nome, numero, ia_ativada, fullpp) substituindo `users` — v1.1
+- [ ] Fluxo: cadastro automático de lead na primeira mensagem + verificação `ia_ativada` — v1.1
+- [ ] Histórico de conversas vinculado ao lead (recuperação de contexto entre sessões) — v1.1
+- [ ] Auto-migrate na inicialização do Brain (verificar/criar tabelas via ENV) — v1.1
+- [ ] Correção WebhookTransport.start() com runner injection (GAP-1) — v1.1
+- [ ] Multi-tenant: revisão e ativação do TenantPoolManager em produção — v1.1
+- [ ] Brain SDR: primeiro Brain real com fluxo de atendimento, qualificação e sub-agente — v1.1
 - [ ] Arquitetura de memória semântica (embeddings + RAG): busca por similaridade em produção
 
 ### Out of Scope
 
-- Implementações de Brain específicos (SDR, Suporte, CS) — v1 é só infraestrutura
+- Brain SDR com sub-agente de qualificação avançada (SPIN/BANT completo) — pós v1.1
+- Outros Brains específicos (Suporte, CS, Cobrança, RH) — pós v1.1
 - Mecanismo de licenciamento (LICENSE_KEY) — futuro
 - UI de gerenciamento de Brains — futuro
 - Migração para tenant_id nas tabelas — futuro quando escala demandar
+- fullpp com regra de negócio — futuro
 
 ## Context
 
@@ -89,4 +113,4 @@ Este documento evolui nas transições de fase e marcos de milestone.
 4. Atualizar Context com estado atual
 
 ---
-*Last updated: 2026-06-13 after v1.0 milestone — Brain Core MVP shipped, 4 phases, 28/30 requirements satisfied, SC-2/SC-3 human verified*
+*Last updated: 2026-06-13 — Milestone v1.1 iniciado: Brain SDR + Infraestrutura Produção*
