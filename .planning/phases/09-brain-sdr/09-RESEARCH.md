@@ -611,25 +611,22 @@ toolsRegistry.enableTool("sdr", "qualify_lead");
 
 ---
 
-## Open Questions (RESOLVED)
+## Open Questions
 
 1. **Conteúdo dos prompts SDR padrão no seed**
    - What we know: Claude's Discretion (CONTEXT.md)
    - What's unclear: Nível de detalhe esperado (genérico vs específico para o produto do cliente)
    - Recommendation: Usar prompts genéricos mas plausíveis de SDR B2B; cliente substitui via update no banco sem deploy
-   - RESOLVED: Usar prompts genéricos de SDR B2B no seed SQL (0005_brain_sdr_prompts.sql); cliente substitui via update direto no banco sem deploy
 
 2. **Tratamento de erro no sub-agente (timeout, parse JSON falha, DB indisponível)**
    - What we know: Claude's Discretion — escolher entre ConfigurationError vs fallback
    - What's unclear: Se falha silenciosa com `{qualificado: false, motivo: "erro interno", proximo_passo: "..."}` é preferível ao throw
    - Recommendation: Retornar fallback `{qualificado: false, motivo: "Não foi possível analisar no momento", proximo_passo: "Continue a conversa normalmente"}` em vez de throw — evita que uma falha do sub-agente derrube a conversa principal
-   - RESOLVED: Retornar fallback `{qualificado: false, motivo: "Não foi possível analisar no momento", proximo_passo: "Continue a conversa normalmente para coletar mais informações"}` em vez de throw — implementado com try/catch gracioso em runQualificationAgent()
 
 3. **Estrutura exata do nó "analyze" do sub-agente — forçar structured output ou parse JSON manual**
    - What we know: LLMs às vezes envolvem JSON em markdown
    - What's unclear: Se o LLM configurado suporta `.withStructuredOutput()` (OpenAI, Anthropic: sim; outros: variável)
    - Recommendation: Parse JSON manual com regex `extractJSON()` é mais portável entre providers; `.withStructuredOutput()` pode ser uma melhoria futura
-   - RESOLVED: Parse JSON manual com regex `extractJSON()` — mais portável entre providers; `.withStructuredOutput()` descartado para v1.1 por variabilidade de suporte
 
 ---
 
