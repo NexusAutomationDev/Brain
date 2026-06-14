@@ -84,6 +84,12 @@ export class RabbitMQTransport implements ITransport {
         requeue: false,
       },
       async (msg) => {
+        // WR-01: guard pub before any DLQ send — pub may be undefined during teardown
+        if (!this.pub) {
+          this.logger.error({}, "Publisher not available — dropping message (teardown in progress)");
+          return ConsumerStatus.ACK;
+        }
+
         // T-07-06 / ASVS V5: validar payload antes de qualquer processamento
         const parsed = BrainEventSchema.safeParse(msg.body);
 
@@ -94,7 +100,7 @@ export class RabbitMQTransport implements ITransport {
             { bodyKeys: Object.keys(msg.body ?? {}) },
             "Invalid BrainEvent from RabbitMQ — sending to DLQ"
           );
-          await this.pub!.send(dlq, msg.body);
+          await this.pub.send(dlq, msg.body);
           return ConsumerStatus.ACK; // ack mensagem original (já está na DLQ)
         }
 
@@ -121,7 +127,7 @@ export class RabbitMQTransport implements ITransport {
               "Max attempts reached — sending to DLQ"
             );
             this.retryMap.delete(msgKey);
-            await this.pub!.send(dlq, msg.body);
+            await this.pub.send(dlq, msg.body);
             return ConsumerStatus.ACK;
           }
 
