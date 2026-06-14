@@ -13,7 +13,10 @@ import { StateGraph } from "@langchain/langgraph";
 import type { BrainStateAnnotation } from "@brain-pkg/ai";
 
 // Test configuration
-const TEST_DB_URL = process.env.POSTGRES_URL || process.env.TEST_DATABASE_URL || "postgresql://postgres:postgres@10.0.1.26:5432/brain_test";
+const TEST_DB_URL = process.env.POSTGRES_URL ?? process.env.TEST_DATABASE_URL;
+if (!TEST_DB_URL) {
+  throw new Error("POSTGRES_URL or TEST_DATABASE_URL must be set to run integration tests");
+}
 
 describe("BrainRunner Integration", () => {
   let sql: ReturnType<typeof postgres>;
