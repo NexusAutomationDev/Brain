@@ -48,8 +48,14 @@ export function createWebhookApp(runner?: IBrainRunnerLike): Hono {
     // Dispatch to BrainRunner if provided
     // T-05-03: Do NOT return thread_id or session internals in response
     if (runner) {
-      const result = await runner.run(event);
-      return c.json({ status: "ok", reply: result.reply });
+      try {
+        const result = await runner.run(event);
+        return c.json({ status: "ok", reply: result.reply });
+      } catch (err) {
+        // Log internally but never surface internals to the caller
+        console.error({ err }, "BrainRunner.run() failed");
+        return c.json({ error: "Internal error" }, 500);
+      }
     }
 
     // Fallback: runner not injected (should not occur in production)
