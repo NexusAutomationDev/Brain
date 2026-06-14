@@ -10,7 +10,7 @@ import { BrainRunner } from "../runner.js";
 import { ToolsRegistry } from "../../tools/registry.js";
 import type { IBrain } from "../../brain/interface.js";
 import { StateGraph } from "@langchain/langgraph";
-import type { BrainStateAnnotation } from "@brain-pkg/ai";
+import { BrainStateAnnotation } from "@brain-pkg/ai";
 
 // Test configuration
 const TEST_DB_URL = process.env.POSTGRES_URL ?? process.env.TEST_DATABASE_URL;
@@ -51,7 +51,7 @@ describe("BrainRunner Integration", () => {
       promptKeys: ["system"],
       tools: [],
       buildGraph: (context) => {
-        const graph = new StateGraph({} as typeof BrainStateAnnotation);
+        const graph = new StateGraph(BrainStateAnnotation);
         // Simple graph that just echoes
         graph.addNode("respond", async (state: any) => {
           return {
