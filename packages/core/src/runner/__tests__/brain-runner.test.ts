@@ -1,6 +1,6 @@
 // SDK-02: BrainRunner — lifecycle init() + run() returning { reply: string }
 // Uses MemorySaver in tests (AI-01 allows MemorySaver ONLY in *.test.ts)
-import { describe, test, expect, mock, beforeEach } from "bun:test";
+import { describe, test, expect, mock, beforeEach, afterEach } from "bun:test";
 import type { BrainEvent } from "@brain-pkg/transport";
 import { AIMessage, HumanMessage } from "@langchain/core/messages";
 
@@ -48,6 +48,20 @@ mock.module("drizzle-orm/postgres-js", () => ({
 
 mock.module("@brain-pkg/database", () => ({
   runMigrations: mock(async () => {}),
+  // Mock das tabelas do Drizzle — necessário porque lead-service.ts importa `leads` de @brain-pkg/database
+  // O mock de lead-service.js intercepta o LeadService mas o bun analisa os named exports do módulo
+  leads: {},
+  prompts: {},
+  users: {},
+  memories: {},
+  agentState: {},
+  embeddings: {},
+  eq: mock(() => {}),
+  and: mock(() => {}),
+  or: mock(() => {}),
+  sql: mock(() => {}),
+  drizzle: mock(() => ({})),
+  TenantPoolManager: mock(function () { return {}; }),
 }));
 
 // Satisfy MIGRATIONS_FOLDER check in runner.init() — prevents process.exit(1) before runMigrations
@@ -90,6 +104,7 @@ function makeBrain(promptKeys = ["system"]): IBrain {
             new AIMessage("test reply"),
           ],
         })),
+        getState: mock(async () => ({ values: { messages: [] } })),  // HIST-03
       })),
     })) as unknown as IBrain["buildGraph"],
   };
@@ -249,6 +264,78 @@ describe("BrainRunner", () => {
       expect(numero).toBe("5511999990001");
       expect(idLead).toBe("lead-test-1");
       expect(name).toBe("Test User");
+    });
+  });
+
+  // --- Testes HIST-03: context window ---
+
+  describe("HIST-03: context window (getState antes do invoke)", () => {
+    const originalEnv = process.env.CONTEXT_WINDOW_MESSAGES;
+
+    afterEach(() => {
+      if (originalEnv === undefined) {
+        delete process.env.CONTEXT_WINDOW_MESSAGES;
+      } else {
+        process.env.CONTEXT_WINDOW_MESSAGES = originalEnv;
+      }
+    });
+
+    test("usa padrão 40 quando CONTEXT_WINDOW_MESSAGES não está definida", async () => {
+      delete process.env.CONTEXT_WINDOW_MESSAGES;
+      const brain = makeBrain(["system"]);
+      const runner = new BrainRunner({ brain, sql: {} as never, toolsRegistry: registry });
+      await runner.init();
+      // run() não deve lançar erro — getState retorna values.messages=[]
+      const result = await runner.run(makeEvent());
+      expect(result).not.toBeNull();
+      expect(result?.reply).toBe("test reply");
+    });
+
+    test("usa CONTEXT_WINDOW_MESSAGES=10 quando definida", async () => {
+      process.env.CONTEXT_WINDOW_MESSAGES = "10";
+      const brain = makeBrain(["system"]);
+      const runner = new BrainRunner({ brain, sql: {} as never, toolsRegistry: registry });
+      await runner.init();
+      const result = await runner.run(makeEvent());
+      expect(result).not.toBeNull();
+      expect(result?.reply).toBe("test reply");
+    });
+
+    test("fallback para 40 quando CONTEXT_WINDOW_MESSAGES é inválida ('abc')", async () => {
+      process.env.CONTEXT_WINDOW_MESSAGES = "abc";
+      const brain = makeBrain(["system"]);
+      const runner = new BrainRunner({ brain, sql: {} as never, toolsRegistry: registry });
+      await runner.init();
+      // Não deve lançar, não deve usar NaN como window size
+      const result = await runner.run(makeEvent());
+      expect(result).not.toBeNull();
+      expect(result?.reply).toBe("test reply");
+    });
+
+    test("run() chama getState() com thread_id correto antes do invoke", async () => {
+      const getStateMock = mock(async () => ({ values: { messages: [] } }));
+      const brain: IBrain = {
+        id: "test-brain",
+        brainType: "test",
+        promptKeys: ["system"],
+        tools: [],
+        buildGraph: mock(() => ({
+          compile: mock(() => ({
+            invoke: mock(async () => ({
+              messages: [new HumanMessage("hello"), new AIMessage("test reply")],
+            })),
+            getState: getStateMock,
+          })),
+        })) as unknown as IBrain["buildGraph"],
+      };
+      const runner = new BrainRunner({ brain, sql: {} as never, toolsRegistry: registry });
+      await runner.init();
+      await runner.run(makeEvent());
+
+      expect(getStateMock).toHaveBeenCalledTimes(1);
+      const [calledConfig] = getStateMock.mock.calls[0] as [any];
+      // thread_id deve ser lead.uniqueId ("lead-abc" do mockUpsertLead)
+      expect(calledConfig.configurable.thread_id).toBe("lead-abc");
     });
   });
 });

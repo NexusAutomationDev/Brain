@@ -21,9 +21,19 @@ export const echoBrain: IBrain = {
       .addNode("llm", async (state) => {
         // D-01: system prompt carregado de ctx.prompts['system'] (nunca hardcoded)
         // D-03: ctx.llm já configurado pelo BrainRunner — não criar LLM aqui
+
+        // HIST-03: Limitar mensagens enviadas ao LLM — histórico completo fica no PostgresSaver
+        // D-05: Slice aqui (no nó), não no invoke() do BrainRunner — evita duplicação de mensagens
+        // O SystemMessage é construído inline (não faz parte de state.messages), então o slice é aplicado apenas no histórico
+        const contextWindowSize = (() => {
+          const n = parseInt(process.env.CONTEXT_WINDOW_MESSAGES ?? "40", 10);
+          return n > 0 && isFinite(n) ? n : 40;  // SECURITY: T-08-ENV
+        })();
+        const messagesForLLM = state.messages.slice(-contextWindowSize);
+
         const response = await ctx.llm.invoke([
           { role: "system", content: ctx.prompts["system"] },
-          ...state.messages,
+          ...messagesForLLM,
         ]);
         return { messages: [...state.messages, response] };
       })
