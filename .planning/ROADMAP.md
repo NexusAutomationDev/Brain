@@ -99,10 +99,10 @@ Plans:
 **Plans**: 4 plans
 
 Plans:
-- [ ] 09-00-PLAN.md — Wave 0: test stubs (unit + integration) + package.json
-- [ ] 09-01-PLAN.md — Migration 0005_brain_sdr_prompts.sql (seed prompts SDR)
-- [ ] 09-02-PLAN.md — brain.ts (IBrain ReAct + ToolNode) + qualifier.ts (qualify_lead + sub-agente stateless)
-- [ ] 09-03-PLAN.md — index.ts (TenantPoolManager) + server.ts + tsconfig.json + Dockerfile
+- [x] 09-00-PLAN.md — Wave 0: test stubs (unit + integration) + package.json
+- [x] 09-01-PLAN.md — Migration 0005_brain_sdr_prompts.sql (seed prompts SDR)
+- [x] 09-02-PLAN.md — brain.ts (IBrain ReAct + ToolNode) + qualifier.ts (qualify_lead + sub-agente stateless)
+- [x] 09-03-PLAN.md — index.ts (TenantPoolManager) + server.ts + tsconfig.json + Dockerfile
 
 ## Progress
 
