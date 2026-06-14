@@ -40,12 +40,13 @@ Uma infraestrutura de agentes modular onde novos Brains são criados definindo a
 ### Active
 
 - [ ] Transport layer (RabbitMQ): seleção via `TRANSPORT=rabbitmq` env com campos padronizados (Name, Message, Numero, IDLead) — v1.1
-- [ ] Webhook: campos de entrada obrigatórios padronizados (Name, Message, Numero, IDLead) — v1.1
 - [ ] Schema: tabela `leads` (id, unique_id, nome, numero, ia_ativada, fullpp) substituindo `users` — v1.1
 - [ ] Fluxo: cadastro automático de lead na primeira mensagem + verificação `ia_ativada` — v1.1
 - [ ] Histórico de conversas vinculado ao lead (recuperação de contexto entre sessões) — v1.1
 - [ ] Auto-migrate na inicialização do Brain (verificar/criar tabelas via ENV) — v1.1
-- [ ] Correção WebhookTransport.start() com runner injection (GAP-1) — v1.1
+- [x] Correção WebhookTransport.start() com runner injection (GAP-1) — Validated in Phase 5: transport-foundation
+- [x] Webhook: campos de entrada padronizados (Name, Message, Numero, IDLead) — Validated in Phase 5: transport-foundation
+- [x] Lint pipeline ativo em todos os 7 pacotes (turbo run lint passa 7/7) — Validated in Phase 5: transport-foundation
 - [ ] Multi-tenant: revisão e ativação do TenantPoolManager em produção — v1.1
 - [ ] Brain SDR: primeiro Brain real com fluxo de atendimento, qualificação e sub-agente — v1.1
 - [ ] Arquitetura de memória semântica (embeddings + RAG): busca por similaridade em produção
@@ -93,7 +94,7 @@ Brains planejados para o futuro: SDR, Suporte, Customer Success, Cobrança, RH, 
 | Tools Registry por tipo de Brain | Cada tipo define seu conjunto base de tools no código | ✓ Good — whitelist Map<brainType, Set<toolName>> funcionou; brain-echo registrado sem tools sem problemas |
 | v1 = só infraestrutura core | Nenhum Brain específico no v1; garantir base sólida antes de implementar SDR/Suporte | ✓ Good — decisão validada; base sólida com 28/30 requirements satisfeitos e SC-2/SC-3 verificados |
 | postgres.js como driver Drizzle (não bun:sql) | Bug de conexão travada após constraint errors no bun:sql | ✓ Good — zero problemas com postgres.js durante todo o desenvolvimento |
-| WebhookTransport bypassed em brain-echo | brain-echo usa createWebhookApp(runner) diretamente (GAP-1 workaround) | ⚠️ Revisit — WebhookTransport.start() ainda cria app sem injeção de runner; classe não usada em produção mas é latent trap via ITransport interface |
+| WebhookTransport runner injection (GAP-1 fix) | WebhookTransport agora recebe runner via construtor; start() lança ConfigurationError se ausente | ✓ Fixed in Phase 5 — constructor injection, fail-fast ConfigurationError, factory atualizada |
 
 ## Evolution
 
@@ -113,4 +114,4 @@ Este documento evolui nas transições de fase e marcos de milestone.
 4. Atualizar Context com estado atual
 
 ---
-*Last updated: 2026-06-13 — Milestone v1.1 iniciado: Brain SDR + Infraestrutura Produção*
+*Last updated: 2026-06-13 — Phase 5 complete: GAP-1 fix, BrainEvent schema padronizado, lint ativo em 7 pacotes*
