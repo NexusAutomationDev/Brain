@@ -17,3 +17,7 @@ export { loadPrompts } from "./prompts/loader.js";
 
 // SDK-05: Core server (createCoreApp — exposes /reload-prompts endpoint)
 export { createCoreApp } from "./server.js";
+
+// LEAD-02: LeadService
+export { LeadService } from "./leads/lead-service.js";
+export type { Lead } from "./leads/lead-service.js";
