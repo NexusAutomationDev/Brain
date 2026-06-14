@@ -171,11 +171,17 @@ export class BrainRunner {
 
   /** Internal: compile the graph with checkpointer and inject context */
   private async _compileGraph(): Promise<void> {
+    // D-06: Fail-fast if DATABASE_URL missing — avoids cryptic downstream connection errors
+    const dbUrl = process.env.DATABASE_URL;
+    if (!dbUrl) {
+      this.logger.error({ brainId: this.brain.id }, "DATABASE_URL is not set — cannot create checkpointer");
+      process.exit(1);
+    }
     const checkpointer = await createCheckpointer(
       // TenantPoolManager provides the connection string; for v1 single-tenant,
       // BrainRunner receives the Sql directly and uses it for all queries.
       // PostgresSaver needs a connection string — derive from env.
-      process.env.DATABASE_URL!
+      dbUrl
     );
 
     // Drizzle db for MemoryManager — uses same postgres.js Sql instance
