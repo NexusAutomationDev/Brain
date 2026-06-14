@@ -21,3 +21,28 @@ Tech debt aceito e documentado no audit `v1.0-MILESTONE-AUDIT.md`:
 - **OBS-02**: GET /health sem campo `transport` no status. Deferido per decisão D-15 (Phase 1); Phase 2 transport completo mas campo nunca foi adicionado. Deferido para v2.
 
 ---
+
+## v1.1 Brain SDR + Infraestrutura Produção (Shipped: 2026-06-14)
+
+**Phases completed:** 5 phases (5-9), 12 plans, ~124 commits
+**Timeline:** 2026-06-13 → 2026-06-14 (2 days)
+
+**Key accomplishments:**
+
+1. Transport padronizado: BrainEvent migrado para {Name, Message, Numero, IDLead}, DedupCache removido, WebhookTransport com constructor injection e fail-fast ConfigurationError — corrige tech debt de v1.0
+2. ESLint v8 + @typescript-eslint/recommended ativado nos 7 pacotes monorepo — `turbo run lint` passa 7/7 com zero erros
+3. Schema `leads` com advisory lock em runMigrations() + BrainRunner auto-migrate via ENV MIGRATIONS_FOLDER — startup race condition prevenida entre múltiplas instâncias
+4. LeadService com upsert atômico por numero, gate ia_ativada no BrainRunner, RabbitMQTransport com ack manual, DLQ explícita e retry — transport layer completo (webhook + rabbitmq)
+5. Histórico de conversas persistente: thread_id = lead.uniqueId via PostgresSaver, context window configurável com slice(-N) no nó do grafo — conversas multi-sessão funcionando
+6. Brain SDR: primeiro Brain real com grafo ReAct 2-nós, sub-agente de qualificação stateless lendo histórico via PostgresSaver.getTuple(), zero prompts hardcoded, TenantPoolManager em produção, Dockerfile multi-stage
+
+### Known Gaps
+
+Tech debt aceito e documentado no audit `milestones/v1.1-MILESTONE-AUDIT.md`:
+
+- **GAP-2**: `apps/brain-sdr/.env` usa `OPENAI_API_KEY` em vez de `API_KEY` — dev-only; Docker runtime supre o valor correto
+- **INFRA-02**: `apps/brain-sdr/package.json` sem script `lint` — escopo do requisito eram os 7 pacotes core (satisfeito)
+- **SDR-02/SDR-03/SDR-05 partial**: arquitetura verificada; runtime completo depende de DB + LLM real em produção
+- Tech debt: handler.ts sem try/catch em runner.run(), test placeholders, LangGraph internal API access — todos não-bloqueantes
+
+---

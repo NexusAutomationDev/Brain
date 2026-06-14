@@ -4,75 +4,77 @@
 
 Plataforma monorepo para construção de agentes de IA especializados (Brains). Cada Brain — SDR, Suporte, Customer Success, etc. — é empacotado como uma imagem Docker independente, mas compartilha o mesmo núcleo de infraestrutura: transport, memória, embeddings, Tools Registry e Brain SDK. O produto é vendido/distribuído para clientes que contratam o Brain adequado ao seu caso de uso.
 
+O primeiro Brain real (SDR) foi entregue no v1.1 — atende leads no WhatsApp com histórico de conversa persistente, gate ia_ativada, sub-agente de qualificação e zero prompts hardcoded.
+
 ## Core Value
 
 Uma infraestrutura de agentes modular onde novos Brains são criados definindo apenas prompts, tools, embeddings e fluxos — sem reescrever a base.
-
-## Current Milestone: v1.1 Brain SDR + Infraestrutura Produção
-
-**Goal:** Implementar o primeiro Brain real (SDR) sobre a infraestrutura consolidada — com transport RabbitMQ, schema de leads, fluxo de atendimento e correções estruturais pendentes do v1.0.
-
-**Target features:**
-- Transport RabbitMQ + Webhook com campos padronizados (Name, Message, Numero, IDLead)
-- Auto-migrate na inicialização do Brain (verifica e cria tabelas se não existirem)
-- Schema: tabela `leads` (id, unique_id, nome, numero, ia_ativada, fullpp) substituindo `users`
-- Fluxo de cadastro automático de leads na primeira mensagem + verificação `ia_ativada`
-- Histórico de conversas vinculado ao lead com recuperação de contexto
-- Correção do WebhookTransport.start() (bug de runner injection)
-- Revisão e ativação do Multi-tenant via TenantPoolManager
-- Brain SDR: primeiro atendimento de leads com contexto de conversa, respeito ao `ia_ativada`, registro de interações
 
 ## Requirements
 
 ### Validated
 
-- [x] Monorepo estruturado com `packages/` (shared, database, observability) — Validated in Phase 1: foundation
-- [x] Schema PostgreSQL + PGVector (users, memories, agent_state, embeddings) — Validated in Phase 1: foundation
-- [x] Multi-tenancy: 1 banco por cliente, seleção via `DATABASE_NAME` env (TenantPoolManager, LRU max 20) — Validated in Phase 1: foundation
-- [x] Observabilidade básica (health check GET /health, logging estruturado com Pino) — Validated in Phase 1: foundation
-- [x] `apps/` directory com Brain packages — Validated in Phase 4: apps/brain-echo (IBrain + BrainRunner end-to-end)
-- [x] Brain SDK: IBrain interface + BrainRunner lifecycle (init → run) + ToolsRegistry — Validated in Phase 4: EchoBrain exercita contrato completo com LLM real
-- [x] Transport layer (Webhook): POST /api/v1/webhook traversa BrainRunner → LangGraph → resposta — Validated in Phase 4: SC-2 smoke test com LLM real
-- [x] Tools Registry: registerBrainType + enableTool por tipo de Brain — Validated in Phase 4: EchoBrain registrado sem tools
-- [x] Docker: multi-stage Dockerfile (node:22-slim builder + oven/bun:1 runner), imagem por Brain — Validated in Phase 4: brain-echo-test 419MB, startup fail-fast, migrations na imagem
-- [x] PostgresSaver: estado LangGraph persistido no PostgreSQL, dura container restart — Validated in Phase 4: SC-3 (MARKER_BRAINCORE_42 sobreviveu docker restart)
+**v1.0 — MVP**
+
+- ✓ Monorepo estruturado com `packages/` (shared, database, observability) — v1.0
+- ✓ Schema PostgreSQL + PGVector (users, memories, agent_state, embeddings) — v1.0
+- ✓ Multi-tenancy: 1 banco por cliente, seleção via `DATABASE_NAME` env (TenantPoolManager, LRU max 20) — v1.0
+- ✓ Observabilidade básica (health check GET /health, logging estruturado com Pino) — v1.0
+- ✓ `apps/` directory com Brain packages — v1.0
+- ✓ Brain SDK: IBrain interface + BrainRunner lifecycle (init → run) + ToolsRegistry — v1.0
+- ✓ Transport layer (Webhook): POST /api/v1/webhook traversa BrainRunner → LangGraph → resposta — v1.0
+- ✓ Tools Registry: registerBrainType + enableTool por tipo de Brain — v1.0
+- ✓ Docker: multi-stage Dockerfile (node:22-slim builder + oven/bun:1 runner), imagem por Brain — v1.0
+- ✓ PostgresSaver: estado LangGraph persistido no PostgreSQL, dura container restart — v1.0
+
+**v1.1 — Brain SDR + Infraestrutura Produção**
+
+- ✓ Transport layer (RabbitMQ): seleção via `TRANSPORT=rabbitmq` env com campos padronizados (Name, Message, Numero, IDLead) — v1.1
+- ✓ Schema: tabela `leads` (id, unique_id, nome, numero, ia_ativada, fullpp) com advisory lock em runMigrations() — v1.1
+- ✓ Auto-migrate na inicialização do Brain (verificar/criar tabelas via ENV MIGRATIONS_FOLDER) — v1.1
+- ✓ Fluxo: cadastro automático de lead na primeira mensagem + verificação `ia_ativada` — v1.1
+- ✓ Histórico de conversas vinculado ao lead (thread_id = lead.uniqueId, recuperação via PostgresSaver) — v1.1
+- ✓ Correção WebhookTransport.start() com runner injection (GAP-1) — v1.1
+- ✓ Webhook: campos de entrada padronizados (Name, Message, Numero, IDLead) — v1.1
+- ✓ Lint pipeline ativo em todos os 7 pacotes (turbo run lint passa 7/7) — v1.1
+- ✓ Multi-tenant: TenantPoolManager ativo em produção no Brain SDR — v1.1
+- ✓ Brain SDR: primeiro Brain real com fluxo de atendimento, qualificação e sub-agente — v1.1
 
 ### Active
 
-- [x] Transport layer (RabbitMQ): seleção via `TRANSPORT=rabbitmq` env com campos padronizados (Name, Message, Numero, IDLead) — Validated in Phase 7: leadservice-rabbitmq-transport
-- [x] Schema: tabela `leads` (id, unique_id, nome, numero, ia_ativada, fullpp) com advisory lock em runMigrations() — Validated in Phase 6: leads-schema-migration
-- [x] Auto-migrate na inicialização do Brain (verificar/criar tabelas via ENV) — Validated in Phase 6: leads-schema-migration
-- [x] Fluxo: cadastro automático de lead na primeira mensagem + verificação `ia_ativada` — Validated in Phase 7: leadservice-rabbitmq-transport
-- [x] Histórico de conversas vinculado ao lead (recuperação de contexto entre sessões) — Validated in Phase 9: brain-sdr (PostgresSaver.getTuple() no sub-agente de qualificação)
-- [x] Correção WebhookTransport.start() com runner injection (GAP-1) — Validated in Phase 5: transport-foundation
-- [x] Webhook: campos de entrada padronizados (Name, Message, Numero, IDLead) — Validated in Phase 5: transport-foundation
-- [x] Lint pipeline ativo em todos os 7 pacotes (turbo run lint passa 7/7) — Validated in Phase 5: transport-foundation
-- [x] Multi-tenant: revisão e ativação do TenantPoolManager em produção — Validated in Phase 9: brain-sdr (TenantPoolManager ativo em index.ts)
-- [x] Brain SDR: primeiro Brain real com fluxo de atendimento, qualificação e sub-agente — Validated in Phase 9: brain-sdr
 - [ ] Arquitetura de memória semântica (embeddings + RAG): busca por similaridade em produção
+- [ ] Outros Brains: Suporte, Customer Success — próximo milestone
+- [ ] Sub-agente de qualificação avançada com SPIN/BANT completo — próximo milestone
 
 ### Out of Scope
 
-- Brain SDR com sub-agente de qualificação avançada (SPIN/BANT completo) — pós v1.1
-- Outros Brains específicos (Suporte, CS, Cobrança, RH) — pós v1.1
+- Brain SDR com sub-agente de qualificação avançada (SPIN/BANT completo) — simplificado para v1.1; SPIN/BANT é v1.2
 - Mecanismo de licenciamento (LICENSE_KEY) — futuro
 - UI de gerenciamento de Brains — futuro
 - Migração para tenant_id nas tabelas — futuro quando escala demandar
-- fullpp com regra de negócio — futuro
+- fullpp com regra de negócio — futuro quando necessário
+- Brain SDR publicando respostas de volta ao RabbitMQ — apenas consume em v1.1 (amqplib-bun large-message bug evitado via rabbitmq-client)
+- Outros Brains específicos (Suporte, CS, Cobrança, RH) — pós v1.1
 
 ## Context
 
-**Estado v1.0 (shipped 2026-06-13):** ~7.094 linhas TypeScript, 8 pacotes (shared, database, observability, ai, memory, transport, core + brain-echo app), 234 commits, 23 dias de desenvolvimento.
+**Estado v1.1 (shipped 2026-06-14):** 2 Brains implementados (brain-echo, brain-sdr), ~9 pacotes no monorepo, 367 commits totais.
+
+**v1.0 (shipped 2026-06-13):** ~7.094 linhas TypeScript, 8 pacotes, 234 commits, 23 dias de desenvolvimento.
 
 Stack validado: Bun + Hono + Drizzle (postgres.js driver) + LangGraph + PostgresSaver + pgvector + Pino + Langfuse.
 
-O sistema foi projetado para suportar múltiplos tipos de Brain, cada um com prompts, tools, embeddings e fluxos próprios. Todos os prompts ficam no banco de dados para permitir atualização sem deploy. O cliente usa apenas a imagem do Brain contratado.
+O Brain SDR tem uma arquitetura com sub-agente de qualificação: o Brain principal conversa com leads e aciona o sub-agente quando chega o momento de qualificar. O sub-agente lê o histórico via PostgresSaver.getTuple() e retorna {qualificado, motivo, proximo_passo}. Toda comunicação de transport é via webhook (TRANSPORT=webhook) ou RabbitMQ (TRANSPORT=rabbitmq), selecionável via ENV.
 
-O Brain SDR tem uma arquitetura com sub-agente de qualificação: o Brain principal conversa com leads e aciona o sub-agente quando chega o momento de qualificar (identificar perfil, orçamento, necessidade, momento de compra). O resultado volta para o Brain principal continuar a conversa.
+Brains planejados para o futuro: Suporte, Customer Success, Cobrança, RH, Jurídico, E-commerce, Agendamento.
 
-Brains planejados para o futuro: SDR, Suporte, Customer Success, Cobrança, RH, Jurídico, E-commerce, Agendamento.
-
-**Tech debt v1.0 para v2:** MEM-03 (semantic write path inativo), OBS-02 (transport status no /health), WebhookTransport.start() sem runner injection, TenantPoolManager não ativado em produção, lint scripts ausentes nos pacotes. Ver `.planning/milestones/v1.0-MILESTONE-AUDIT.md` para detalhes completos.
+**Tech debt v1.1 para v1.2:**
+- MEM-03: semantic write path (dead code) — createEmbeddings() nunca chamado pelo BrainRunner
+- OBS-02: transport status ausente no GET /health
+- users table obsoleta — deprecar em v2
+- handler.ts sem try/catch em runner.run() — unhandled errors → 500 genérico
+- apps/brain-sdr sem lint script (brain-echo também)
+- GAP-2: brain-sdr .env usa OPENAI_API_KEY em vez de API_KEY (dev-only)
 
 ## Constraints
 
@@ -87,14 +89,17 @@ Brains planejados para o futuro: SDR, Suporte, Customer Success, Cobrança, RH, 
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Hono sobre Express | Melhor integração com Bun, zero deps, performance superior | ✓ Good — sem fricção em nenhuma das 4 fases; roteamento de sub-apps em brain-echo trivial |
-| Drizzle sobre Prisma | Lightweight, TypeScript nativo, sem geração de client, melhor com Bun | ✓ Good — migrations funcionaram; único ajuste: usar `postgres.js` como driver (não `bun:sql`) por bug de conexão após constraint errors |
-| Brain SDK no core desde v1 | Consistência no registro de Brains; evita refatoração quando criar o primeiro Brain | ✓ Good — brain-echo integrou sem atrito; BrainRegistry exportado mas brain-echo passa objeto diretamente (arch decision, não regressão) |
-| 1 banco por cliente (inicial) | Isolamento simples agora; migrar para tenant_id quando escala demandar | ⚠️ Revisit — TenantPoolManager implementado mas brain-echo usa DATABASE_URL direto; multi-tenancy via DATABASE_NAME é infrastructure-ready mas inativo em produção |
-| Tools Registry por tipo de Brain | Cada tipo define seu conjunto base de tools no código | ✓ Good — whitelist Map<brainType, Set<toolName>> funcionou; brain-echo registrado sem tools sem problemas |
-| v1 = só infraestrutura core | Nenhum Brain específico no v1; garantir base sólida antes de implementar SDR/Suporte | ✓ Good — decisão validada; base sólida com 28/30 requirements satisfeitos e SC-2/SC-3 verificados |
+| Hono sobre Express | Melhor integração com Bun, zero deps, performance superior | ✓ Good — sem fricção em nenhuma das fases; sub-apps em brain-echo e brain-sdr triviais |
+| Drizzle sobre Prisma | Lightweight, TypeScript nativo, sem geração de client, melhor com Bun | ✓ Good — único ajuste: usar `postgres.js` como driver (não `bun:sql`) por bug de conexão |
+| Brain SDK no core desde v1 | Consistência no registro de Brains; evita refatoração quando criar o primeiro Brain | ✓ Good — brain-sdr integrou sem refatoração do SDK |
+| 1 banco por cliente (inicial) | Isolamento simples agora; migrar para tenant_id quando escala demandar | ✓ Good — TenantPoolManager ativo em produção via DATABASE_NAME no brain-sdr |
+| Tools Registry por tipo de Brain | Cada tipo define seu conjunto base de tools no código | ✓ Good — enableTool("sdr","qualify_lead") funcionou sem problemas |
+| v1 = só infraestrutura core | Nenhum Brain específico no v1; garantir base sólida antes de implementar SDR | ✓ Good — decisão validada; base absorveu Brain SDR sem refatoração estrutural |
 | postgres.js como driver Drizzle (não bun:sql) | Bug de conexão travada após constraint errors no bun:sql | ✓ Good — zero problemas com postgres.js durante todo o desenvolvimento |
-| WebhookTransport runner injection (GAP-1 fix) | WebhookTransport agora recebe runner via construtor; start() lança ConfigurationError se ausente | ✓ Fixed in Phase 5 — constructor injection, fail-fast ConfigurationError, factory atualizada |
+| WebhookTransport runner injection via construtor (v1.1) | Fail-fast ConfigurationError se runner ausente | ✓ Good — GAP-1 resolvido; createTransport(runner) é API idiomática agora |
+| rabbitmq-client@5.0.8 (não amqplib-bun) | Zero deps, Bun-compatible, auto-reconnect built-in; amqplib-bun tem bugs com large-message | ✓ Good — testes passaram, DLQ implementada sem dependência de configuração de broker |
+| Sub-agente de qualificação stateless (sem checkpointer) | Lê histórico via PostgresSaver.getTuple() mas não persiste estado próprio | ✓ Good — evita acumulação de checkpoints do sub-agente; fallback gracioso em todos os pontos de falha |
+| Drizzle _journal.json para migrations (GAP-1 v1.1) | Drizzle exige entrada no journal para executar SQL — 0005 foi adicionado pós-audit | ✓ Fixed — migrate() agora aplica seed de prompts SDR na inicialização |
 
 ## Evolution
 
@@ -114,4 +119,4 @@ Este documento evolui nas transições de fase e marcos de milestone.
 4. Atualizar Context com estado atual
 
 ---
-*Last updated: 2026-06-14 — Phase 8 complete: HIST-01/02/03 — thread_id = lead.uniqueId, histórico persiste via PostgresSaver, context window com slice(-N) no nó do grafo*
+*Last updated: 2026-06-14 after v1.1 milestone — Brain SDR + Infraestrutura Produção shipped*
