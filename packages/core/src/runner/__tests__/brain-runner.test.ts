@@ -140,6 +140,35 @@ describe("BrainRunner", () => {
     expect(mockLoadPrompts).toHaveBeenCalledWith({}, "test", ["system"]);
   });
 
+  test("init() calls process.exit(1) when MIGRATIONS_FOLDER ENV is not set and migrationsFolder option is absent (D-11, T-06-07)", async () => {
+    const savedFolder = process.env.MIGRATIONS_FOLDER;
+    delete process.env.MIGRATIONS_FOLDER;
+
+    const originalExit = process.exit;
+    const mockExit = mock((_code: number) => { throw new Error("process.exit called"); });
+    process.exit = mockExit as never;
+
+    const brain = makeBrain(["system"]);
+    // No migrationsFolder option passed — relies solely on ENV (which is now unset)
+    const runner = new BrainRunner({
+      brain,
+      sql: {} as never,
+      toolsRegistry: registry,
+    });
+
+    try {
+      await runner.init();
+      expect.unreachable("init() should have called process.exit(1)");
+    } catch (e) {
+      expect((e as Error).message).toBe("process.exit called");
+      expect(mockExit).toHaveBeenCalledWith(1);
+    } finally {
+      process.exit = originalExit;
+      // Restore ENV so subsequent tests are not affected
+      process.env.MIGRATIONS_FOLDER = savedFolder;
+    }
+  });
+
   test("init() calls process.exit(1) when a promptKey is missing from DB", async () => {
     mockLoadPrompts.mockImplementationOnce(async () => ({})); // returns no keys
 

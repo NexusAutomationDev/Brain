@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'bun:test';
-import { users, memories, agentState, embeddings, prompts } from './tables.js';
+import { users, memories, agentState, embeddings, prompts, leads } from './tables.js';
 
 // Helper: get the Drizzle table name via its well-known symbol
 function tableName(table: Record<symbol, unknown>): string {
@@ -62,6 +62,64 @@ describe('Schema Tables (DB-01, DB-02, SDK-04)', () => {
       // The config string should contain hnsw reference
       const configStr = extraConfigBuilder.toString();
       expect(configStr).toContain('hnsw');
+    });
+  });
+
+  describe('LEAD-01: Leads table — identity and state for each lead (D-01 to D-07)', () => {
+    it('exports leads table with correct Postgres table name', () => {
+      expect(leads).toBeDefined();
+      expect(tableName(leads as any)).toBe('leads');
+    });
+
+    it('D-01: id is a UUID primary key with defaultRandom()', () => {
+      expect(leads.id.name).toBe('id');
+      expect(leads.id.columnType).toBe('PgUUID');
+      expect(leads.id.primary).toBe(true);
+    });
+
+    it('D-02: uniqueId maps to column unique_id and is NOT NULL', () => {
+      expect(leads.uniqueId.name).toBe('unique_id');
+      expect(leads.uniqueId.notNull).toBe(true);
+    });
+
+    it('D-03: nome maps to column nome and is nullable (no notNull)', () => {
+      expect(leads.nome.name).toBe('nome');
+      expect(leads.nome.notNull).toBe(false);
+    });
+
+    it('D-04: numero maps to column numero and is NOT NULL', () => {
+      expect(leads.numero.name).toBe('numero');
+      expect(leads.numero.notNull).toBe(true);
+    });
+
+    it('D-04: leads_numero_unique_idx uniqueIndex is defined on numero', () => {
+      const extraConfigBuilder = (leads as any)[Symbol.for('drizzle:ExtraConfigBuilder')];
+      expect(extraConfigBuilder).toBeDefined();
+      expect(typeof extraConfigBuilder).toBe('function');
+      const configStr = extraConfigBuilder.toString();
+      expect(configStr).toContain('leads_numero_unique_idx');
+      expect(configStr).toContain('uniqueIndex');
+    });
+
+    it('D-05: iaAtivada maps to ia_ativada, is NOT NULL, and defaults to true', () => {
+      expect(leads.iaAtivada.name).toBe('ia_ativada');
+      expect(leads.iaAtivada.notNull).toBe(true);
+      expect((leads.iaAtivada as any).default).toBe(true);
+    });
+
+    it('D-06: fullpp maps to fullpp column and is nullable (no notNull)', () => {
+      expect(leads.fullpp.name).toBe('fullpp');
+      expect(leads.fullpp.notNull).toBe(false);
+    });
+
+    it('D-07: createdAt maps to created_at and is NOT NULL', () => {
+      expect(leads.createdAt.name).toBe('created_at');
+      expect(leads.createdAt.notNull).toBe(true);
+    });
+
+    it('D-07: updatedAt maps to updated_at and is NOT NULL', () => {
+      expect(leads.updatedAt.name).toBe('updated_at');
+      expect(leads.updatedAt.notNull).toBe(true);
     });
   });
 
