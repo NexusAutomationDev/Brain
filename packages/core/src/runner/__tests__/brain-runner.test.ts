@@ -45,6 +45,24 @@ mock.module("drizzle-orm/postgres-js", () => ({
   drizzle: mock(() => ({})),
 }));
 
+// Mock LeadService — LEAD-03: gate ia_ativada controlled per test
+const mockUpsertLead = mock(async () => ({
+  id: "uuid-1",
+  uniqueId: "lead-abc",
+  numero: "5511999990001",
+  nome: "Test User",
+  iaAtivada: true, // default: IA ativa — testes existentes não são afetados
+  fullpp: null,
+  createdAt: new Date(),
+  updatedAt: new Date(),
+}));
+
+mock.module("../../leads/lead-service.js", () => ({
+  LeadService: mock(function () {
+    return { upsertLead: mockUpsertLead, getByNumero: mock(async () => null) };
+  }),
+}));
+
 // Import after mocks
 import { BrainRunner } from "../runner.js";
 import { ToolsRegistry } from "../../tools/registry.js";
@@ -171,5 +189,58 @@ describe("BrainRunner", () => {
     expect(mockLoadPrompts.mock.calls.length).toBeGreaterThan(callCountBefore);
     // Verify graph was recompiled by checking buildGraph was called again
     expect((brain.buildGraph as ReturnType<typeof mock>).mock.calls.length).toBeGreaterThan(1);
+  });
+
+  // --- Testes LEAD-03: gate ia_ativada ---
+
+  describe("gate ia_ativada (LEAD-03)", () => {
+    beforeEach(() => {
+      mockUpsertLead.mockClear();
+    });
+
+    test("run() retorna null quando lead.iaAtivada=false", async () => {
+      mockUpsertLead.mockImplementationOnce(async () => ({
+        id: "uuid-1",
+        uniqueId: "lead-abc",
+        numero: "5511999990001",
+        nome: "Test User",
+        iaAtivada: false, // gate deve bloquear
+        fullpp: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }));
+
+      const brain = makeBrain(["system"]);
+      const runner = new BrainRunner({ brain, sql: {} as never, toolsRegistry: registry });
+      await runner.init();
+
+      const result = await runner.run(makeEvent());
+      expect(result).toBeNull();
+    });
+
+    test("run() retorna { reply } quando iaAtivada=true", async () => {
+      // mockUpsertLead default já retorna iaAtivada: true — sem override necessário
+      const brain = makeBrain(["system"]);
+      const runner = new BrainRunner({ brain, sql: {} as never, toolsRegistry: registry });
+      await runner.init();
+
+      const result = await runner.run(makeEvent());
+      expect(result).not.toBeNull();
+      expect(result?.reply).toBe("test reply");
+    });
+
+    test("run() chama upsertLead com Numero, IDLead e Name do evento", async () => {
+      const brain = makeBrain(["system"]);
+      const runner = new BrainRunner({ brain, sql: {} as never, toolsRegistry: registry });
+      await runner.init();
+
+      await runner.run(makeEvent());
+
+      expect(mockUpsertLead).toHaveBeenCalledTimes(1);
+      const [numero, idLead, name] = mockUpsertLead.mock.calls[0] as [string, string, string];
+      expect(numero).toBe("5511999990001");
+      expect(idLead).toBe("lead-test-1");
+      expect(name).toBe("Test User");
+    });
   });
 });

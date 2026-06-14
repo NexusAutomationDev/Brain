@@ -20,6 +20,8 @@ import type { Sql } from "postgres";
 import type { IBrain, BrainBuildContext } from "../brain/interface.js";
 import { ToolsRegistry } from "../tools/registry.js";
 import { loadPrompts } from "../prompts/loader.js";
+import { LeadService } from "../leads/lead-service.js";
+import type { Lead } from "../leads/lead-service.js";
 
 /** Options for constructing a BrainRunner */
 export interface BrainRunnerOptions {
@@ -61,6 +63,7 @@ export class BrainRunner {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private compiledGraph: any | null = null;
   private memoryManager: MemoryManager | null = null;
+  private leadService!: LeadService; // inicializado no construtor
 
   constructor(options: BrainRunnerOptions) {
     this.brain = options.brain;
@@ -68,6 +71,7 @@ export class BrainRunner {
     this.toolsRegistry = options.toolsRegistry;
     this.llmOptions = options.llmOptions;
     this.migrationsFolder = options.migrationsFolder;
+    this.leadService = new LeadService(options.sql);
   }
 
   /**
@@ -139,7 +143,7 @@ export class BrainRunner {
    *
    * @param event - BrainEvent from transport layer (validated by BrainEventSchema before reaching here)
    */
-  async run(event: BrainEvent): Promise<BrainRunResult> {
+  async run(event: BrainEvent): Promise<BrainRunResult | null> {
     if (!this.compiledGraph || !this.memoryManager) {
       throw new ConfigurationError(
         "BrainRunner.init() must be called before run()",
@@ -147,7 +151,22 @@ export class BrainRunner {
       );
     }
 
-    // Phase 8: substituir por lead.unique_id (após LeadService criar unique_id derivado do Numero)
+    // D-06: Fluxo — upsert lead → gate ia_ativada → LLM (LEAD-02, LEAD-03)
+    const lead: Lead = await this.leadService.upsertLead(
+      event.Numero,
+      event.IDLead,
+      event.Name
+    );
+
+    // D-04/D-05: Gate ia_ativada — retorna null silenciosamente (LEAD-03)
+    // Segurança: iaAtivada vem do banco (upsert), nunca do payload externo
+    if (!lead.iaAtivada) {
+      this.logger.debug({ numero: event.Numero }, "ia_ativada=false — ignoring message");
+      return null;
+    }
+
+    // Phase 8: substituir por lead.uniqueId após Phase 7 entregar o lead object
+    // Por ora: event.Numero como antes
     const threadId = event.Numero;
 
     // Step 1: Hydrate memory — retrieve context from all 3 layers (MEM-04)

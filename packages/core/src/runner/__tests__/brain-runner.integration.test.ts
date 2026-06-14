@@ -14,11 +14,11 @@ import { BrainStateAnnotation } from "@brain-pkg/ai";
 
 // Test configuration
 const TEST_DB_URL = process.env.POSTGRES_URL ?? process.env.TEST_DATABASE_URL;
-if (!TEST_DB_URL) {
-  throw new Error("POSTGRES_URL or TEST_DATABASE_URL must be set to run integration tests");
-}
 
-describe("BrainRunner Integration", () => {
+// Skip all integration tests gracefully when DB not available (avoids crashing unit test runs)
+const describeOrSkip = TEST_DB_URL ? describe : describe.skip;
+
+describeOrSkip("BrainRunner Integration", () => {
   let sql: ReturnType<typeof postgres>;
   let db: ReturnType<typeof drizzle>;
 

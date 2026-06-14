@@ -12,7 +12,7 @@ import type { BrainEvent } from "./events.js";
  * Duck typing: BrainRunner satisfies IBrainRunnerLike structurally.
  */
 export interface IBrainRunnerLike {
-  run(event: BrainEvent): Promise<{ reply: string }>;
+  run(event: BrainEvent): Promise<{ reply: string } | null>;
 }
 
 /**
@@ -50,6 +50,10 @@ export function createWebhookApp(runner?: IBrainRunnerLike): Hono {
     if (runner) {
       try {
         const result = await runner.run(event);
+        // LEAD-03: runner.run() retorna null quando ia_ativada=false
+        if (result === null) {
+          return c.json({ status: "ignored" }, 200);
+        }
         return c.json({ status: "ok", reply: result.reply });
       } catch (err) {
         // Log internally but never surface internals to the caller
