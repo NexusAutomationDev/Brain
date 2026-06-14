@@ -8,6 +8,7 @@
 
 import { createCheckpointer, createLLM } from "@brain-pkg/ai";
 import type { LLMOptions } from "@brain-pkg/ai";
+import { runMigrations } from "@brain-pkg/database";
 import { MemoryManager } from "@brain-pkg/memory";
 import { createTracingCallbacks } from "@brain-pkg/observability";
 import { createLogger } from "@brain-pkg/observability";
@@ -30,6 +31,8 @@ export interface BrainRunnerOptions {
   toolsRegistry: ToolsRegistry;
   /** LLM options for createLLM() — provider and model from env */
   llmOptions?: LLMOptions;
+  /** Pasta de migrations para auto-migrate no init(). Se omitido, usa MIGRATIONS_FOLDER ENV. */
+  migrationsFolder?: string;
 }
 
 /** Return type of BrainRunner.run() — internal LangGraph state never leaks beyond this */
@@ -50,6 +53,7 @@ export class BrainRunner {
   private readonly sql: Sql;
   private readonly toolsRegistry: ToolsRegistry;
   private readonly llmOptions?: LLMOptions;
+  private readonly migrationsFolder: string | undefined;
   private readonly logger = createLogger();
 
   private prompts: Record<string, string> = {};
@@ -63,6 +67,7 @@ export class BrainRunner {
     this.sql = options.sql;
     this.toolsRegistry = options.toolsRegistry;
     this.llmOptions = options.llmOptions;
+    this.migrationsFolder = options.migrationsFolder;
   }
 
   /**
@@ -77,6 +82,23 @@ export class BrainRunner {
       { brainId: this.brain.id, brainType: this.brain.brainType },
       "BrainRunner initializing"
     );
+
+    // D-10: runMigrations() chamada dentro de BrainRunner.init() — SDK cuida automaticamente
+    // D-11: MIGRATIONS_FOLDER via ENV ou opção do construtor
+    // D-12: migration completa antes do Brain aceitar mensagens
+    const migrationsFolder = this.migrationsFolder ?? process.env.MIGRATIONS_FOLDER;
+    if (!migrationsFolder) {
+      this.logger.error(
+        { brainId: this.brain.id },
+        'MIGRATIONS_FOLDER not set — cannot run migrations'
+      );
+      process.exit(1);
+    }
+    await runMigrations(this.sql, migrationsFolder).catch((err: unknown) => {
+      this.logger.error({ brainId: this.brain.id, err }, 'Migrations failed — aborting init');
+      process.exit(1);
+    });
+    this.logger.info({ brainId: this.brain.id }, 'Migrations completed');
 
     this.prompts = await loadPrompts(this.sql, this.brain.brainType, this.brain.promptKeys);
 

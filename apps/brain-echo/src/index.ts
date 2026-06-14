@@ -1,14 +1,14 @@
 // D-05: Startup sequencial:
-// 1. runMigrations(sql, migrationsDir) — aplica migrations + seed (exit 1 se falhar)
-// 2. runner.init()                     — carrega prompts + compila graph (exit 1 se prompt faltando)
-// 3. Bun.serve(...)                    — só sobe após os passos anteriores com sucesso
+// 1. runner.init() — runMigrations() + carrega prompts + compila graph (exit 1 se falhar)
+// 2. Bun.serve(...)  — só sobe após os passos anteriores com sucesso
+//
+// MIGRATIONS_FOLDER ENV deve apontar para packages/database/src/migrations
+// Em Docker: MIGRATIONS_FOLDER=/app/migrations (via ENV no Dockerfile)
+// Em dev: definir em .env ou usar path relativo
 
 import postgres from "postgres";
-import { runMigrations } from "@brain-pkg/database";
 import { BrainRunner, ToolsRegistry } from "@brain-pkg/core";
 import { createLogger } from "@brain-pkg/observability";
-import { fileURLToPath } from "url";
-import { join, dirname } from "path";
 import { createServer } from "./server.js";
 import { echoBrain } from "./brain.js";
 
@@ -23,21 +23,9 @@ async function main() {
 
   const sql = postgres(connectionString, { max: 10, idle_timeout: 300 });
 
-  // Passo 1: Migrations + seed de prompts
-  // Path resolvido em relação ao arquivo compilado para funcionar no Docker.
-  // Em desenvolvimento, as migrations ficam em packages/database/src/migrations/
-  // No container: ENV MIGRATIONS_DIR=/app/migrations (ver plano 04-02)
-  const migrationsDir = process.env.MIGRATIONS_DIR
-    ?? join(dirname(fileURLToPath(import.meta.url)), "../../migrations");
-
-  await runMigrations(sql, migrationsDir).catch((err) => {
-    logger.error({ err }, "Migrations failed — aborting startup");
-    process.exit(1);
-  });
-  logger.info({}, "Migrations completed");
-
-  // Passo 2: Inicializa BrainRunner
-  // runner.init() chama process.exit(1) internamente se promptKey 'system' não existir no DB
+  // Passo 1: Inicializa BrainRunner — runMigrations() é chamado dentro de runner.init() (D-10)
+  // MIGRATIONS_FOLDER deve estar definida no .env ou via ENV do container
+  // runner.init() chama process.exit(1) internamente se migration falhar ou promptKey faltando
   const toolsRegistry = new ToolsRegistry();
   // D-02: EchoBrain tem tools: [] — registrar o brainType sem tools para satisfazer o ToolsRegistry
   toolsRegistry.registerBrainType(echoBrain.brainType);
