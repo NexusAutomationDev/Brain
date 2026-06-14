@@ -24,7 +24,14 @@ export function createTransport(runner?: IBrainRunnerLike): ITransport {
     case "webhook":
       return new WebhookTransport(runner);
     case "rabbitmq":
-      return new RabbitMQTransport(runner!);
+      // WR-04: explicitamente falha aqui em vez de passar undefined silenciosamente
+      if (!runner) {
+        throw new ConfigurationError(
+          "RabbitMQTransport requires a runner — inject via createTransport(runner)",
+          { transport: "rabbitmq" }
+        );
+      }
+      return new RabbitMQTransport(runner);
     default:
       throw new ConfigurationError(`Unknown TRANSPORT: ${type}`, { transport: type });
   }
