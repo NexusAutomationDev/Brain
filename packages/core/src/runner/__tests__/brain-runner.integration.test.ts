@@ -29,17 +29,15 @@ describeOrSkip("BrainRunner Integration", () => {
 
     // Seed prompts table for test brain
     await db.insert(prompts).values({
-      brain_type: "integration-test",
+      brainType: "integration-test",
       key: "system",
-      value: "You are a helpful assistant. Always respond with 'Integration test reply'.",
-      created_at: new Date(),
-      updated_at: new Date(),
+      content: "You are a helpful assistant. Always respond with 'Integration test reply'.",
     }).onConflictDoNothing();
   });
 
   afterAll(async () => {
     // Cleanup
-    await db.delete(prompts).where(eq(prompts.brain_type, "integration-test"));
+    await db.delete(prompts).where(eq(prompts.brainType, "integration-test"));
     await sql.end();
   });
 
