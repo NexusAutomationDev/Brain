@@ -64,6 +64,52 @@ importers:
         specifier: ^5.0.0
         version: 5.9.3
 
+  apps/brain-sdr:
+    dependencies:
+      '@brain-pkg/ai':
+        specifier: workspace:*
+        version: link:../../packages/ai
+      '@brain-pkg/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@brain-pkg/database':
+        specifier: workspace:*
+        version: link:../../packages/database
+      '@brain-pkg/observability':
+        specifier: workspace:*
+        version: link:../../packages/observability
+      '@brain-pkg/transport':
+        specifier: workspace:*
+        version: link:../../packages/transport
+      '@langchain/core':
+        specifier: ^1.1.48
+        version: 1.1.48(@opentelemetry/api@1.9.1)(openai@6.42.0(zod@3.25.76))
+      '@langchain/langgraph':
+        specifier: ^1.4.1
+        version: 1.4.1(@langchain/core@1.1.48(@opentelemetry/api@1.9.1)(openai@6.42.0(zod@3.25.76)))(zod@3.25.76)
+      '@langchain/langgraph-checkpoint-postgres':
+        specifier: ^1.0.1
+        version: 1.0.3(@langchain/core@1.1.48(@opentelemetry/api@1.9.1)(openai@6.42.0(zod@3.25.76)))(@langchain/langgraph-checkpoint@1.1.0(@langchain/core@1.1.48(@opentelemetry/api@1.9.1)(openai@6.42.0(zod@3.25.76))))
+      drizzle-orm:
+        specifier: 0.45.2
+        version: 0.45.2(@opentelemetry/api@1.9.1)(bun-types@1.3.14)(pg@8.21.0)(postgres@3.4.9)
+      hono:
+        specifier: ^4.12.0
+        version: 4.12.25
+      postgres:
+        specifier: ^3.4.9
+        version: 3.4.9
+      zod:
+        specifier: ^3.25.76
+        version: 3.25.76
+    devDependencies:
+      '@types/bun':
+        specifier: latest
+        version: 1.3.14
+      typescript:
+        specifier: ^5.0.0
+        version: 5.9.3
+
   packages/ai:
     dependencies:
       '@brain-pkg/shared':
@@ -242,12 +288,18 @@ importers:
 
   packages/transport:
     dependencies:
+      '@brain-pkg/observability':
+        specifier: workspace:*
+        version: link:../observability
       '@brain-pkg/shared':
         specifier: workspace:*
         version: link:../shared
       hono:
         specifier: ^4.12.25
         version: 4.12.25
+      rabbitmq-client:
+        specifier: ^5.0.8
+        version: 5.0.8
       zod:
         specifier: ^3.23.8
         version: 3.25.76
@@ -1602,6 +1654,10 @@ packages:
   quick-format-unescaped@4.0.4:
     resolution: {integrity: sha512-tYC1Q1hgyRuHgloV/YXs2w15unPVh8qfu/qCTfhTYamaw7fyhumKa2yGpdSo87vY32rIclj+4fWYQXUMs9EHvg==}
 
+  rabbitmq-client@5.0.8:
+    resolution: {integrity: sha512-nNto/okuVq+d/OamRYX4HIiCkHdOE0RICIDRjS4YQUo2DI/l3R9RlsFaEEYSjIc+LT6DV+1wUub3nD1HwrM4SQ==}
+    engines: {node: '>=16'}
+
   real-require@0.2.0:
     resolution: {integrity: sha512-57frrGM/OCTLqLOAh0mhVA9VBMHd+9U7Zb2THMGdBUoZVOtGbJzjxsYGDJ3A9AYYCP4hn6y1TVbaOfzWtm5GFg==}
     engines: {node: '>= 12.13.0'}
@@ -2843,6 +2899,8 @@ snapshots:
   queue-microtask@1.2.3: {}
 
   quick-format-unescaped@4.0.4: {}
+
+  rabbitmq-client@5.0.8: {}
 
   real-require@0.2.0: {}
 
