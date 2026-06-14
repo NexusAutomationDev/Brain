@@ -13,6 +13,7 @@
 import { TenantPoolManager } from "@brain-pkg/database";
 import { BrainRunner, ToolsRegistry } from "@brain-pkg/core";
 import { createLogger } from "@brain-pkg/observability";
+import { createTransport } from "@brain-pkg/transport";
 import { createServer } from "./server.js";
 import { sdrBrain } from "./brain.js";
 
@@ -73,6 +74,16 @@ async function main() {
 
   Bun.serve({ port, fetch: app.fetch });
   logger.info({ port }, "brain-sdr server listening");
+
+  // TRP-06: start RabbitMQ consumer when TRANSPORT=rabbitmq
+  // Webhook mode is handled by the Hono server above (POST /api/v1/webhook route).
+  // RabbitMQ mode starts a consumer in addition to the health/core HTTP server.
+  const transportType = process.env.TRANSPORT ?? "webhook";
+  if (transportType === "rabbitmq") {
+    const transport = createTransport(runner);
+    await transport.start();
+    logger.info({ transport: transportType }, "RabbitMQ transport started");
+  }
 }
 
 main();
