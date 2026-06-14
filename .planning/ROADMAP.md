@@ -52,8 +52,8 @@
 **Plans**: 2 plans
 
 Plans:
-- [ ] 06-01-PLAN.md — Schema leadsTable + advisory lock em migrate.ts
-- [ ] 06-02-PLAN.md — [BLOCKING] drizzle-kit generate + BrainRunner.init() auto-migrate
+- [x] 06-01-PLAN.md — Schema leadsTable + advisory lock em migrate.ts
+- [x] 06-02-PLAN.md — [BLOCKING] drizzle-kit generate + BrainRunner.init() auto-migrate
 
 ### Phase 7: LeadService + RabbitMQ Transport
 **Goal**: Lead é registrado automaticamente na primeira mensagem, leads com `ia_ativada=false` são ignorados silenciosamente, e o transport RabbitMQ consume mensagens com ack manual, DLX e reconexão automática
