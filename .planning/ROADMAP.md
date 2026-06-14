@@ -82,8 +82,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 08-01-PLAN.md — Integration tests HIST-01 (thread_id = IDLead, não Numero) e HIST-02 (histórico persiste entre chamadas)
-- [ ] 08-02-PLAN.md — getState() + context window em runner.ts + slice no nó brain-echo + CONTEXT_WINDOW_MESSAGES em .env.example
+- [x] 08-01-PLAN.md — Integration tests HIST-01 (thread_id = IDLead, não Numero) e HIST-02 (histórico persiste entre chamadas)
+- [x] 08-02-PLAN.md — getState() + context window em runner.ts + slice no nó brain-echo + CONTEXT_WINDOW_MESSAGES em .env.example
 
 ### Phase 9: Brain SDR
 **Goal**: Brain SDR atende leads reais no WhatsApp com contexto de conversa, respeita ia_ativada, registra todas as interações, usa prompts do banco e executa sub-agente de qualificação quando acionado
