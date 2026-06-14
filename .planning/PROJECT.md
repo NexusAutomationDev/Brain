@@ -39,10 +39,10 @@ Uma infraestrutura de agentes modular onde novos Brains são criados definindo a
 
 ### Active
 
-- [ ] Transport layer (RabbitMQ): seleção via `TRANSPORT=rabbitmq` env com campos padronizados (Name, Message, Numero, IDLead) — v1.1
+- [x] Transport layer (RabbitMQ): seleção via `TRANSPORT=rabbitmq` env com campos padronizados (Name, Message, Numero, IDLead) — Validated in Phase 7: leadservice-rabbitmq-transport
 - [x] Schema: tabela `leads` (id, unique_id, nome, numero, ia_ativada, fullpp) com advisory lock em runMigrations() — Validated in Phase 6: leads-schema-migration
 - [x] Auto-migrate na inicialização do Brain (verificar/criar tabelas via ENV) — Validated in Phase 6: leads-schema-migration
-- [ ] Fluxo: cadastro automático de lead na primeira mensagem + verificação `ia_ativada` — v1.1
+- [x] Fluxo: cadastro automático de lead na primeira mensagem + verificação `ia_ativada` — Validated in Phase 7: leadservice-rabbitmq-transport
 - [ ] Histórico de conversas vinculado ao lead (recuperação de contexto entre sessões) — v1.1
 - [x] Correção WebhookTransport.start() com runner injection (GAP-1) — Validated in Phase 5: transport-foundation
 - [x] Webhook: campos de entrada padronizados (Name, Message, Numero, IDLead) — Validated in Phase 5: transport-foundation
