@@ -114,4 +114,4 @@ Este documento evolui nas transições de fase e marcos de milestone.
 4. Atualizar Context com estado atual
 
 ---
-*Last updated: 2026-06-13 — Phase 5 complete: GAP-1 fix, BrainEvent schema padronizado, lint ativo em 7 pacotes*
+*Last updated: 2026-06-14 — Phase 8 complete: HIST-01/02/03 — thread_id = lead.uniqueId, histórico persiste via PostgresSaver, context window com slice(-N) no nó do grafo*
