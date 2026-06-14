@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import { createTransport } from "./factory.js";
 import { WebhookTransport } from "./webhook/handler.js";
+import { RabbitMQTransport } from "./rabbitmq/consumer.js";
 import { ConfigurationError } from "@brain-pkg/shared";
 
 describe("createTransport factory (TRANS-04, TRP-02)", () => {
@@ -28,9 +29,16 @@ describe("createTransport factory (TRANS-04, TRP-02)", () => {
     expect(transport.start(9999)).rejects.toThrow(ConfigurationError);
   });
 
-  it("createTransport with unknown TRANSPORT env throws ConfigurationError", () => {
-    process.env.TRANSPORT = "rabbitmq";
+  it("createTransport with unknown TRANSPORT env throws ConfigurationError (ex: 'kafka')", () => {
+    process.env.TRANSPORT = "kafka";
     expect(() => createTransport()).toThrow(ConfigurationError);
+  });
+
+  it("createTransport com TRANSPORT=rabbitmq retorna RabbitMQTransport (TRP-06)", () => {
+    process.env.TRANSPORT = "rabbitmq";
+    const mockRunner = { run: async () => ({ reply: "ok" }) };
+    const transport = createTransport(mockRunner);
+    expect(transport).toBeInstanceOf(RabbitMQTransport);
   });
 
   it("createTransport reads TRANSPORT env var when set to webhook", () => {
