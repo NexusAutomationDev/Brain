@@ -68,8 +68,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 07-01-PLAN.md — LeadService (upsertLead) + gate ia_ativada em BrainRunner.run() + TRP-01 explícito
-- [ ] 07-02-PLAN.md — RabbitMQTransport (consumer, retry, DLQ) + factory case "rabbitmq" + .env.example
+- [x] 07-01-PLAN.md — LeadService (upsertLead) + gate ia_ativada em BrainRunner.run() + TRP-01 explícito
+- [x] 07-02-PLAN.md — RabbitMQTransport (consumer, retry, DLQ) + factory case "rabbitmq" + .env.example
 
 ### Phase 8: BrainRunner + Conversation History
 **Goal**: Cada lead tem histórico de conversa persistente vinculado ao seu `unique_id` como `thread_id`, recuperado automaticamente entre sessões, com janela de contexto controlada
