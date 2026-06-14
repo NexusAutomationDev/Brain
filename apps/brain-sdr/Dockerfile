@@ -80,8 +80,10 @@ COPY --from=builder /app/packages/observability/node_modules ./packages/observab
 COPY --from=builder /app/packages/shared/node_modules ./packages/shared/node_modules
 COPY --from=builder /app/packages/transport/node_modules ./packages/transport/node_modules
 
-# App brain-sdr compilado + node_modules do app
+# App brain-sdr compilado + package.json + node_modules do app
+# package.json obrigatório: runtime lê "type": "module" e "main" daqui
 COPY --from=builder /app/apps/brain-sdr/dist ./apps/brain-sdr/dist
+COPY --from=builder /app/apps/brain-sdr/package.json ./apps/brain-sdr/package.json
 COPY --from=builder /app/apps/brain-sdr/node_modules ./apps/brain-sdr/node_modules
 
 # Migrations SQL — NÃO estão em dist/, DEVEM ser copiadas explicitamente (Pitfall 1)
