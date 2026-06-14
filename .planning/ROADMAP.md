@@ -65,7 +65,11 @@ Plans:
   3. `TRANSPORT=rabbitmq` inicia consumer que processa mensagens `{Name, Message, Numero, IDLead}` da fila configurada via ENV — mensagem processada com sucesso recebe ack
   4. Falha permanente no processamento envia mensagem para Dead Letter Queue (não requeue infinito) — consumer não trava nem perde mensagens
   5. `TRANSPORT=webhook` mantém comportamento anterior — seleção via ENV funciona sem recompilação
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 07-01-PLAN.md — LeadService (upsertLead) + gate ia_ativada em BrainRunner.run() + TRP-01 explícito
+- [ ] 07-02-PLAN.md — RabbitMQTransport (consumer, retry, DLQ) + factory case "rabbitmq" + .env.example
 
 ### Phase 8: BrainRunner + Conversation History
 **Goal**: Cada lead tem histórico de conversa persistente vinculado ao seu `unique_id` como `thread_id`, recuperado automaticamente entre sessões, com janela de contexto controlada
@@ -100,6 +104,6 @@ Plans:
 | 4. Validation Brain | v1.0 | 5/5 | Complete | 2026-06-13 |
 | 5. Transport Foundation | v1.1 | 0/? | Not started | - |
 | 6. Leads Schema + Migration | v1.1 | 0/2 | Planned | - |
-| 7. LeadService + RabbitMQ Transport | v1.1 | 0/? | Not started | - |
+| 7. LeadService + RabbitMQ Transport | v1.1 | 0/2 | Planned | - |
 | 8. BrainRunner + Conversation History | v1.1 | 0/? | Not started | - |
 | 9. Brain SDR | v1.1 | 0/? | Not started | - |
