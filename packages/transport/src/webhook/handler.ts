@@ -1,8 +1,11 @@
 import { Hono } from "hono";
 import { ConfigurationError } from "@brain-pkg/shared";
+import { createLogger } from "@brain-pkg/observability";
 import type { ITransport } from "../interface.js";
 import { BrainEventSchema } from "./events.js";
 import type { BrainEvent } from "./events.js";
+
+const logger = createLogger();
 
 /**
  * T-3-04-03: Local interface to avoid circular dependency.
@@ -57,7 +60,7 @@ export function createWebhookApp(runner?: IBrainRunnerLike): Hono {
         return c.json({ status: "ok", reply: result.reply });
       } catch (err) {
         // Log internally but never surface internals to the caller
-        console.error({ err }, "BrainRunner.run() failed");
+        logger.error({ err }, "BrainRunner.run() failed");
         return c.json({ error: "Internal error" }, 500);
       }
     }
