@@ -13,7 +13,6 @@ import { MemoryManager } from "@brain-pkg/memory";
 import { createTracingCallbacks } from "@brain-pkg/observability";
 import { createLogger } from "@brain-pkg/observability";
 import { ConfigurationError } from "@brain-pkg/shared";
-import { AIMessage } from "@langchain/core/messages";
 import type { BaseMessage } from "@langchain/core/messages";
 import type { BrainEvent } from "@brain-pkg/transport";
 import type { Sql } from "postgres";
