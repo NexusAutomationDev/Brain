@@ -130,6 +130,7 @@ export class BrainRunner {
 
     // Step 1: Hydrate memory — retrieve context from all 3 layers (MEM-04)
     // Pass empty queryVector to skip semantic search in v1 (no embedding of input yet)
+    // Context flows through the PostgresSaver checkpointer; explicit message injection deferred to Phase 8.
     await this.memoryManager.getContext(threadId, event.IDLead, []);
 
     // Step 2: Invoke compiled graph with thread_id + Langfuse callbacks
