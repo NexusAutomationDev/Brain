@@ -38,12 +38,20 @@ mock.module("@brain-pkg/observability", () => ({
     info: mock(() => {}),
     error: mock(() => {}),
     warn: mock(() => {}),
+    debug: mock(() => {}),
   })),
 }));
 
 mock.module("drizzle-orm/postgres-js", () => ({
   drizzle: mock(() => ({})),
 }));
+
+mock.module("@brain-pkg/database", () => ({
+  runMigrations: mock(async () => {}),
+}));
+
+// Satisfy MIGRATIONS_FOLDER check in runner.init() — prevents process.exit(1) before runMigrations
+process.env.MIGRATIONS_FOLDER = "/tmp/test-migrations";
 
 // Mock LeadService — LEAD-03: gate ia_ativada controlled per test
 const mockUpsertLead = mock(async () => ({

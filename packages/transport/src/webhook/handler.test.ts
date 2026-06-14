@@ -96,6 +96,22 @@ describe("WebhookTransport handler (TRANS-02, TRP-02)", () => {
     expect(body.error).toBe("Invalid BrainEvent");
   });
 
+  it("POST /api/v1/webhook com runner retornando null retorna 200 { status: 'ignored' } (LEAD-03)", async () => {
+    const nullRunner = {
+      run: async (_event: unknown) => null,
+    };
+    const appWithNullRunner = createWebhookApp(nullRunner);
+    const req = new Request("http://localhost/api/v1/webhook", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(validEvent),
+    });
+    const res = await appWithNullRunner.fetch(req);
+    expect(res.status).toBe(200);
+    const body = await res.json() as Record<string, unknown>;
+    expect(body.status).toBe("ignored");
+  });
+
   it("POST /api/v1/webhook sem IDLead retorna 400 com error Invalid BrainEvent (TRP-01)", async () => {
     // TRP-01: T-07-01 — IDLead ausente deve ser rejeitado antes do upsert
     const req = new Request("http://localhost/api/v1/webhook", {
