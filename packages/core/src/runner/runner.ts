@@ -217,9 +217,10 @@ export class BrainRunner {
     );
 
     // Step 3: Extract last AIMessage from state — D-05: only reply text, no state leak
-    // A4 (assumption): result.messages is BaseMessage[] — filter by AIMessage instanceof
+    // Use _getType() instead of instanceof to avoid cross-module identity issues in pnpm/bun
+    // monorepos where @langchain/core may resolve to different module instances per package.
     const messages: BaseMessage[] = result.messages ?? [];
-    const lastAI = [...messages].reverse().find((m) => m instanceof AIMessage);
+    const lastAI = [...messages].reverse().find((m) => m._getType() === "ai");
     // For v1 (text-only responses): content is string. For tool calls, content may be complex.
     const reply = typeof lastAI?.content === "string" ? lastAI.content : "";
 
