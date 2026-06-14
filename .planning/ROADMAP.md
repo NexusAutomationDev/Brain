@@ -79,7 +79,11 @@ Plans:
   1. `BrainRunner.run()` deriva `thread_id = lead.unique_id` após lookup no DB — nunca usa `IDLead` direto do payload como thread_id
   2. Lead que retorna após dias tem histórico completo de conversa anterior recuperado pelo PostgresSaver automaticamente
   3. Conversas longas (30-80 turnos) não causam overflow — `trimMessages` trunca o contexto respeitando o limite configurado via ENV
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 08-01-PLAN.md — Integration tests HIST-01 (thread_id = IDLead, não Numero) e HIST-02 (histórico persiste entre chamadas)
+- [ ] 08-02-PLAN.md — getState() + context window em runner.ts + slice no nó brain-echo + CONTEXT_WINDOW_MESSAGES em .env.example
 
 ### Phase 9: Brain SDR
 **Goal**: Brain SDR atende leads reais no WhatsApp com contexto de conversa, respeita ia_ativada, registra todas as interações, usa prompts do banco e executa sub-agente de qualificação quando acionado
@@ -105,5 +109,5 @@ Plans:
 | 5. Transport Foundation | v1.1 | 0/? | Not started | - |
 | 6. Leads Schema + Migration | v1.1 | 0/2 | Planned | - |
 | 7. LeadService + RabbitMQ Transport | v1.1 | 0/2 | Planned | - |
-| 8. BrainRunner + Conversation History | v1.1 | 0/? | Not started | - |
+| 8. BrainRunner + Conversation History | v1.1 | 0/2 | Planned | - |
 | 9. Brain SDR | v1.1 | 0/? | Not started | - |
