@@ -247,7 +247,48 @@ docs/
 <!-- GSD:architecture-start source:ARCHITECTURE.md -->
 ## Architecture
 
-Architecture not yet mapped. Follow existing patterns found in the codebase.
+### Modelo de Deployment por Cliente
+
+Cada cliente recebe **1 imagem Docker** do Brain contratado (ex: Brain SDR). O cliente pode subir **múltiplas instâncias** dessa imagem — por redundância ou volume de atendimento.
+
+```
+Cliente X
+├── brain-sdr (instância 1)  ─┐
+├── brain-sdr (instância 2)  ─┼──► PostgreSQL (banco_cliente_x)
+└── brain-sdr (instância 3)  ─┘
+```
+
+**Regras:**
+- **1 banco por cliente** — isolamento via `DATABASE_NAME` ENV + TenantPoolManager
+- **N instâncias do mesmo Brain** — todas apontam para o mesmo banco do cliente
+- **Auto-migrate na inicialização** — cada instância roda `runMigrations()` ao subir; `pg_advisory_lock` garante que apenas uma migra por vez (as demais aguardam)
+- **`unique_id` do lead = `IDLead` do payload** — a integração (WhatsApp/CRM via webhook ou RabbitMQ) envia o `IDLead`, que é armazenado como `leads.unique_id` e usado como `thread_id` no PostgresSaver (histórico de conversa por lead)
+
+### Ciclo de Vida de um Brain
+
+```
+startup
+  └── BrainRunner.init()
+        ├── runMigrations(sql, MIGRATIONS_FOLDER)  ← advisory lock aqui
+        │     └── CREATE EXTENSION vector + aplica migrations pendentes
+        └── brain.init()  ← Brain inicializa prompts, tools, etc.
+
+mensagem recebida (webhook ou RabbitMQ)
+  └── BrainRunner.run(event)
+        ├── LeadService.upsert(numero, IDLead, nome)  ← cria lead se primeiro contato
+        ├── verifica ia_ativada  ← ignora silenciosamente se false
+        └── LangGraph (thread_id = lead.unique_id)  ← recupera histórico via PostgresSaver
+```
+
+### Como Criar um Novo Brain
+
+Novo Brain = novo app em `apps/brain-{tipo}/` que:
+1. Implementa `IBrain` (init, run, getPrompts, getTools)
+2. Define `MIGRATIONS_FOLDER` no `.env`
+3. Registra o tipo no `ToolsRegistry`
+4. Tem seu próprio `Dockerfile` (imagem independente)
+
+O SDK (`packages/core`) cuida de todo o resto: lifecycle, migrations, transport, LangGraph, PostgresSaver.
 <!-- GSD:architecture-end -->
 
 <!-- GSD:skills-start source:skills/ -->
