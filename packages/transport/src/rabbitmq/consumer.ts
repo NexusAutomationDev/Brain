@@ -89,8 +89,9 @@ export class RabbitMQTransport implements ITransport {
 
         if (!parsed.success) {
           // Payload inválido — sem retry (schema não vai melhorar com retry)
+          // T-07-08 Segurança: não logar body completo (pode conter PII — número, nome, etc.)
           this.logger.error(
-            { body: msg.body },
+            { bodyKeys: Object.keys(msg.body ?? {}) },
             "Invalid BrainEvent from RabbitMQ — sending to DLQ"
           );
           await this.pub!.send(dlq, msg.body);
