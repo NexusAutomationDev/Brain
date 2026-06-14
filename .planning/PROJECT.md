@@ -43,12 +43,12 @@ Uma infraestrutura de agentes modular onde novos Brains são criados definindo a
 - [x] Schema: tabela `leads` (id, unique_id, nome, numero, ia_ativada, fullpp) com advisory lock em runMigrations() — Validated in Phase 6: leads-schema-migration
 - [x] Auto-migrate na inicialização do Brain (verificar/criar tabelas via ENV) — Validated in Phase 6: leads-schema-migration
 - [x] Fluxo: cadastro automático de lead na primeira mensagem + verificação `ia_ativada` — Validated in Phase 7: leadservice-rabbitmq-transport
-- [ ] Histórico de conversas vinculado ao lead (recuperação de contexto entre sessões) — v1.1
+- [x] Histórico de conversas vinculado ao lead (recuperação de contexto entre sessões) — Validated in Phase 9: brain-sdr (PostgresSaver.getTuple() no sub-agente de qualificação)
 - [x] Correção WebhookTransport.start() com runner injection (GAP-1) — Validated in Phase 5: transport-foundation
 - [x] Webhook: campos de entrada padronizados (Name, Message, Numero, IDLead) — Validated in Phase 5: transport-foundation
 - [x] Lint pipeline ativo em todos os 7 pacotes (turbo run lint passa 7/7) — Validated in Phase 5: transport-foundation
-- [ ] Multi-tenant: revisão e ativação do TenantPoolManager em produção — v1.1
-- [ ] Brain SDR: primeiro Brain real com fluxo de atendimento, qualificação e sub-agente — v1.1
+- [x] Multi-tenant: revisão e ativação do TenantPoolManager em produção — Validated in Phase 9: brain-sdr (TenantPoolManager ativo em index.ts)
+- [x] Brain SDR: primeiro Brain real com fluxo de atendimento, qualificação e sub-agente — Validated in Phase 9: brain-sdr
 - [ ] Arquitetura de memória semântica (embeddings + RAG): busca por similaridade em produção
 
 ### Out of Scope
