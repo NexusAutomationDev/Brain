@@ -165,9 +165,10 @@ export class BrainRunner {
       return null;
     }
 
-    // Phase 8: substituir por lead.uniqueId após Phase 7 entregar o lead object
-    // Por ora: event.Numero como antes
-    const threadId = event.Numero;
+    // WR-02: usar lead.uniqueId (IDLead canonical) como thread_id — não event.Numero.
+    // lead já está disponível (upsertado acima). Garante que o histórico de conversa
+    // fica vinculado ao lead canônico, não ao número de telefone.
+    const threadId = lead.uniqueId;
 
     // Step 1: Hydrate memory — retrieve context from all 3 layers (MEM-04)
     // Pass empty queryVector to skip semantic search in v1 (no embedding of input yet)
