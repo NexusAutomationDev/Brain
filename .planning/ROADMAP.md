@@ -49,7 +49,11 @@
   2. Brain inicializa contra banco vazio e cria todas as tabelas necessárias antes de aceitar a primeira mensagem
   3. Startup race condition prevenida — advisory lock em `runMigrations()` garante que múltiplas instâncias não colidem
   4. Schema `leads` exportado do barrel do pacote database e disponível para importação em outros pacotes
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 06-01-PLAN.md — Schema leadsTable + advisory lock em migrate.ts
+- [ ] 06-02-PLAN.md — [BLOCKING] drizzle-kit generate + BrainRunner.init() auto-migrate
 
 ### Phase 7: LeadService + RabbitMQ Transport
 **Goal**: Lead é registrado automaticamente na primeira mensagem, leads com `ia_ativada=false` são ignorados silenciosamente, e o transport RabbitMQ consume mensagens com ack manual, DLX e reconexão automática
@@ -95,7 +99,7 @@
 | 3. Brain SDK | v1.0 | 5/5 | Complete | 2026-06-13 |
 | 4. Validation Brain | v1.0 | 5/5 | Complete | 2026-06-13 |
 | 5. Transport Foundation | v1.1 | 0/? | Not started | - |
-| 6. Leads Schema + Migration | v1.1 | 0/? | Not started | - |
+| 6. Leads Schema + Migration | v1.1 | 0/2 | Planned | - |
 | 7. LeadService + RabbitMQ Transport | v1.1 | 0/? | Not started | - |
 | 8. BrainRunner + Conversation History | v1.1 | 0/? | Not started | - |
 | 9. Brain SDR | v1.1 | 0/? | Not started | - |
