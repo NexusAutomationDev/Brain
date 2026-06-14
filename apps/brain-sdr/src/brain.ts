@@ -50,6 +50,10 @@ export const sdrBrain: IBrain = {
     // CRITICAL: bindTools() com [boundQualifyTool] — não ctx.tools
     // ctx.tools vem do ToolsRegistry e contém qualifyLeadTool sem closure;
     // usar boundQualifyTool garante que o prompt do banco é injetado.
+    // BaseChatModel.bindTools é opcional na tipagem — guard de runtime garante provider com tool calling
+    if (!ctx.llm.bindTools) {
+      throw new Error("LLM provider não suporta tool calling — configure um provider compatível (ex: OpenAI, Anthropic, Gemini)");
+    }
     const llmWithTools = ctx.llm.bindTools([boundQualifyTool]);
 
     // HIST-03: context window — slice feito no nó, não no invoke() (Pitfall 3 do runner.ts)
