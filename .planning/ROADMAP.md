@@ -96,7 +96,13 @@ Plans:
   4. Sub-agente de qualificação retorna `{qualificado, motivo, proximo_passo}` ao Brain principal após analisar histórico completo (mensagens IA vs lead) buscado pelo serviço de código via session ID
   5. TenantPoolManager seleciona o banco correto via `DATABASE_NAME` ENV — Brain SDR opera em produção com isolamento multi-tenant
 **UI hint**: no
-**Plans**: TBD
+**Plans**: 4 plans
+
+Plans:
+- [ ] 09-00-PLAN.md — Wave 0: test stubs (unit + integration) + package.json
+- [ ] 09-01-PLAN.md — Migration 0005_brain_sdr_prompts.sql (seed prompts SDR)
+- [ ] 09-02-PLAN.md — brain.ts (IBrain ReAct + ToolNode) + qualifier.ts (qualify_lead + sub-agente stateless)
+- [ ] 09-03-PLAN.md — index.ts (TenantPoolManager) + server.ts + tsconfig.json + Dockerfile
 
 ## Progress
 
@@ -110,4 +116,4 @@ Plans:
 | 6. Leads Schema + Migration | v1.1 | 0/2 | Planned | - |
 | 7. LeadService + RabbitMQ Transport | v1.1 | 0/2 | Planned | - |
 | 8. BrainRunner + Conversation History | v1.1 | 0/2 | Planned | - |
-| 9. Brain SDR | v1.1 | 0/? | Not started | - |
+| 9. Brain SDR | v1.1 | 0/4 | Planned | - |
