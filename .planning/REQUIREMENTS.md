@@ -1,0 +1,51 @@
+# Requirements — v1.2 Output Parser + Tool Contracts
+
+_Last updated: 2026-06-14 — Milestone v1.2 started_
+
+## v1.2 Requirements
+
+### Output Parser (PARSER)
+
+- [ ] **PARSER-01**: O SDK expõe um Output Parser padrão com o JSON schema definido — `fullResponse` e `responseMode` obrigatórios; `mediaType`/`mediaUrl` condicionalmente obrigatórios entre si
+- [ ] **PARSER-02**: Todos os Brains retornam exclusivamente o formato estruturado (breaking change — sem fallback para string plana)
+- [ ] **PARSER-03**: O Brain SDR é migrado para usar o novo Output Parser
+
+### Tool Control via ENV (TOOLS-ENV)
+
+- [ ] **TOOLS-ENV-01**: O SDK suporta `BRAIN_TOOLS` como whitelist de tools habilitadas em runtime (ex: `BRAIN_TOOLS=qualify_lead,pause_session`)
+- [ ] **TOOLS-ENV-02**: Quando `BRAIN_TOOLS` está ausente, o comportamento padrão do `enableTool()` é mantido sem alteração
+
+### Standard Tools (TOOLS-STD)
+
+- [ ] **TOOLS-STD-01**: Tool `pause_session` disponível para todos os Brains — altera `leads.fullpp` para `false`
+- [ ] **TOOLS-STD-02**: Tool `finish_conversation` disponível para todos os Brains — altera `leads.ia_ativada` e `leads.fullpp` para `false`
+- [ ] **TOOLS-STD-03**: Brain SDR tem `pause_session` e `finish_conversation` habilitadas por padrão
+
+## Future Requirements
+
+- Outros Brains (Suporte, Customer Success) — próximo milestone
+- Sub-agente de qualificação avançada com SPIN/BANT completo
+- Memória semântica (embeddings + RAG) — pgvector ativo em produção
+- Brain SDR publicando respostas de volta ao RabbitMQ
+
+## Out of Scope (v1.2)
+
+- `BRAIN_TOOLS_DISABLED` (lista de exclusão) — whitelist (`BRAIN_TOOLS`) é suficiente para v1.2
+- Suporte a `mediaUrl` com upload direto — apenas URL externa por ora
+- UI de gerenciamento de tools — configuração via ENV only
+- Mecanismo de licenciamento — futuro
+
+## Traceability
+
+_Preenchido pelo roadmapper_
+
+| REQ-ID | Phase | Plan |
+|--------|-------|------|
+| PARSER-01 | — | — |
+| PARSER-02 | — | — |
+| PARSER-03 | — | — |
+| TOOLS-ENV-01 | — | — |
+| TOOLS-ENV-02 | — | — |
+| TOOLS-STD-01 | — | — |
+| TOOLS-STD-02 | — | — |
+| TOOLS-STD-03 | — | — |
