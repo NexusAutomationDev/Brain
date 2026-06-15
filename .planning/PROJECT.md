@@ -68,6 +68,8 @@ Uma infraestrutura de agentes modular onde novos Brains são criados definindo a
 
 ## Context
 
+**Estado v1.2 (Phase 11 completa 2026-06-15):** Tool Contracts SDK entregue — `createPauseSessionTool(sql)` e `createFinishConversationTool(sql)` como factories tipadas; guard `BRAIN_TOOLS` em `enableTool()` (whitelist CSV via ENV); `BrainBuildContext` com `sql?: Sql`; `BrainRunner` injeta `sql: this.sql`; 22 testes verdes (7/7 truths verificadas). TOOLS-ENV-01/02 e TOOLS-STD-01/02 satisfeitos.
+
 **Estado v1.2 (Phase 10 completa 2026-06-15):** Output Parser SDK entregue — contrato de saída estruturado `BrainOutput` com `fullResponse`, `responseMode` e validação Zod; BrainRunner retorna `BrainOutput | null`; 68 testes verdes (8/8 truths verificadas).
 
 **Estado v1.1 (shipped 2026-06-14):** 2 Brains implementados (brain-echo, brain-sdr), ~9 pacotes no monorepo, 367 commits totais.
