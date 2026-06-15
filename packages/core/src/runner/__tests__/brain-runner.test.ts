@@ -409,6 +409,44 @@ describe("BrainRunner", () => {
     });
   });
 
+  // --- Teste D-03: BrainBuildContext sql injection ---
+
+  describe("D-03: _compileGraph passes sql to BrainBuildContext", () => {
+    test("buildGraph receives ctx with sql equal to the sql instance passed to BrainRunner", async () => {
+      const sqlInstance = { tag: "sql-sentinel" } as never;
+
+      const buildGraphMock = mock(() => ({
+        compile: mock(() => ({
+          invoke: mock(async () => ({
+            messages: [new MockHumanMessage("hello"), new MockAIMessage("test reply")],
+            brainOutput: { fullResponse: "test reply", responseMode: "text" },
+          })),
+          getState: mock(async () => ({ values: { messages: [] } })),
+        })),
+      }));
+
+      const brain: IBrain = {
+        id: "test-brain",
+        brainType: "test",
+        promptKeys: ["system"],
+        tools: [],
+        buildGraph: buildGraphMock as unknown as IBrain["buildGraph"],
+      };
+
+      const runner = new BrainRunner({ brain, sql: sqlInstance, toolsRegistry: registry });
+      await runner.init();
+
+      // buildGraph must have been called exactly once during init()
+      expect(buildGraphMock.mock.calls.length).toBe(1);
+
+      // The first (and only) argument to buildGraph is BrainBuildContext
+      const ctx = buildGraphMock.mock.calls[0][0] as { sql: unknown };
+
+      // D-03: ctx.sql must be the exact same sql instance passed to BrainRunner
+      expect(ctx.sql).toBe(sqlInstance);
+    });
+  });
+
   // --- Testes HIST-03: context window ---
 
   describe("HIST-03: context window (getState antes do invoke)", () => {
