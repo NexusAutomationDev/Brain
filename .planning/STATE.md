@@ -5,7 +5,7 @@ milestone_name: Brain SDR + Infraestrutura Produção
 status: complete
 stopped_at: milestone archived
 last_updated: "2026-06-14T00:00:00.000Z"
-last_activity: 2026-06-14
+last_activity: 2026-06-15 - Completed quick task 260614-u6j: ajustar reload-prompts para buscar e upsert prompts do banco de dados
 progress:
   total_phases: 5
   completed_phases: 5
@@ -46,6 +46,12 @@ Ver PROJECT.md Key Decisions table para decisões completas com outcomes.
 4. **handler.ts**: runner.run() sem try/catch — unhandled errors → 500 genérico
 5. **GAP-2**: brain-sdr .env usa OPENAI_API_KEY em vez de API_KEY (dev-only)
 6. **INFRA-02**: apps/brain-sdr sem lint script
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260614-u6j | ajustar reload-prompts para buscar e upsert prompts do banco de dados | 2026-06-15 | c6c23d7 | [260614-u6j-ajustar-reload-prompts-para-buscar-e-ups](./quick/260614-u6j-ajustar-reload-prompts-para-buscar-e-ups/) |
 
 ### Blockers/Concerns
 
