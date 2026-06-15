@@ -99,15 +99,13 @@ Plans:
 | 10. Output Parser SDK | v1.2 | 5/5 | Complete    | 2026-06-15 |
 | 11. Tool Contracts SDK | v1.2 | 2/1 | Complete    | 2026-06-15 |
 | 12. Brain SDR Integration | v1.2 | 2/2 | Complete    | 2026-06-15 |
-| 13. PgBouncer Compatibility | v1.2 | 0/2 | In Progress | — |
 
 ### Phase 13: Suporte a PgBouncer para connection pooling
 
-**Goal:** Tornar o Brain Core compatível com PgBouncer em qualquer modo — `prepare: false` em todas as instâncias postgres.js, substituição de pg_advisory_lock por row-lock transacional em migrations, e correção do connection leak em qualifier.ts (CR-01)
-**Requirements**: PGB-01, PGB-02, PGB-03, PGB-04, PGB-05
+**Goal:** [To be planned]
+**Requirements**: TBD
 **Depends on:** Phase 12
-**Plans:** 2 plans
+**Plans:** 2/2 plans complete
 
 Plans:
-- [ ] 13-01-PLAN.md — prepare:false em TenantPoolManager + row-lock _schema_lock em runMigrations() + doc PgBouncer em createCheckpointer()
-- [ ] 13-02-PLAN.md — CR-01 fix: saver.end() em finally em qualifier.ts
+- [ ] TBD (run /gsd-plan-phase 13 to break down)

@@ -50,3 +50,34 @@ describe("qualifier.ts — análise estática de anti-patterns (Pitfall 4, SDR-0
     expect(codeLines).toMatch(/return fallback/);
   });
 });
+
+describe("CR-01: PostgresSaver connection leak — saver.end() em finally", () => {
+  const src = readFileSync(resolve(import.meta.dir, "../../qualifier.ts"), "utf-8");
+  // Excluir linhas de comentário para evitar falsos positivos
+  const codeLines = src.split("\n").filter(l => !l.trim().startsWith("//")).join("\n");
+
+  test("qualifier.ts contém saver.end() para fechar o pg.Pool interno (CR-01)", () => {
+    expect(codeLines).toMatch(/saver\.end\(\)/);
+  });
+
+  test("saver.end() está em bloco finally (não no fluxo normal)", () => {
+    // Verificar que 'finally' aparece no contexto do saver
+    expect(codeLines).toMatch(/finally\s*\{[^}]*saver\.end\(\)/s);
+  });
+
+  test("saver.end() é chamado APÓS saver.getTuple() (Pitfall 5: não fechar antes de usar)", () => {
+    const getTupleIdx = codeLines.indexOf("saver.getTuple(");
+    const endIdx = codeLines.indexOf("saver.end()");
+    expect(getTupleIdx).toBeGreaterThan(-1);
+    expect(endIdx).toBeGreaterThan(-1);
+    expect(endIdx).toBeGreaterThan(getTupleIdx);
+  });
+
+  test("saver.end() usa API pública tipada — sem cast (saver as any) na chamada end()", () => {
+    // Verificar que a linha com saver.end() não tem cast de tipo
+    const lines = src.split("\n");
+    const endLine = lines.find(l => l.includes("saver.end()") && !l.trim().startsWith("//"));
+    expect(endLine).toBeDefined();
+    expect(endLine).not.toMatch(/as any/);
+  });
+});
