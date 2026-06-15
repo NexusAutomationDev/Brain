@@ -37,15 +37,13 @@ _Last updated: 2026-06-14 — Milestone v1.2 started_
 
 ## Traceability
 
-_Preenchido pelo roadmapper_
-
 | REQ-ID | Phase | Plan |
 |--------|-------|------|
-| PARSER-01 | — | — |
-| PARSER-02 | — | — |
-| PARSER-03 | — | — |
-| TOOLS-ENV-01 | — | — |
-| TOOLS-ENV-02 | — | — |
-| TOOLS-STD-01 | — | — |
-| TOOLS-STD-02 | — | — |
-| TOOLS-STD-03 | — | — |
+| PARSER-01 | Phase 10 | — |
+| PARSER-02 | Phase 10 | — |
+| PARSER-03 | Phase 12 | — |
+| TOOLS-ENV-01 | Phase 11 | — |
+| TOOLS-ENV-02 | Phase 11 | — |
+| TOOLS-STD-01 | Phase 11 | — |
+| TOOLS-STD-02 | Phase 11 | — |
+| TOOLS-STD-03 | Phase 12 | — |

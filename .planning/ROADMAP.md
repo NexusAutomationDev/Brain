@@ -4,6 +4,7 @@
 
 - ✅ **v1.0 MVP** — Phases 1-4 (shipped 2026-06-13) — [archive](milestones/v1.0-ROADMAP.md)
 - ✅ **v1.1 Brain SDR + Infraestrutura Produção** — Phases 5-9 (shipped 2026-06-14) — [archive](milestones/v1.1-ROADMAP.md)
+- 🚧 **v1.2 Output Parser + Tool Contracts** — Phases 10-12 (in progress)
 
 ## Phases
 
@@ -28,6 +29,49 @@
 
 </details>
 
+### 🚧 v1.2 Output Parser + Tool Contracts (In Progress)
+
+**Milestone Goal:** Padronizar o contrato de saída dos Brains e o sistema de tools — toda resposta é estruturada, todo conjunto de tools é configurável via ENV.
+
+- [ ] **Phase 10: Output Parser SDK** — Schema JSON estruturado definido e aplicado no core; todos os Brains retornam `BrainOutput` em vez de string plana
+- [ ] **Phase 11: Tool Contracts SDK** — Whitelist de tools via `BRAIN_TOOLS` ENV e tools padrão (`pause_session`, `finish_conversation`) disponíveis no SDK
+- [ ] **Phase 12: Brain SDR Integration** — Brain SDR migrado para Output Parser e com `pause_session`/`finish_conversation` habilitadas por padrão
+
+## Phase Details
+
+### Phase 10: Output Parser SDK
+**Goal**: O SDK define e aplica um contrato de saída estruturado — todo Brain retorna `BrainOutput` com `fullResponse` e `responseMode` obrigatórios; string plana deixa de ser output válido
+**Depends on**: Phase 9 (v1.1 complete)
+**Requirements**: PARSER-01, PARSER-02
+**Success Criteria** (what must be TRUE):
+  1. `packages/core` exporta `BrainOutputSchema` (Zod) e o tipo `BrainOutput` com `fullResponse` (string obrigatória), `responseMode` (obrigatório), `mediaType`/`mediaUrl` (condicionalmente obrigatórios entre si)
+  2. `BrainRunner.run()` rejeita (lança erro) qualquer saída do LangGraph que não valide contra `BrainOutputSchema`
+  3. O contrato da interface `IBrain.run()` retorna `BrainOutput` em vez de `string` — qualquer Brain que retorne string não compila
+  4. brain-echo compila e seus testes passam com o novo contrato de saída
+**Plans**: TBD
+
+### Phase 11: Tool Contracts SDK
+**Goal**: O SDK suporta controle de tools via ENV e disponibiliza `pause_session` e `finish_conversation` como tools padrão que qualquer Brain pode habilitar
+**Depends on**: Phase 10
+**Requirements**: TOOLS-ENV-01, TOOLS-ENV-02, TOOLS-STD-01, TOOLS-STD-02
+**Success Criteria** (what must be TRUE):
+  1. Quando `BRAIN_TOOLS=pause_session,finish_conversation` está no ENV, apenas essas tools são habilitadas no ToolsRegistry — `enableTool()` de tools fora da whitelist é silenciosamente ignorado
+  2. Quando `BRAIN_TOOLS` está ausente, o comportamento de `enableTool()` é idêntico ao atual — nenhum Brain existente quebra
+  3. `pause_session` está disponível em `packages/core/tools`: quando invocada, altera `leads.fullpp` para `false` no banco do tenant ativo
+  4. `finish_conversation` está disponível em `packages/core/tools`: quando invocada, altera `leads.ia_ativada` para `false` e `leads.fullpp` para `false` no banco do tenant ativo
+**Plans**: TBD
+
+### Phase 12: Brain SDR Integration
+**Goal**: Brain SDR consome o Output Parser e habilita `pause_session` e `finish_conversation` por padrão — primeiro Brain a usar o contrato completo de v1.2
+**Depends on**: Phase 11
+**Requirements**: PARSER-03, TOOLS-STD-03
+**Success Criteria** (what must be TRUE):
+  1. Brain SDR retorna `BrainOutput` estruturado em todas as respostas — webhook e RabbitMQ entregam JSON com `fullResponse` e `responseMode` (não mais string plana)
+  2. Brain SDR tem `pause_session` e `finish_conversation` registradas via `enableTool()` no Brain SDR init — ambas aparecem no grafo LangGraph como ferramentas disponíveis
+  3. Um POST ao `/api/v1/webhook` do brain-sdr retorna body JSON com os campos do `BrainOutput` validáveis por schema
+  4. `turbo run build` e `turbo run lint` passam em todos os pacotes incluindo brain-sdr após a migração
+**Plans**: TBD
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -41,3 +85,6 @@
 | 7. LeadService + RabbitMQ Transport | v1.1 | 2/2 | Complete | 2026-06-14 |
 | 8. BrainRunner + Conversation History | v1.1 | 2/2 | Complete | 2026-06-14 |
 | 9. Brain SDR | v1.1 | 4/4 | Complete | 2026-06-14 |
+| 10. Output Parser SDK | v1.2 | 0/? | Not started | - |
+| 11. Tool Contracts SDK | v1.2 | 0/? | Not started | - |
+| 12. Brain SDR Integration | v1.2 | 0/? | Not started | - |
