@@ -1,5 +1,5 @@
 // SDK-02: BrainRunner — host that orchestrates a complete conversation turn.
-// D-05: run() returns { reply: string } — LangGraph internal state does NOT leak.
+// D-12: run() returns BrainOutput | null — structured output contract, LangGraph internal state does NOT leak.
 // D-06: Lifecycle: new BrainRunner({...}) sync → await runner.init() async → runner.run(event) per request.
 // D-06: init() fails with process.exit(1) if any promptKey is missing — fail-fast startup pattern.
 // D-07: refreshPrompts() reloads prompts AND recompiles graph (prompts are snapshot in buildGraph closure).
@@ -12,7 +12,8 @@ import { runMigrations } from "@brain-pkg/database";
 import { MemoryManager } from "@brain-pkg/memory";
 import { createTracingCallbacks } from "@brain-pkg/observability";
 import { createLogger } from "@brain-pkg/observability";
-import { ConfigurationError } from "@brain-pkg/shared";
+import { ConfigurationError, BrainOutputValidationError } from "@brain-pkg/shared";
+import type { BrainOutput } from "@brain-pkg/shared";
 import type { BaseMessage } from "@langchain/core/messages";
 import type { BrainEvent } from "@brain-pkg/transport";
 import type { Sql } from "postgres";
@@ -21,6 +22,7 @@ import { ToolsRegistry } from "../tools/registry.js";
 import { loadPrompts, upsertPrompts } from "../prompts/loader.js";
 import { LeadService } from "../leads/lead-service.js";
 import type { Lead } from "../leads/lead-service.js";
+import { BrainOutputSchema } from "../output/schema.js";
 
 /** Options for constructing a BrainRunner */
 export interface BrainRunnerOptions {
@@ -36,10 +38,6 @@ export interface BrainRunnerOptions {
   migrationsFolder?: string;
 }
 
-/** Return type of BrainRunner.run() — internal LangGraph state never leaks beyond this */
-export interface BrainRunResult {
-  reply: string;
-}
 
 /**
  * SDK-02: BrainRunner — orchestrates the full conversation turn lifecycle.
@@ -141,13 +139,14 @@ export class BrainRunner {
   }
 
   /**
-   * D-05: Run a single conversation turn.
-   * Returns { reply: string } — only the text of the last AIMessage.
-   * LangGraph internal state (messages array, checkpoint data) never leaks.
+   * D-12: Run a single conversation turn.
+   * Returns BrainOutput — structured output contract (fullResponse + responseMode).
+   * Returns null when ia_ativada=false (LEAD-03).
+   * Throws BrainOutputValidationError if brainOutput is null or fails BrainOutputSchema.
    *
    * @param event - BrainEvent from transport layer (validated by BrainEventSchema before reaching here)
    */
-  async run(event: BrainEvent): Promise<BrainRunResult | null> {
+  async run(event: BrainEvent): Promise<BrainOutput | null> {
     if (!this.compiledGraph || !this.memoryManager) {
       throw new ConfigurationError(
         "BrainRunner.init() must be called before run()",
@@ -220,23 +219,42 @@ export class BrainRunner {
       }
     );
 
-    // Step 3: Extract last AIMessage from state — D-05: only reply text, no state leak
-    // Use _getType() instead of instanceof to avoid cross-module identity issues in pnpm/bun
-    // monorepos where @langchain/core may resolve to different module instances per package.
-    const messages: BaseMessage[] = result.messages ?? [];
-    const lastAI = [...messages].reverse().find((m) => m._getType() === "ai");
-    // For v1 (text-only responses): content is string. For tool calls, content may be complex.
-    const reply = typeof lastAI?.content === "string" ? lastAI.content : "";
+    // Step 3: Validate structured output (SDK-06, D-12, D-14)
+    // O nó do grafo DEVE setar state.brainOutput — BrainRunner valida e lança erro se ausente.
+    // Pitfall 3: BrainOutputSchema.parse() lança ZodError — re-lançar como BrainOutputValidationError.
+    const rawOutput = result.brainOutput;
+    if (rawOutput === null || rawOutput === undefined) {
+      throw new BrainOutputValidationError(
+        "Brain graph returned null brainOutput — node must set state.brainOutput before '__end__'",
+        { brainId: this.brain.id, threadId }
+      );
+    }
+
+    let brainOutput: BrainOutput;
+    try {
+      brainOutput = BrainOutputSchema.parse(rawOutput);
+    } catch (err) {
+      // Re-lançar como BrainOutputValidationError para catch específico em handler.ts
+      const zodMessage = err instanceof Error ? err.message : String(err);
+      throw new BrainOutputValidationError(
+        `BrainOutput schema validation failed: ${zodMessage}`,
+        { brainId: this.brain.id, threadId, rawOutput }
+      );
+    }
 
     // Step 4: Persist long-term memory after the turn (MEM-04)
-    // Fire-and-forget is NOT used here — we await to ensure persistence before responding
+    // Pitfall 5: usar brainOutput.fullResponse em vez de 'reply' (variável removida)
     await this.memoryManager.saveContext({
       userId: event.IDLead,
       profileKey: "context",
-      profileValue: { lastUserMessage: event.Message, lastReply: reply, conversationId: threadId },
+      profileValue: {
+        lastUserMessage: event.Message,
+        lastReply: brainOutput.fullResponse,
+        conversationId: threadId,
+      },
     });
 
-    return { reply };
+    return brainOutput;
   }
 
   /** Internal: compile the graph with checkpointer and inject context */
