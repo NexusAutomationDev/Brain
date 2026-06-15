@@ -48,7 +48,11 @@
   2. `BrainRunner.run()` rejeita (lança erro) qualquer saída do LangGraph que não valide contra `BrainOutputSchema`
   3. O contrato da interface `IBrain.run()` retorna `BrainOutput` em vez de `string` — qualquer Brain que retorne string não compila
   4. brain-echo compila e seus testes passam com o novo contrato de saída
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+- [ ] 10-01-PLAN.md — BrainOutput type em shared, BrainOutputSchema em core, testes unitários do schema
+- [ ] 10-02-PLAN.md — BrainStateAnnotation com brainOutput, BrainRunner.run() novo retorno e validação
+- [ ] 10-03-PLAN.md — brain-echo migrado para setar brainOutput, IBrainRunnerLike e handler.ts atualizados
 
 ### Phase 11: Tool Contracts SDK
 **Goal**: O SDK suporta controle de tools via ENV e disponibiliza `pause_session` e `finish_conversation` como tools padrão que qualquer Brain pode habilitar
@@ -85,6 +89,6 @@
 | 7. LeadService + RabbitMQ Transport | v1.1 | 2/2 | Complete | 2026-06-14 |
 | 8. BrainRunner + Conversation History | v1.1 | 2/2 | Complete | 2026-06-14 |
 | 9. Brain SDR | v1.1 | 4/4 | Complete | 2026-06-14 |
-| 10. Output Parser SDK | v1.2 | 0/? | Not started | - |
+| 10. Output Parser SDK | v1.2 | 0/3 | Planned | - |
 | 11. Tool Contracts SDK | v1.2 | 0/? | Not started | - |
 | 12. Brain SDR Integration | v1.2 | 0/? | Not started | - |
