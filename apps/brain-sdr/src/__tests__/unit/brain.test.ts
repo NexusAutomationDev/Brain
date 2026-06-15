@@ -1,4 +1,5 @@
 import { describe, test, expect, mock } from "bun:test";
+import { AIMessage } from "@langchain/core/messages";
 
 describe("BrainSDR — IBrain contract (SDR-01, SDR-04)", () => {
   test("sdrBrain.id é 'brain-sdr'", async () => {
@@ -112,5 +113,29 @@ describe("BrainSDR — nó llm seta brainOutput (D-09, PARSER-03)", () => {
     // Verificação regressiva — promptKeys não mudam (D-11)
     const mod = await import("../../brain.js");
     expect(mod.sdrBrain.promptKeys).toEqual(["system", "qualification"]);
+  });
+
+  test("grafo compilado seta brainOutput.fullResponse e brainOutput.responseMode após invocação do LLM sem tool_calls", async () => {
+    const mod = await import("../../brain.js");
+    const llmInvokeMock = mock(async () =>
+      new AIMessage({ content: "resposta do llm", tool_calls: [] })
+    );
+    const ctx = {
+      llm: {
+        bindTools: mock(() => ({ invoke: llmInvokeMock })),
+      },
+      prompts: { system: "prompt sistema", qualification: "prompt qualificacao" },
+      tools: [],
+      sql: {} as any,
+    };
+    const graph = mod.sdrBrain.buildGraph(ctx as any);
+    const compiled = graph.compile();
+    const result = await compiled.invoke(
+      { messages: [{ role: "user", content: "olá" }] },
+      { configurable: { thread_id: "test-parser-03" } }
+    );
+    expect(result.brainOutput).toBeDefined();
+    expect(result.brainOutput.fullResponse).toBe("resposta do llm");
+    expect(result.brainOutput.responseMode).toBe("text");
   });
 });
