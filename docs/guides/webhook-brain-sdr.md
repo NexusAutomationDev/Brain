@@ -2,11 +2,31 @@
 
 Endpoint HTTP para envio de mensagens ao Brain SDR.
 
+## Autenticação
+
+O endpoint exige um Bearer token em todas as requisições:
+
+```
+Authorization: Bearer <WEBHOOK_TOKEN>
+```
+
+Configure `WEBHOOK_TOKEN` no `.env` do brain-sdr. Gere um valor seguro com:
+
+```bash
+openssl rand -hex 32
+```
+
+| Status | Causa |
+|--------|-------|
+| 401    | Token ausente ou incorreto |
+| 503    | `WEBHOOK_TOKEN` não configurado no container |
+
 ## Endpoint
 
 ```
 POST /api/v1/webhook
 Content-Type: application/json
+Authorization: Bearer <WEBHOOK_TOKEN>
 ```
 
 ## Payload
@@ -34,6 +54,7 @@ Content-Type: application/json
 ```bash
 curl -X POST http://localhost:3002/api/v1/webhook \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <WEBHOOK_TOKEN>" \
   -d '{
     "Name": "João Silva",
     "Message": "Olá, tenho interesse no produto de vocês",
@@ -55,6 +76,7 @@ curl -X POST http://localhost:3002/api/v1/webhook \
 ```bash
 curl -X POST http://localhost:3002/api/v1/webhook \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <WEBHOOK_TOKEN>" \
   -d '{
     "Name": "João Silva",
     "Message": "Somos uma empresa de 50 funcionários e queremos automatizar nosso processo de vendas",
@@ -104,6 +126,8 @@ curl -X POST http://localhost:3002/reload-prompts \
 
 | Status | Body                                          | Causa                        |
 |--------|-----------------------------------------------|------------------------------|
+| 401    | `{ "error": "Unauthorized" }`                 | Token ausente ou incorreto   |
+| 503    | `{ "error": "Service unavailable" }`          | `WEBHOOK_TOKEN` não configurado |
 | 400    | `{ "error": "Invalid JSON body" }`            | JSON malformado              |
 | 400    | `{ "error": "Invalid BrainEvent", "details": ... }` | Campo ausente ou inválido |
 | 500    | `{ "error": "Internal error" }`               | Erro interno do BrainRunner  |

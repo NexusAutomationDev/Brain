@@ -5,7 +5,7 @@ milestone_name: Brain SDR + Infraestrutura Produção
 status: complete
 stopped_at: milestone archived
 last_updated: "2026-06-14T00:00:00.000Z"
-last_activity: 2026-06-15 - Completed quick task 260614-u9h: corrigir salvamento de respostas da IA nas memories do DB
+last_activity: 2026-06-15 - Completed quick task 260614-vcu: proteger o webhook com token de autenticação
 progress:
   total_phases: 5
   completed_phases: 5
@@ -53,6 +53,7 @@ Ver PROJECT.md Key Decisions table para decisões completas com outcomes.
 |---|-------------|------|--------|-----------|
 | 260614-u6j | ajustar reload-prompts para buscar e upsert prompts do banco de dados | 2026-06-15 | c6c23d7 | [260614-u6j-ajustar-reload-prompts-para-buscar-e-ups](./quick/260614-u6j-ajustar-reload-prompts-para-buscar-e-ups/) |
 | 260614-u9h | corrigir salvamento de respostas da IA nas memories do DB | 2026-06-15 | d857f8f | [260614-u9h-investigar-por-que-as-respostas-da-ia-na](./quick/260614-u9h-investigar-por-que-as-respostas-da-ia-na/) |
+| 260614-vcu | proteger o webhook com token de autenticação | 2026-06-15 | 8729677 | [260614-vcu-uma-coisa-que-foi-faltando-foi-proteger-](./quick/260614-vcu-uma-coisa-que-foi-faltando-foi-proteger-/) |
 
 ### Blockers/Concerns
 
