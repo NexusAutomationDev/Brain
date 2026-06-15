@@ -1,5 +1,7 @@
-import { describe, it, expect, beforeEach } from "bun:test";
+import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import { createWebhookApp } from "./handler.js";
+
+const TEST_TOKEN = "test-token-handler";
 
 const validEvent = {
   Name: "João Silva",
@@ -12,14 +14,23 @@ describe("WebhookTransport handler (TRANS-02, TRP-02)", () => {
   let app: ReturnType<typeof createWebhookApp>;
 
   beforeEach(() => {
+    // Set WEBHOOK_TOKEN so auth passes in all handler tests
+    process.env.WEBHOOK_TOKEN = TEST_TOKEN;
     // Fresh app for each test
     app = createWebhookApp();
+  });
+
+  afterEach(() => {
+    delete process.env.WEBHOOK_TOKEN;
   });
 
   it("POST /api/v1/webhook with valid BrainEvent returns 200 { status: 'accepted' } without runner", async () => {
     const req = new Request("http://localhost/api/v1/webhook", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${TEST_TOKEN}`,
+      },
       body: JSON.stringify(validEvent),
     });
     const res = await app.fetch(req);
@@ -31,7 +42,10 @@ describe("WebhookTransport handler (TRANS-02, TRP-02)", () => {
   it("POST /api/v1/webhook without X-Request-Id returns 200 (header not required)", async () => {
     const req = new Request("http://localhost/api/v1/webhook", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${TEST_TOKEN}`,
+      },
       body: JSON.stringify(validEvent),
     });
     const res = await app.fetch(req);
@@ -45,7 +59,10 @@ describe("WebhookTransport handler (TRANS-02, TRP-02)", () => {
     const appWithRunner = createWebhookApp(mockRunner);
     const req = new Request("http://localhost/api/v1/webhook", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${TEST_TOKEN}`,
+      },
       body: JSON.stringify(validEvent),
     });
     const res = await appWithRunner.fetch(req);
@@ -65,7 +82,10 @@ describe("WebhookTransport handler (TRANS-02, TRP-02)", () => {
     };
     const req = new Request("http://localhost/api/v1/webhook", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${TEST_TOKEN}`,
+      },
       body: JSON.stringify(oldEvent),
     });
     const res = await app.fetch(req);
@@ -77,7 +97,10 @@ describe("WebhookTransport handler (TRANS-02, TRP-02)", () => {
   it("POST /api/v1/webhook with malformed JSON returns 400 (T-05-01)", async () => {
     const req = new Request("http://localhost/api/v1/webhook", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${TEST_TOKEN}`,
+      },
       body: "not-valid-json{{{",
     });
     const res = await app.fetch(req);
@@ -87,7 +110,10 @@ describe("WebhookTransport handler (TRANS-02, TRP-02)", () => {
   it("POST with missing required BrainEvent field (only Name) returns 400 (T-05-01)", async () => {
     const req = new Request("http://localhost/api/v1/webhook", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${TEST_TOKEN}`,
+      },
       body: JSON.stringify({ Name: "João" }), // missing Message, Numero, IDLead
     });
     const res = await app.fetch(req);
@@ -103,7 +129,10 @@ describe("WebhookTransport handler (TRANS-02, TRP-02)", () => {
     const appWithNullRunner = createWebhookApp(nullRunner);
     const req = new Request("http://localhost/api/v1/webhook", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${TEST_TOKEN}`,
+      },
       body: JSON.stringify(validEvent),
     });
     const res = await appWithNullRunner.fetch(req);
@@ -116,7 +145,10 @@ describe("WebhookTransport handler (TRANS-02, TRP-02)", () => {
     // TRP-01: T-07-01 — IDLead ausente deve ser rejeitado antes do upsert
     const req = new Request("http://localhost/api/v1/webhook", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${TEST_TOKEN}`,
+      },
       body: JSON.stringify({ Name: "João", Message: "Olá", Numero: "5511999990001" }), // IDLead ausente
     });
     const res = await app.fetch(req);
