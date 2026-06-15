@@ -1,4 +1,4 @@
-// SDK-02: BrainRunner — lifecycle init() + run() returning { reply: string }
+// SDK-02: BrainRunner — lifecycle init() + run() returning BrainOutput | null
 // Uses MemorySaver in tests (AI-01 allows MemorySaver ONLY in *.test.ts)
 import { describe, test, expect, mock, beforeEach, afterEach } from "bun:test";
 import type { BrainEvent } from "@brain-pkg/transport";
@@ -105,6 +105,11 @@ function makeBrain(promptKeys = ["system"]): IBrain {
             new HumanMessage("hello"),
             new AIMessage("test reply"),
           ],
+          // SDK-06: D-08 — nó do grafo seta brainOutput manualmente
+          brainOutput: {
+            fullResponse: "test reply",
+            responseMode: "text",
+          },
         })),
         getState: mock(async () => ({ values: { messages: [] } })),  // HIST-03
       })),
@@ -196,7 +201,7 @@ describe("BrainRunner", () => {
     }
   });
 
-  test("run(event) returns { reply: string } with the last AIMessage content", async () => {
+  test("run(event) retorna BrainOutput com fullResponse e responseMode", async () => {
     const brain = makeBrain(["system"]);
     const runner = new BrainRunner({
       brain,
@@ -207,12 +212,12 @@ describe("BrainRunner", () => {
     await runner.init();
     const result = await runner.run(makeEvent());
 
-    expect(result).toHaveProperty("reply");
-    expect(typeof result.reply).toBe("string");
-    expect(result.reply).toBe("test reply");
+    expect(result).not.toBeNull();
+    expect(result!.fullResponse).toBe("test reply");
+    expect(result!.responseMode).toBe("text");
   });
 
-  test("run(event) does NOT expose LangGraph internal state in the return value", async () => {
+  test("run() retorna BrainOutput — sem vazamento de estado interno", async () => {
     const brain = makeBrain(["system"]);
     const runner = new BrainRunner({
       brain,
@@ -223,8 +228,10 @@ describe("BrainRunner", () => {
     await runner.init();
     const result = await runner.run(makeEvent());
 
-    // Only 'reply' is allowed — no messages, state, checkpoint, etc.
-    expect(Object.keys(result)).toEqual(["reply"]);
+    expect(result).toHaveProperty("fullResponse");
+    expect(result).toHaveProperty("responseMode");
+    expect(result).not.toHaveProperty("messages");  // T-05-03: estado interno não vaza
+    expect(result).not.toHaveProperty("sessionId");
   });
 
   test("refreshPrompts() reloads prompts from DB and recompiles the graph", async () => {
@@ -300,7 +307,7 @@ describe("BrainRunner", () => {
       expect(result).toBeNull();
     });
 
-    test("run() retorna { reply } quando iaAtivada=true", async () => {
+    test("run() retorna BrainOutput quando iaAtivada=true", async () => {
       // mockUpsertLead default já retorna iaAtivada: true — sem override necessário
       const brain = makeBrain(["system"]);
       const runner = new BrainRunner({ brain, sql: {} as never, toolsRegistry: registry });
@@ -308,7 +315,7 @@ describe("BrainRunner", () => {
 
       const result = await runner.run(makeEvent());
       expect(result).not.toBeNull();
-      expect(result?.reply).toBe("test reply");
+      expect(result?.fullResponse).toBe("test reply");
     });
 
     test("run() chama upsertLead com Numero, IDLead e Name do evento", async () => {
@@ -323,6 +330,48 @@ describe("BrainRunner", () => {
       expect(numero).toBe("5511999990001");
       expect(idLead).toBe("lead-test-1");
       expect(name).toBe("Test User");
+    });
+  });
+
+  // --- Testes D-14: lançar BrainOutputValidationError ---
+
+  describe("D-14: BrainOutputValidationError quando brainOutput inválido", () => {
+    test("run() lança BrainOutputValidationError quando brainOutput é null após invoke", async () => {
+      const brainSemOutput: IBrain = {
+        ...makeBrain(),
+        buildGraph: mock(() => ({
+          compile: mock(() => ({
+            invoke: mock(async () => ({
+              messages: [new HumanMessage("hello"), new AIMessage("reply")],
+              brainOutput: null,  // nó não setou brainOutput
+            })),
+            getState: mock(async () => ({ values: { messages: [] } })),
+          })),
+        })) as unknown as IBrain["buildGraph"],
+      };
+      const runner = new BrainRunner({ brain: brainSemOutput, sql: {} as never, toolsRegistry: registry });
+      await runner.init();
+
+      await expect(runner.run(makeEvent())).rejects.toThrow();
+    });
+
+    test("run() lança BrainOutputValidationError quando brainOutput tem schema inválido (fullResponse vazia)", async () => {
+      const brainOutputInvalido: IBrain = {
+        ...makeBrain(),
+        buildGraph: mock(() => ({
+          compile: mock(() => ({
+            invoke: mock(async () => ({
+              messages: [new HumanMessage("hello"), new AIMessage("reply")],
+              brainOutput: { fullResponse: "", responseMode: "text" },  // fullResponse vazia falha no Zod
+            })),
+            getState: mock(async () => ({ values: { messages: [] } })),
+          })),
+        })) as unknown as IBrain["buildGraph"],
+      };
+      const runner = new BrainRunner({ brain: brainOutputInvalido, sql: {} as never, toolsRegistry: registry });
+      await runner.init();
+
+      await expect(runner.run(makeEvent())).rejects.toThrow();
     });
   });
 
@@ -347,7 +396,7 @@ describe("BrainRunner", () => {
       // run() não deve lançar erro — getState retorna values.messages=[]
       const result = await runner.run(makeEvent());
       expect(result).not.toBeNull();
-      expect(result?.reply).toBe("test reply");
+      expect(result?.fullResponse).toBe("test reply");
     });
 
     test("usa CONTEXT_WINDOW_MESSAGES=10 quando definida", async () => {
@@ -357,7 +406,7 @@ describe("BrainRunner", () => {
       await runner.init();
       const result = await runner.run(makeEvent());
       expect(result).not.toBeNull();
-      expect(result?.reply).toBe("test reply");
+      expect(result?.fullResponse).toBe("test reply");
     });
 
     test("fallback para 40 quando CONTEXT_WINDOW_MESSAGES é inválida ('abc')", async () => {
@@ -368,7 +417,7 @@ describe("BrainRunner", () => {
       // Não deve lançar, não deve usar NaN como window size
       const result = await runner.run(makeEvent());
       expect(result).not.toBeNull();
-      expect(result?.reply).toBe("test reply");
+      expect(result?.fullResponse).toBe("test reply");
     });
 
     test("run() chama getState() com thread_id correto antes do invoke", async () => {
@@ -382,6 +431,10 @@ describe("BrainRunner", () => {
           compile: mock(() => ({
             invoke: mock(async () => ({
               messages: [new HumanMessage("hello"), new AIMessage("test reply")],
+              brainOutput: {
+                fullResponse: "test reply",
+                responseMode: "text",
+              },
             })),
             getState: getStateMock,
           })),
