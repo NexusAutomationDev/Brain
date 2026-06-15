@@ -19,26 +19,36 @@ Scope: mudanças em `packages/core` (schema + runner), `packages/ai` (BrainState
 
 - **D-01:** `responseMode` representa o **tipo de mídia** da resposta, não o estado da conversa nem o modo de entrega.
 - **D-02:** Valores válidos: `"text" | "image" | "audio" | "document"` (Zod enum).
-- **D-03:** Quando `responseMode !== "text"`, os campos `mediaType` e `mediaUrl` passam a ser obrigatórios (validação condicional no Zod schema via `.refine()`).
-- **D-04:** `mediaType` é **string livre** (MIME type, ex: `"image/jpeg"`, `"audio/ogg"`, `"application/pdf"`). Não é um enum — os tipos MIME são numerosos e a integração downstream (WhatsApp Business API) define os tipos aceitos.
-- **D-05:** `mediaUrl` é string contendo URL externa. Upload direto (base64) está fora de escopo em v1.2.
+- **D-03:** `responseMode: "audio"` é um **sinal de TTS** — o `fullResponse` contém o texto que será convertido em áudio pelo sistema downstream. `mediaType` e `mediaUrl` **não se aplicam** ao modo áudio.
+- **D-04:** `mediaType` e `mediaUrl` são obrigatórios **apenas** quando `responseMode === "image"` ou `responseMode === "document"` (validação condicional no Zod schema via `.refine()`).
+- **D-05:** `mediaType` é **string livre** (MIME type, ex: `"image/jpeg"`, `"application/pdf"`). Não é um enum.
+- **D-06:** `mediaUrl` é string contendo URL externa. Upload direto (base64) está fora de escopo em v1.2.
+
+**Tabela resumo de campos por responseMode:**
+
+| responseMode | fullResponse | mediaType + mediaUrl |
+|---|---|---|
+| `"text"` | obrigatório | não usa |
+| `"audio"` | obrigatório (texto para TTS) | não usa |
+| `"image"` | obrigatório (legenda) | obrigatórios |
+| `"document"` | obrigatório (acompanhamento) | obrigatórios |
 
 ### Origem do JSON estruturado
 
-- **D-06:** O **nó do grafo** é responsável por montar o `BrainOutput` manualmente após invocar o LLM. Sem `.withStructuredOutput()` — o LLM retorna string, o nó wraps em BrainOutput.
-- **D-07:** Fluxo dentro do nó: `llm.invoke([...])` → extrai `content` como string → monta `{ fullResponse: content, responseMode: "text" }` → seta `state.brainOutput`.
+- **D-07:** O **nó do grafo** é responsável por montar o `BrainOutput` manualmente após invocar o LLM. Sem `.withStructuredOutput()` — o LLM retorna string, o nó wraps em BrainOutput.
+- **D-08:** Fluxo dentro do nó: `llm.invoke([...])` → extrai `content` como string → monta `{ fullResponse: content, responseMode: "text" }` → seta `state.brainOutput`.
 
 ### BrainStateAnnotation — novo campo
 
-- **D-08:** `BrainStateAnnotation` (em `packages/ai/src/graph/state.ts`) ganha o campo `brainOutput: BrainOutput | null`.
-- **D-09:** Reducer: last-write wins (`(_, b) => b`). Default: `() => null`.
-- **D-10:** `BrainOutput` é importado de `@brain-pkg/core` no `BrainStateAnnotation` — core exporta o tipo/schema, ai o usa no state.
+- **D-09:** `BrainStateAnnotation` (em `packages/ai/src/graph/state.ts`) ganha o campo `brainOutput: BrainOutput | null`.
+- **D-10:** Reducer: last-write wins (`(_, b) => b`). Default: `() => null`.
+- **D-11:** `BrainOutput` é importado de `@brain-pkg/core` no `BrainStateAnnotation` — core exporta o tipo/schema, ai o usa no state.
 
 ### API pública — retorno do BrainRunner
 
-- **D-11:** `BrainRunner.run()` passa a retornar `Promise<BrainOutput | null>` diretamente (sem wrapper). `null` quando `ia_ativada = false`.
-- **D-12:** O tipo `BrainRunResult` (`{ reply: string }`) é **removido** do SDK. Breaking change controlado — apenas `handler.ts` dos Brains consome esse tipo.
-- **D-13:** Após `compiledGraph.invoke()`, BrainRunner lê `result.brainOutput` e valida com `BrainOutputSchema.parse()`. Se inválido (null ou schema mismatch), **lança erro** — nunca retorna silenciosamente.
+- **D-12:** `BrainRunner.run()` passa a retornar `Promise<BrainOutput | null>` diretamente (sem wrapper). `null` quando `ia_ativada = false`.
+- **D-13:** O tipo `BrainRunResult` (`{ reply: string }`) é **removido** do SDK. Breaking change controlado — apenas `handler.ts` dos Brains consome esse tipo.
+- **D-14:** Após `compiledGraph.invoke()`, BrainRunner lê `result.brainOutput` e valida com `BrainOutputSchema.parse()`. Se inválido (null ou schema mismatch), **lança erro** — nunca retorna silenciosamente.
 
 ### Claude's Discretion
 
