@@ -35,7 +35,7 @@
 
 - [x] **Phase 10: Output Parser SDK** — Schema JSON estruturado definido e aplicado no core; todos os Brains retornam `BrainOutput` em vez de string plana (gap closure em andamento) (completed 2026-06-15)
 - [x] **Phase 11: Tool Contracts SDK** — Whitelist de tools via `BRAIN_TOOLS` ENV e tools padrão (`pause_session`, `finish_conversation`) disponíveis no SDK (completed 2026-06-15)
-- [ ] **Phase 12: Brain SDR Integration** — Brain SDR migrado para Output Parser e com `pause_session`/`finish_conversation` habilitadas por padrão
+- [x] **Phase 12: Brain SDR Integration** — Brain SDR migrado para Output Parser e com `pause_session`/`finish_conversation` habilitadas por padrão (completed 2026-06-15)
 
 ## Phase Details
 
@@ -80,8 +80,8 @@ Plans:
   4. `turbo run build` e `turbo run lint` passam em todos os pacotes incluindo brain-sdr após a migração
 **Plans**: 2 plans
 Plans:
-- [ ] 12-01-PLAN.md — brain.ts migrado: 3 tools bound + nó llm com brainOutput; index.ts: 2 enableTool(); brain.test.ts: cobertura 3 tools; package.json: lint script
-- [ ] 12-02-PLAN.md — handler.ts: resposta { fullResponse, responseMode } sem reply; handler.test.ts: assertions do novo contrato
+- [x] 12-01-PLAN.md — brain.ts migrado: 3 tools bound + nó llm com brainOutput; index.ts: 2 enableTool(); brain.test.ts: cobertura 3 tools; package.json: lint script
+- [x] 12-02-PLAN.md — handler.ts: resposta { fullResponse, responseMode } sem reply; handler.test.ts: assertions do novo contrato
 
 ## Progress
 
@@ -98,4 +98,14 @@ Plans:
 | 9. Brain SDR | v1.1 | 4/4 | Complete | 2026-06-14 |
 | 10. Output Parser SDK | v1.2 | 5/5 | Complete    | 2026-06-15 |
 | 11. Tool Contracts SDK | v1.2 | 2/1 | Complete    | 2026-06-15 |
-| 12. Brain SDR Integration | v1.2 | 0/2 | Not started | - |
+| 12. Brain SDR Integration | v1.2 | 2/2 | Complete   | 2026-06-15 |
+
+### Phase 13: Suporte a PgBouncer para connection pooling
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 12
+**Plans:** 2/2 plans complete
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 13 to break down)
