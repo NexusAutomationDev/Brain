@@ -12,8 +12,32 @@ import { PostgresSaver } from "@langchain/langgraph-checkpoint-postgres";
 import { createLLM } from "@brain-pkg/ai";
 import { createLogger } from "@brain-pkg/observability";
 import type { BaseMessage } from "@langchain/core/messages";
+import postgres from "postgres";
 
 const logger = createLogger();
+
+// ─── Helpers de persistência ─────────────────────────────────────────────────
+
+async function saveQualificationToMemories(
+  dbUrl: string,
+  userId: string,
+  qualificado: boolean,
+  motivo: string,
+  proximo_passo: string
+): Promise<void> {
+  const sql = postgres(dbUrl, { max: 1 });
+  try {
+    const value = { qualificado, motivo, proximo_passo, timestamp: new Date().toISOString() };
+    await sql`
+      INSERT INTO memories (id, user_id, key, value, created_at, updated_at)
+      VALUES (gen_random_uuid(), ${userId}, 'qualification', ${sql.json(value)}, NOW(), NOW())
+      ON CONFLICT (user_id, key) DO UPDATE
+        SET value = ${sql.json(value)}, updated_at = NOW()
+    `;
+  } finally {
+    await sql.end();
+  }
+}
 
 // ─── QualificationAnnotation ─────────────────────────────────────────────────
 // Sub-agente tem StateAnnotation próprio — não usa BrainStateAnnotation
@@ -195,11 +219,22 @@ export async function runQualificationAgent(
       qualificationPrompt: resolvedPrompt,
     });
 
-    return {
+    const finalResult = {
       qualificado: result.qualificado ?? false,
       motivo: result.motivo || fallback.motivo,
       proximo_passo: result.proximo_passo || fallback.proximo_passo,
     };
+
+    // Persiste resultado na tabela memories (key: "qualification") — fire-and-forget com log
+    saveQualificationToMemories(
+      dbUrl,
+      sessionId,
+      finalResult.qualificado,
+      finalResult.motivo,
+      finalResult.proximo_passo
+    ).catch((err) => logger.warn({ err, sessionId }, "Qualification: falha ao salvar em memories"));
+
+    return finalResult;
   } catch (err) {
     logger.error({ err, sessionId }, "Qualification agent error — returning fallback");
     return fallback;
