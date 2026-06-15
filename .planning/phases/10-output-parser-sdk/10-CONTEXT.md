@@ -18,7 +18,7 @@ Scope: mudanças em `packages/core` (schema + runner), `packages/ai` (BrainState
 ### responseMode — Valores do enum
 
 - **D-01:** `responseMode` representa o **tipo de mídia** da resposta, não o estado da conversa nem o modo de entrega.
-- **D-02:** Valores válidos: `"text" | "image" | "audio" | "document"` (Zod enum).
+- **D-02:** Valores válidos: `"text" | "image" | "audio" | "video" | "document"` (Zod enum).
 - **D-03:** `responseMode: "audio"` é um **sinal de TTS** — o `fullResponse` contém o texto que será convertido em áudio pelo sistema downstream. `mediaType` e `mediaUrl` **não se aplicam** ao modo áudio.
 - **D-04:** `mediaType` e `mediaUrl` são obrigatórios **apenas** quando `responseMode === "image"` ou `responseMode === "document"` (validação condicional no Zod schema via `.refine()`).
 - **D-05:** `mediaType` é **string livre** (MIME type, ex: `"image/jpeg"`, `"application/pdf"`). Não é um enum.
@@ -31,6 +31,7 @@ Scope: mudanças em `packages/core` (schema + runner), `packages/ai` (BrainState
 | `"text"` | obrigatório | não usa |
 | `"audio"` | obrigatório (texto para TTS) | não usa |
 | `"image"` | obrigatório (legenda) | obrigatórios |
+| `"video"` | obrigatório (legenda) | obrigatórios |
 | `"document"` | obrigatório (acompanhamento) | obrigatórios |
 
 ### Origem do JSON estruturado
@@ -114,7 +115,6 @@ Scope: mudanças em `packages/core` (schema + runner), `packages/ai` (BrainState
 <deferred>
 ## Deferred Ideas
 
-- Suporte a `video` como valor de `responseMode` — avaliado pós-v1.2 se necessário
 - `mediaType` como enum restrito — futuro se precisarmos validar MIME types aceitos pelo WhatsApp
 - Upload base64 (mediaUrl com conteúdo embutido) — fora de escopo em v1.2
 - `responseMode: "end" | "pause"` ligado ao estado da conversa — decidido que isso pertence às tools da Fase 11
