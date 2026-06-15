@@ -68,6 +68,8 @@ Uma infraestrutura de agentes modular onde novos Brains são criados definindo a
 
 ## Context
 
+**Estado v1.2 (Phase 10 completa 2026-06-15):** Output Parser SDK entregue — contrato de saída estruturado `BrainOutput` com `fullResponse`, `responseMode` e validação Zod; BrainRunner retorna `BrainOutput | null`; 68 testes verdes (8/8 truths verificadas).
+
 **Estado v1.1 (shipped 2026-06-14):** 2 Brains implementados (brain-echo, brain-sdr), ~9 pacotes no monorepo, 367 commits totais.
 
 **v1.0 (shipped 2026-06-13):** ~7.094 linhas TypeScript, 8 pacotes, 234 commits, 23 dias de desenvolvimento.
