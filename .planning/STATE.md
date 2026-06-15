@@ -4,13 +4,13 @@ milestone: v1.2
 milestone_name: Output Parser + Tool Contracts
 status: executing
 stopped_at: Phase 12 context gathered
-last_updated: "2026-06-15T18:48:42.215Z"
+last_updated: "2026-06-15T20:07:20.406Z"
 last_activity: 2026-06-15
 progress:
-  total_phases: 3
-  completed_phases: 2
-  total_plans: 6
-  completed_plans: 7
+  total_phases: 4
+  completed_phases: 3
+  total_plans: 8
+  completed_plans: 9
   percent: 100
 ---
 
@@ -25,9 +25,9 @@ See: .planning/PROJECT.md (updated 2026-06-14 — after v1.1 milestone)
 
 ## Current Position
 
-Phase: 12
+Phase: 13
 Plan: Not started
-Status: Executing Phase 10
+Status: Ready to execute
 Last activity: 2026-06-15
 
 Progress (v1.2): [░░░░░░░░░░] 0%
@@ -36,7 +36,7 @@ Progress (v1.2): [░░░░░░░░░░] 0%
 
 **Velocity:**
 
-- Total plans completed: 7 (v1.2)
+- Total plans completed: 9 (v1.2)
 - Average duration: —
 - Total execution time: —
 
@@ -46,6 +46,7 @@ Progress (v1.2): [░░░░░░░░░░] 0%
 |-------|-------|-------|----------|
 | 10 | 5 | - | - |
 | 11 | 2 | - | - |
+| 12 | 2 | - | - |
 
 *Updated after each plan completion*
 
@@ -75,6 +76,10 @@ Decisões relevantes para v1.2:
 | 260614-u6j | ajustar reload-prompts para buscar e upsert prompts do banco | 2026-06-15 | c6c23d7 | [link](./quick/260614-u6j-ajustar-reload-prompts-para-buscar-e-ups/) |
 | 260614-u9h | corrigir salvamento de respostas da IA nas memories do DB | 2026-06-15 | d857f8f | [link](./quick/260614-u9h-investigar-por-que-as-respostas-da-ia-na/) |
 | 260614-vcu | proteger o webhook com token de autenticação | 2026-06-15 | 8729677 | [link](./quick/260614-vcu-uma-coisa-que-foi-faltando-foi-proteger-/) |
+
+### Roadmap Evolution
+
+- Phase 13 added: Suporte a PgBouncer para connection pooling
 
 ### Blockers/Concerns
 
