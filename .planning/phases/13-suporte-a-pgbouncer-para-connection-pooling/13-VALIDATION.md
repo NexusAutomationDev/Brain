@@ -1,10 +1,11 @@
 ---
 phase: 13
 slug: suporte-a-pgbouncer-para-connection-pooling
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: complete
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-06-15
+audited: 2026-06-15
 ---
 
 # Phase 13 — Validation Strategy
@@ -38,11 +39,11 @@ created: 2026-06-15
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 13-01-01 | 01 | 1 | PGB-01 | — | N/A | unit | `bun test packages/database/src/pool-manager.test.ts` | ❌ W0 | ⬜ pending |
-| 13-01-02 | 01 | 1 | PGB-02 | — | N/A | unit | `bun test packages/database/src/migrate.test.ts` | ✅ (adaptar) | ⬜ pending |
-| 13-01-03 | 01 | 1 | PGB-03 | — | N/A | unit | `bun test packages/database/src/migrate.test.ts` | ✅ (adaptar) | ⬜ pending |
-| 13-01-04 | 01 | 1 | PGB-04 | T-09-03-05 | saver.end() fechado em finally; DATABASE_URL nunca logada | unit | `bun test apps/brain-sdr/src/__tests__/unit/` | ❌ W0 | ⬜ pending |
-| 13-01-05 | 01 | 1 | PGB-05 | — | N/A | unit | `bun test packages/database/src/migrate.test.ts` | ❌ W0 | ⬜ pending |
+| 13-01-01 | 01 | 1 | PGB-01 | — | N/A | unit | `bun test packages/database/src/pool-manager.test.ts` | ✅ | ✅ green |
+| 13-01-02 | 01 | 1 | PGB-02 | — | N/A | unit | `bun test packages/database/src/migrate.test.ts` | ✅ | ✅ green |
+| 13-01-03 | 01 | 1 | PGB-03 | — | N/A | unit | `bun test packages/database/src/migrate.test.ts` | ✅ | ✅ green |
+| 13-01-04 | 01 | 1 | PGB-04 | T-09-03-05 | saver.end() fechado em finally; DATABASE_URL nunca logada | unit | `bun test apps/brain-sdr/src/__tests__/unit/qualifier.unit.test.ts` | ✅ | ✅ green |
+| 13-01-05 | 01 | 1 | PGB-05 | — | N/A | unit | `bun test packages/database/src/migrate.test.ts` | ✅ | ✅ green |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -50,9 +51,9 @@ created: 2026-06-15
 
 ## Wave 0 Requirements
 
-- [ ] `packages/database/src/pool-manager.test.ts` — implementar testes para `prepare: false` (PGB-01); substituir `it.todo` pelos testes reais
-- [ ] `packages/database/src/migrate.test.ts` — adaptar mocks de `pg_advisory_lock` para row-lock; adicionar teste para `prepare: false` no bloco CLI (PGB-02, PGB-03, PGB-05)
-- [ ] `apps/brain-sdr/src/__tests__/unit/qualifier.test.ts` — verificar se existe; adicionar/adaptar teste para `saver.end()` em finally (PGB-04)
+- [x] `packages/database/src/pool-manager.test.ts` — 6 testes implementados para `prepare: false` (PGB-01); zero `it.todo`
+- [x] `packages/database/src/migrate.test.ts` — 8 testes adaptados para row-lock `_schema_lock`; `pg_advisory_lock` removido; PGB-05 estático presente
+- [x] `apps/brain-sdr/src/__tests__/unit/qualifier.unit.test.ts` — 4 testes CR-01 adicionados para `saver.end()` em finally (PGB-04)
 
 ---
 
@@ -60,17 +61,30 @@ created: 2026-06-15
 
 | Behavior | Requirement | Why Manual | Test Instructions |
 |----------|-------------|------------|-------------------|
-| PostgresSaver requer PgBouncer session mode (ou ≥ 1.21) | D-05 | Requer PgBouncer real em transaction mode para verificar incompatibilidade | Documentar na review — não testar automaticamente; limitação do driver `pg` v8.21 |
+| PostgresSaver requer PgBouncer session mode (ou ≥ 1.21) | D-05 | Requer PgBouncer real em transaction mode para verificar incompatibilidade | Documentado em `checkpointer.ts` JSDoc — limitação do driver `pg` v8.21 |
 
 ---
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 500ms
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references
+- [x] No watch-mode flags
+- [x] Feedback latency < 500ms
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** 2026-06-15
+
+---
+
+## Validation Audit 2026-06-15
+
+| Metric | Count |
+|--------|-------|
+| Gaps found | 0 |
+| Resolved | 0 |
+| Escalated | 0 |
+| Tasks audited | 5 |
+| Tests passing | 24 (pool-manager: 6, migrate: 8, qualifier: 10) |
+| Coverage | COVERED — todos os requisitos PGB-01..PGB-05 com testes verdes |
