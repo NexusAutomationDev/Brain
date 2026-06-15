@@ -16,3 +16,10 @@ export class ConfigurationError extends BrainError {
     this.name = 'ConfigurationError';
   }
 }
+
+export class BrainOutputValidationError extends BrainError {
+  constructor(message: string, context?: Record<string, unknown>) {
+    super(message, 'BRAIN_OUTPUT_VALIDATION_ERROR', context);
+    this.name = 'BrainOutputValidationError';
+  }
+}

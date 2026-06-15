@@ -13,16 +13,17 @@
   },
   "dependencies": {
     "@brain-pkg/ai": "workspace:*",
-    "@brain-pkg/memory": "workspace:*",
     "@brain-pkg/database": "workspace:*",
-    "@brain-pkg/transport": "workspace:*",
+    "@brain-pkg/memory": "workspace:*",
     "@brain-pkg/observability": "workspace:*",
     "@brain-pkg/shared": "workspace:*",
+    "@brain-pkg/transport": "workspace:*",
     "@langchain/core": "^1.1.48",
     "@langchain/langgraph": "^1.4.1",
     "drizzle-orm": "0.45.2",
     "hono": "^4.12.0",
-    "postgres": "^3.4.9"
+    "postgres": "^3.4.9",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/bun": "latest",

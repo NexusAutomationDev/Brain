@@ -504,17 +504,17 @@ return c.json({ status: "ok", reply: result.fullResponse }); // reply mantido na
 
 ---
 
-## Open Questions (RESOLVED)
+## Open Questions
 
 1. **Onde definir o tipo TypeScript `BrainOutput` para evitar ciclo de dependencia?**
    - O que sabemos: `packages/ai` nao pode importar de `@brain-pkg/core`; `packages/core` exporta o schema Zod
-   - O que era incerto: Se o type vai em `@brain-pkg/shared` (limpo, sem Zod) ou inline em `@brain-pkg/ai`
-   - RESOLVED: Tipo `BrainOutput` definido como interface TypeScript pura em `packages/shared/src/types/index.ts` (sem Zod). `packages/core/src/output/schema.ts` re-exporta o type de `@brain-pkg/shared` apos derivar com `z.infer<>`. `packages/ai` importa apenas `import type { BrainOutput } from "@brain-pkg/shared"` — sem ciclo. Veja Plano 01 Task 1 e Plano 02 Task 1.
+   - O que e incerto: Se o type vai em `@brain-pkg/shared` (limpo, sem Zod) ou inline em `@brain-pkg/ai`
+   - Recomendacao: Colocar em `packages/shared/src/types/index.ts` como interface TypeScript pura (sem Zod); `packages/core` re-exporta com o schema; `packages/ai` importa apenas o type de `@brain-pkg/shared`
 
 2. **O handler webhook deve continuar retornando `reply` na resposta HTTP?**
    - O que sabemos: A decisao D-12 e sobre o SDK; a API HTTP e responsabilidade do transport
-   - O que era incerto: Se o campo na resposta JSON muda de `{ reply }` para `{ fullResponse }` ou permanece `{ reply }`
-   - RESOLVED: Campo `reply` mantido na resposta HTTP do webhook — handler extrai `result.fullResponse` e retorna `{ status: "ok", reply: result.fullResponse }`. Evita breaking change na API publica sem motivo de negocio. Veja Plano 03 Task 2.
+   - O que e incerto: Se o campo na resposta JSON muda de `{ reply }` para `{ fullResponse }` ou permanece `{ reply }`
+   - Recomendacao: Manter `{ reply: result.fullResponse }` na resposta HTTP — evita breaking change na API publica do webhook sem motivo de negocio
 
 ---
 

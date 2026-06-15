@@ -7,7 +7,7 @@ export { BrainRegistry } from "./brain/registry.js";
 
 // SDK-02: BrainRunner
 export { BrainRunner } from "./runner/runner.js";
-export type { BrainRunnerOptions, BrainRunResult } from "./runner/runner.js";
+export type { BrainRunnerOptions } from "./runner/runner.js";
 
 // SDK-03: ToolsRegistry
 export { ToolsRegistry } from "./tools/registry.js";
@@ -21,3 +21,7 @@ export { createCoreApp } from "./server.js";
 // LEAD-02: LeadService
 export { LeadService } from "./leads/lead-service.js";
 export type { Lead } from "./leads/lead-service.js";
+
+// SDK-06: BrainOutput contract — schema Zod em core, type em shared
+export { BrainOutputSchema, ResponseModeSchema } from "./output/schema.js";
+export type { BrainOutput, ResponseMode } from "./output/schema.js";
