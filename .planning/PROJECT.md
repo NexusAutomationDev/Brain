@@ -68,6 +68,8 @@ Uma infraestrutura de agentes modular onde novos Brains são criados definindo a
 
 ## Context
 
+**Estado v1.2 (Phase 13 completa 2026-06-15):** PgBouncer compatibility entregue — `prepare: false` em TenantPoolManager e CLI de migrate.ts; `pg_advisory_lock` substituído por row-lock transacional via `_schema_lock`; `saver.end()` em `finally` corrige connection leak CR-01 em qualifier.ts; JSDoc documenta limitação de PostgresSaver com transaction mode. 11/11 must-haves verificados. PGB-01..05 satisfeitos.
+
 **Estado v1.2 (Phase 12 completa 2026-06-15):** Brain SDR integrado ao contrato v1.2 — 3 tools bound no LangGraph (qualify_lead, pause_session, finish_conversation), nó llm seta `brainOutput`, standard tools registradas no ToolsRegistry, webhook retorna `{ fullResponse, responseMode }` (campo `reply` removido). 25/25 testes passando. PARSER-03 e TOOLS-STD-03 satisfeitos.
 
 **Estado v1.2 (Phase 11 completa 2026-06-15):** Tool Contracts SDK entregue — `createPauseSessionTool(sql)` e `createFinishConversationTool(sql)` como factories tipadas; guard `BRAIN_TOOLS` em `enableTool()` (whitelist CSV via ENV); `BrainBuildContext` com `sql?: Sql`; `BrainRunner` injeta `sql: this.sql`; 22 testes verdes (7/7 truths verificadas). TOOLS-ENV-01/02 e TOOLS-STD-01/02 satisfeitos.
@@ -135,4 +137,4 @@ Este documento evolui nas transições de fase e marcos de milestone.
 4. Atualizar Context com estado atual
 
 ---
-*Last updated: 2026-06-14 after v1.1 milestone — Brain SDR + Infraestrutura Produção shipped*
+*Last updated: 2026-06-15 after Phase 13 — PgBouncer compatibility: prepare:false + row-lock + CR-01 fix*
