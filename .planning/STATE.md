@@ -3,15 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Output Parser + Tool Contracts
 status: planning
-stopped_at: roadmap created
-last_updated: "2026-06-14T00:00:00.000Z"
-last_activity: 2026-06-14 - Roadmap v1.2 criado (Phases 10-12, 8 requirements mapeados)
+stopped_at: Phase 10 context gathered
+last_updated: "2026-06-15T02:46:21.555Z"
+last_activity: 2026-06-14 — Roadmap v1.2 criado, 3 fases derivadas, 8/8 requirements mapeados
 progress:
   total_phases: 3
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
-  percent: 0
 ---
 
 # Project State
@@ -35,6 +34,7 @@ Progress (v1.2): [░░░░░░░░░░] 0%
 ## Performance Metrics
 
 **Velocity:**
+
 - Total plans completed: 0 (v1.2)
 - Average duration: —
 - Total execution time: —
@@ -54,6 +54,7 @@ Progress (v1.2): [░░░░░░░░░░] 0%
 Ver PROJECT.md Key Decisions table para decisões completas com outcomes.
 
 Decisões relevantes para v1.2:
+
 - v1.1: ToolsRegistry com `enableTool()` por tipo de Brain — base para TOOLS-ENV-01/02
 - v1.1: Brain SDR usa LangGraph ReAct 2-nós — saída atual é string plana, alvo de PARSER-02/03
 
@@ -79,6 +80,6 @@ Nenhum — roadmap v1.2 pronto para planning.
 
 ## Session Continuity
 
-Last session: 2026-06-14
-Stopped at: Roadmap v1.2 criado (ROADMAP.md, STATE.md, REQUIREMENTS.md traceability atualizado)
+Last session: 2026-06-15T02:46:21.548Z
+Stopped at: Phase 10 context gathered
 Resume: Executar `/gsd-plan-phase 10` para iniciar planejamento da Phase 10
