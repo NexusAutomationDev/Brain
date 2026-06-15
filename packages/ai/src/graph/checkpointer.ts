@@ -13,6 +13,17 @@ import { PostgresSaver } from "@langchain/langgraph-checkpoint-postgres";
  * AI-01 constraint: MemorySaver is NEVER used in production code.
  * MemorySaver is only permitted in *.test.ts files for unit tests without PostgreSQL.
  *
+ * PgBouncer compatibility (Phase 13 — D-05):
+ * PostgresSaver uses the `pg` (node-postgres v8.21) driver internally, which uses
+ * the extended query protocol (prepared statements) for all parameterized queries.
+ * There is no pool-level option to disable this in pg v8.21.
+ *
+ * Supported PgBouncer configurations:
+ * - Session mode: fully compatible (recommended)
+ * - Transaction mode + PgBouncer >= 1.21 with max_prepared_statements > 0: compatible
+ * - Transaction mode + PgBouncer < 1.21: NOT supported — use session mode instead
+ * - Direct PostgreSQL (no PgBouncer): always compatible
+ *
  * @param connectionString - PostgreSQL connection string (use TEST_DATABASE_URL for tests)
  */
 export async function createCheckpointer(connectionString: string): Promise<PostgresSaver> {
