@@ -56,3 +56,17 @@
 | 11. Tool Contracts SDK | v1.2 | 2/2 | Complete | 2026-06-15 |
 | 12. Brain SDR Integration | v1.2 | 2/2 | Complete | 2026-06-15 |
 | 13. Suporte a PgBouncer | v1.2 | 2/2 | Complete | 2026-06-15 |
+
+## Backlog
+
+### Phase 999.1: responseMode dinâmico via structured output multi-provider (BACKLOG)
+
+**Goal:** Eliminar o hardcode `responseMode: "text"` no brain.ts — o LLM sinaliza o modo correto (text/audio/etc) via API de structured output do provider, não via instrução no system prompt. Suporte obrigatório para OpenAI e Google (Gemini). Parsing robusto com fallback no brain.ts.
+
+**Context:** Hoje o brain-sdr sempre retorna `responseMode: "text"`. O system prompt contém o bloco `<response_format>` como referência comportamental (o LLM conhece os modos), mas sem um mecanismo de saída estruturada o LLM não consegue sinalizar `"audio"` quando o usuário pede. A solução correta é usar `response_format` (OpenAI) ou `generationConfig.responseMimeType` (Google) no nível da API — não instrução de prompt.
+
+**Requirements:** TBD
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (promote with /gsd-review-backlog when ready)
