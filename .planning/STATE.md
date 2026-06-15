@@ -3,15 +3,21 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Output Parser + Tool Contracts
 status: executing
+<<<<<<< Updated upstream
 stopped_at: Phase 12 context gathered
 last_updated: "2026-06-15T20:07:20.406Z"
 last_activity: 2026-06-15
+=======
+stopped_at: Phase 13 context gathered
+last_updated: "2026-06-15T21:16:48.183Z"
+last_activity: 2026-06-15 -- Phase 13 execution started
+>>>>>>> Stashed changes
 progress:
   total_phases: 4
   completed_phases: 3
-  total_plans: 8
+  total_plans: 10
   completed_plans: 9
-  percent: 100
+  percent: 90
 ---
 
 # Project State
@@ -21,14 +27,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-14 — after v1.1 milestone)
 
 **Core value:** Infraestrutura de agentes modular onde novos Brains são criados definindo apenas prompts, tools, embeddings e fluxos — sem reescrever a base
-**Current focus:** Phase 10 — output-parser-sdk
+**Current focus:** Phase 13 — suporte-a-pgbouncer-para-connection-pooling
 
 ## Current Position
 
-Phase: 13
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-06-15
+Phase: 13 (suporte-a-pgbouncer-para-connection-pooling) — EXECUTING
+Plan: 1 of 2
+Status: Executing Phase 13
+Last activity: 2026-06-15 -- Phase 13 execution started
 
 Progress (v1.2): [░░░░░░░░░░] 0%
 

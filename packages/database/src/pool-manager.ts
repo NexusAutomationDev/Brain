@@ -38,6 +38,7 @@ export class TenantPoolManager {
         database: databaseName,
         max: this.baseConfig.max,
         idle_timeout: this.baseConfig.idle_timeout,
+        prepare: false,  // D-01, D-12: sempre ativo — compatível com PgBouncer em qualquer modo
         // eslint-disable-next-line @typescript-eslint/no-empty-function
         onnotice: () => {},
       });
