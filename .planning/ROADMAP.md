@@ -90,6 +90,6 @@ Plans:
 | 7. LeadService + RabbitMQ Transport | v1.1 | 2/2 | Complete | 2026-06-14 |
 | 8. BrainRunner + Conversation History | v1.1 | 2/2 | Complete | 2026-06-14 |
 | 9. Brain SDR | v1.1 | 4/4 | Complete | 2026-06-14 |
-| 10. Output Parser SDK | v1.2 | 4/4 | Complete   | 2026-06-15 |
+| 10. Output Parser SDK | v1.2 | 5/5 | Complete    | 2026-06-15 |
 | 11. Tool Contracts SDK | v1.2 | 0/? | Not started | - |
 | 12. Brain SDR Integration | v1.2 | 0/? | Not started | - |
