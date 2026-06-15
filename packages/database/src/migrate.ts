@@ -36,6 +36,9 @@ export async function runMigrations(sql: Sql, migrationsFolder: string): Promise
   // drizzle(sql) precisa do client raiz (options.parsers) — não pode ser o tx de transação
   const db = drizzle(sql);
 
+  // CREATE EXTENSION deve ser commitado antes de migrate() rodar em conexão separada do pool
+  await sql`CREATE EXTENSION IF NOT EXISTS vector`;
+
   // D-06: Row-lock transaction-scoped — compatível com PgBouncer transaction mode
   // Retry até 3 tentativas com 200ms de sleep entre elas (D-14: comportamento desejável)
   const MAX_RETRIES = 3;
@@ -48,9 +51,6 @@ export async function runMigrations(sql: Sql, migrationsFolder: string): Promise
         await tx`SELECT id FROM _schema_lock WHERE id = 1 FOR UPDATE NOWAIT`;
 
         console.log('[migrate] Row-lock adquirido — iniciando migrations');
-
-        // D-08: Comportamento observável idêntico — CREATE EXTENSION + migrate()
-        await tx`CREATE EXTENSION IF NOT EXISTS vector`;
         await migrate(db, { migrationsFolder });
 
         console.log('[migrate] Migrations concluídas com sucesso');
