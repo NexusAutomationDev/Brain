@@ -78,7 +78,10 @@ Plans:
   2. Brain SDR tem `pause_session` e `finish_conversation` registradas via `enableTool()` no Brain SDR init — ambas aparecem no grafo LangGraph como ferramentas disponíveis
   3. Um POST ao `/api/v1/webhook` do brain-sdr retorna body JSON com os campos do `BrainOutput` validáveis por schema
   4. `turbo run build` e `turbo run lint` passam em todos os pacotes incluindo brain-sdr após a migração
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 12-01-PLAN.md — brain.ts migrado: 3 tools bound + nó llm com brainOutput; index.ts: 2 enableTool(); brain.test.ts: cobertura 3 tools; package.json: lint script
+- [ ] 12-02-PLAN.md — handler.ts: resposta { fullResponse, responseMode } sem reply; handler.test.ts: assertions do novo contrato
 
 ## Progress
 
@@ -95,4 +98,4 @@ Plans:
 | 9. Brain SDR | v1.1 | 4/4 | Complete | 2026-06-14 |
 | 10. Output Parser SDK | v1.2 | 5/5 | Complete    | 2026-06-15 |
 | 11. Tool Contracts SDK | v1.2 | 2/1 | Complete    | 2026-06-15 |
-| 12. Brain SDR Integration | v1.2 | 0/? | Not started | - |
+| 12. Brain SDR Integration | v1.2 | 0/2 | Not started | - |
