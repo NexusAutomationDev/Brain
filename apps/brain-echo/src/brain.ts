@@ -35,7 +35,18 @@ export const echoBrain: IBrain = {
           { role: "system", content: ctx.prompts["system"] },
           ...messagesForLLM,
         ]);
-        return { messages: [...state.messages, response] };
+
+        // SDK-06: D-07, D-08 — nó monta BrainOutput manualmente; sem .withStructuredOutput()
+        const fullResponse =
+          typeof response.content === "string" ? response.content : "";
+
+        return {
+          messages: [...state.messages, response],
+          brainOutput: {
+            fullResponse,
+            responseMode: "text" as const,  // brain-echo é text-only em v1.2
+          },
+        };
       })
       .addEdge("__start__", "llm")
       .addEdge("llm", "__end__");
