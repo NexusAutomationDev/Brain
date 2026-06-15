@@ -10,9 +10,18 @@ O primeiro Brain real (SDR) foi entregue no v1.1 — atende leads no WhatsApp co
 
 Uma infraestrutura de agentes modular onde novos Brains são criados definindo apenas prompts, tools, embeddings e fluxos — sem reescrever a base.
 
-## Current State: v1.2 Shipped
+## Current State: Planning v1.3
 
-Brain Core v1.2 entregou o contrato completo de saída estruturada e tool contracts para todos os Brains. O Brain SDR é o primeiro Brain com output parser, tools padrão (pause_session + finish_conversation) e PgBouncer-compatible connection pooling. Pronto para próximo milestone.
+Brain Core v1.2 entregou o contrato completo de saída estruturada e tool contracts para todos os Brains. v1.3 foca em conectar Brains a ferramentas externas via MCP e deixar o LLM controlar o formato de resposta dinamicamente.
+
+## Current Milestone: v1.3 MCP Integration + Dynamic responseMode
+
+**Goal:** Conectar Brains a ferramentas externas via MCP e deixar o LLM controlar o formato de resposta dinamicamente via structured output multi-provider.
+
+**Target features:**
+- TD-01 fix: `qualifier.ts` com `prepare: false` (risco de falha com PgBouncer em produção)
+- MCP Integration: Brain conecta a servidor MCP externo (n8n) via ENV (`MCP_URL`, `MCP_TOOLS`), registra tools no startup como LangGraph tools normais
+- responseMode dinâmico: LLM decide text/audio/image como parte do BrainOutput via `.withStructuredOutput()` — multi-provider (OpenAI + Anthropic)
 
 ## Requirements
 
@@ -55,11 +64,18 @@ Brain Core v1.2 entregou o contrato completo de saída estruturada e tool contra
 
 ### Active
 
+**v1.3 — MCP Integration + Dynamic responseMode**
+
+- [ ] MCP Integration: Brain conecta a servidor MCP externo via ENV (`MCP_URL`, `MCP_TOOLS`) e usa tools externas no LangGraph
+- [ ] responseMode dinâmico: LLM decide `text/audio/image` via `.withStructuredOutput()` — multi-provider (OpenAI + Anthropic)
+- [ ] TD-01 fix: `qualifier.ts` com `prepare: false` — blocker de produção com PgBouncer
+
+**Backlog (pós v1.3)**
+
 - [ ] Arquitetura de memória semântica (embeddings + RAG): busca por similaridade em produção
-- [ ] Outros Brains: Suporte, Customer Success — próximo milestone
-- [ ] Sub-agente de qualificação avançada com SPIN/BANT completo — próximo milestone
-- [ ] Brain SDR publicando respostas de volta ao RabbitMQ (canal de resposta async) — pós v1.2
-- [ ] Resolver TD-01: qualifier.ts sem `prepare: false` (falha sob PgBouncer transaction mode)
+- [ ] Outros Brains: Suporte, Customer Success
+- [ ] Sub-agente de qualificação avançada com SPIN/BANT completo
+- [ ] Brain SDR publicando respostas de volta ao RabbitMQ (canal de resposta async)
 - [ ] Resolver TD-03: `BRAIN_TOOLS` whitelist não cobre tools bound diretamente em buildGraph()
 
 ### Out of Scope
@@ -86,13 +102,13 @@ O Brain SDR tem uma arquitetura com sub-agente de qualificação stateless: o Br
 
 Brains planejados para o futuro: Suporte, Customer Success, Cobrança, RH, Jurídico, E-commerce, Agendamento.
 
-**Tech debt acumulado (carry-over para próximo milestone):**
-- TD-01: `qualifier.ts` — `postgres()` sem `prepare: false` (falha sob PgBouncer transaction mode)
+**Tech debt acumulado (carry-over):**
+- TD-01: `qualifier.ts` — `postgres()` sem `prepare: false` (targeted v1.3)
 - TD-03: `BRAIN_TOOLS` whitelist inerte para tools bound diretamente em `buildGraph()`
 - TD-04: `LeadService.setFullpp()` / `setIaAtivada()` sem callers de produção
 - MEM-03: semantic write path (dead code) — createEmbeddings() nunca chamado
 - OBS-02: transport status ausente no GET /health
-- handler.ts sem try/catch em runner.run() — unhandled errors → 500 genérico
+- ~~handler.ts sem try/catch~~ — resolvido em quick task (try/catch existe em handler.ts:76-99)
 
 ## Constraints
 
@@ -142,4 +158,4 @@ Este documento evolui nas transições de fase e marcos de milestone.
 4. Atualizar Context com estado atual
 
 ---
-*Last updated: 2026-06-15 after v1.2 milestone — Output Parser + Tool Contracts + PgBouncer compatibility shipped*
+*Last updated: 2026-06-15 — Milestone v1.3 started: MCP Integration + Dynamic responseMode*

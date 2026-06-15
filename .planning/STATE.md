@@ -1,61 +1,46 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.2
-milestone_name: Output Parser + Tool Contracts
-status: complete
-stopped_at: Milestone v1.2 archived
-last_updated: "2026-06-15T23:00:00.000Z"
+milestone: v1.3
+milestone_name: MCP Integration + Dynamic responseMode
+status: planning
+stopped_at: Defining requirements
+last_updated: "2026-06-15T00:00:00.000Z"
 last_activity: 2026-06-15
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 11
-  completed_plans: 11
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-06-15 — after v1.2 milestone)
+See: .planning/PROJECT.md (updated 2026-06-15 — milestone v1.3 started)
 
 **Core value:** Infraestrutura de agentes modular onde novos Brains são criados definindo apenas prompts, tools, embeddings e fluxos — sem reescrever a base
-**Current focus:** Planning next milestone (v1.3)
+
+**Current focus:** Milestone v1.3 — MCP Integration + Dynamic responseMode
 
 ## Current Position
 
-Phase: —
+Phase: Not started (defining requirements)
 Plan: —
-Status: v1.2 milestone complete — ready for next milestone planning
-
-## Performance Metrics
-
-**Velocity (v1.2):**
-
-- Total plans completed: 11
-- Timeline: 2 dias (2026-06-14 → 2026-06-15)
-- Commits: 122
-
-**By Phase:**
-
-| Phase | Plans | Status |
-|-------|-------|--------|
-| 10 — Output Parser SDK | 5 | Complete 2026-06-15 |
-| 11 — Tool Contracts SDK | 2 | Complete 2026-06-15 |
-| 12 — Brain SDR Integration | 2 | Complete 2026-06-15 |
-| 13 — PgBouncer Support | 2 | Complete 2026-06-15 |
+Status: Defining requirements
+Last activity: 2026-06-15 — Milestone v1.3 started
 
 ## Accumulated Context
 
-### Tech Debt (carry-over para v1.3)
+### Tech Debt (carry-over de v1.2)
 
-- **TD-01** (Médio): `qualifier.ts` — `postgres()` sem `prepare: false`; falha sob PgBouncer transaction mode
+- **TD-01** (Médio — targeted v1.3): `qualifier.ts` — `postgres()` sem `prepare: false`; falha sob PgBouncer transaction mode
 - **TD-03** (Baixo): `BRAIN_TOOLS` whitelist inerte para tools bound diretamente em `buildGraph()`
 - **TD-04** (Baixo): `LeadService.setFullpp()` / `setIaAtivada()` sem callers de produção
 - **MEM-03**: semantic write path (dead code) — createEmbeddings() nunca chamado
 - **OBS-02**: transport status ausente no GET /health
-- handler.ts sem try/catch em runner.run()
+- ~~handler.ts sem try/catch~~ — resolvido (try/catch existe em handler.ts:76-99)
 
 ### Quick Tasks Completed
 
@@ -68,10 +53,10 @@ Status: v1.2 milestone complete — ready for next milestone planning
 
 ### Blockers/Concerns
 
-Nenhum — v1.2 completo, pronto para `/gsd-new-milestone`.
+- Protocolo do MCP server no n8n ainda não confirmado (HTTP/SSE vs outro) — pesquisa necessária antes de planejar a fase MCP.
 
 ## Session Continuity
 
-Last session: 2026-06-15T23:00:00.000Z
-Stopped at: Milestone v1.2 archived and tagged
-Resume: Executar `/gsd-new-milestone` para iniciar planejamento do próximo milestone
+Last session: 2026-06-15T00:00:00.000Z
+Stopped at: Milestone v1.3 started — defining requirements
+Resume: Continuar definição de requirements e roadmap
