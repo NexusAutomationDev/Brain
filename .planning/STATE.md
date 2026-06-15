@@ -64,6 +64,7 @@ Status: v1.2 milestone complete — ready for next milestone planning
 | 260614-u6j | ajustar reload-prompts para buscar e upsert prompts do banco | 2026-06-15 | c6c23d7 | [link](./quick/260614-u6j-ajustar-reload-prompts-para-buscar-e-ups/) |
 | 260614-u9h | corrigir salvamento de respostas da IA nas memories do DB | 2026-06-15 | d857f8f | [link](./quick/260614-u9h-investigar-por-que-as-respostas-da-ia-na/) |
 | 260614-vcu | proteger o webhook com token de autenticação | 2026-06-15 | 8729677 | [link](./quick/260614-vcu-uma-coisa-que-foi-faltando-foi-proteger-/) |
+| 260615-rss | fix double json serialization — corrigir bloco response_format no prompt do SDR | 2026-06-15 | — | [260615-rss](./quick/260615-rss-fix-double-json-serialization-in-brain-s/) |
 
 ### Blockers/Concerns
 
