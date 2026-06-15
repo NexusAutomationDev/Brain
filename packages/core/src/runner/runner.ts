@@ -284,6 +284,7 @@ export class BrainRunner {
       llm,
       prompts: this.prompts,
       tools: filteredTools,
+      sql: this.sql, // D-03: injetado para tools de DB — buildGraph() acessa via ctx.sql
     };
 
     // D-02: compile() called HERE — never inside buildGraph()

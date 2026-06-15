@@ -25,3 +25,8 @@ export type { Lead } from "./leads/lead-service.js";
 // SDK-06: BrainOutput contract — schema Zod em core, type em shared
 export { BrainOutputSchema, ResponseModeSchema } from "./output/schema.js";
 export type { BrainOutput, ResponseMode } from "./output/schema.js";
+
+// SDK-07: Standard Tools — factories para tools de controle de sessão
+// D-11: Exportar apenas factories (não instâncias) — Brain chama createXTool(ctx.sql!) em buildGraph()
+export { createPauseSessionTool } from "./tools/pause-session.js";
+export { createFinishConversationTool } from "./tools/finish-conversation.js";
