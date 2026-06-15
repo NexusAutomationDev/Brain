@@ -1,5 +1,6 @@
 import { Annotation, messagesStateReducer } from "@langchain/langgraph";
 import type { BaseMessage } from "@langchain/core/messages";
+import type { BrainOutput } from "@brain-pkg/shared";
 
 /**
  * AI-03: Brain graph state schema.
@@ -29,6 +30,15 @@ export const BrainStateAnnotation = Annotation.Root({
   }),
   sessionId: Annotation<string>({
     default: () => "",
+    reducer: (_, next) => next,
+  }),
+  // SDK-06: D-09/D-10 — brainOutput: contrato de saída estruturado
+  // last-write-wins: o nó do grafo define o valor; reducer descarta o anterior
+  // Default: null — nó DEVE setar; BrainRunner valida e lança erro se null após invoke
+  // Nota: BrainOutput importado de @brain-pkg/shared (não @brain-pkg/core) para evitar ciclo
+  // de dependência — core já depende de ai; ver RESEARCH.md Pitfall 1 e Open Questions RESOLVED.
+  brainOutput: Annotation<BrainOutput | null>({
+    default: () => null,
     reducer: (_, next) => next,
   }),
 });
