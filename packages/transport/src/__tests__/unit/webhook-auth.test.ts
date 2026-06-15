@@ -96,8 +96,12 @@ describe("Webhook Bearer token authentication", () => {
 
   it("processa normalmente com token correto e runner injetado (retorna ok + reply)", async () => {
     process.env.WEBHOOK_TOKEN = "meu-token-secreto";
+    // Duck typed — compatível com nova IBrainRunnerLike (SDK-06)
     const mockRunner = {
-      run: async (_event: unknown) => ({ reply: "Olá! Como posso ajudar?" }),
+      run: async (_event: unknown) => ({
+        fullResponse: "Olá! Como posso ajudar?",
+        responseMode: "text" as const,
+      }),
     };
     const app = createWebhookApp(mockRunner);
 

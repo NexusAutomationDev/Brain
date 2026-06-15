@@ -12,10 +12,16 @@ const logger = createLogger();
  * packages/core imports from @brain-pkg/transport (for BrainEvent).
  * If handler.ts imported from @brain-pkg/core it would create a cycle:
  *   core → transport → core.
- * Duck typing: BrainRunner satisfies IBrainRunnerLike structurally.
+ * SDK-06: Duck typed to BrainOutput shape — structurally compatible with BrainRunner.run() return.
+ * Mantém campo 'reply' na resposta HTTP para não quebrar clientes existentes do webhook.
  */
 export interface IBrainRunnerLike {
-  run(event: BrainEvent): Promise<{ reply: string } | null>;
+  run(event: BrainEvent): Promise<{
+    fullResponse: string;
+    responseMode: string;
+    mediaType?: string;
+    mediaUrl?: string;
+  } | null>;
 }
 
 /**
@@ -74,7 +80,8 @@ export function createWebhookApp(runner?: IBrainRunnerLike): Hono {
         if (result === null) {
           return c.json({ status: "ignored" }, 200);
         }
-        return c.json({ status: "ok", reply: result.reply });
+        // Mantém campo 'reply' na resposta HTTP — API pública do webhook não muda
+        return c.json({ status: "ok", reply: result.fullResponse });
       } catch (err) {
         // Log internally but never surface internals to the caller
         logger.error({ err }, "BrainRunner.run() failed");

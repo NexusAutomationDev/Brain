@@ -53,8 +53,12 @@ describe("WebhookTransport handler (TRANS-02, TRP-02)", () => {
   });
 
   it("POST /api/v1/webhook with runner injected returns 200 { status: 'ok', reply: string }", async () => {
+    // Duck typed — compatível com nova IBrainRunnerLike (SDK-06)
     const mockRunner = {
-      run: async (_event: unknown) => ({ reply: "Olá! Posso te ajudar." }),
+      run: async (_event: unknown) => ({
+        fullResponse: "Olá! Posso te ajudar.",
+        responseMode: "text" as const,
+      }),
     };
     const appWithRunner = createWebhookApp(mockRunner);
     const req = new Request("http://localhost/api/v1/webhook", {
