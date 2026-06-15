@@ -384,7 +384,8 @@ describe("BrainRunner", () => {
       const runner = new BrainRunner({ brain: brainSemOutput, sql: {} as never, toolsRegistry: registry });
       await runner.init();
 
-      await expect(runner.run(makeEvent())).rejects.toThrow();
+      // NOTE: using string check instead of class import to avoid zod v4 "cached value already set" panic in bun 1.3.2
+      await expect(runner.run(makeEvent())).rejects.toThrow("BrainOutput");
     });
 
     test("run() lança BrainOutputValidationError quando brainOutput tem schema inválido (fullResponse vazia)", async () => {
@@ -403,7 +404,8 @@ describe("BrainRunner", () => {
       const runner = new BrainRunner({ brain: brainOutputInvalido, sql: {} as never, toolsRegistry: registry });
       await runner.init();
 
-      await expect(runner.run(makeEvent())).rejects.toThrow();
+      // NOTE: using string check instead of class import to avoid zod v4 "cached value already set" panic in bun 1.3.2
+      await expect(runner.run(makeEvent())).rejects.toThrow("BrainOutput");
     });
   });
 
