@@ -52,8 +52,9 @@ describe("WebhookTransport handler (TRANS-02, TRP-02)", () => {
     expect(res.status).toBe(200);
   });
 
-  it("POST /api/v1/webhook with runner injected returns 200 { status: 'ok', reply: string }", async () => {
-    // Duck typed — compatível com nova IBrainRunnerLike (SDK-06)
+  it("POST /api/v1/webhook with runner injected returns 200 { status: 'ok', fullResponse, responseMode } (D-01, D-02)", async () => {
+    // D-01 (Fase 12): resposta com BrainOutput completo — fullResponse, responseMode
+    // D-02 (Fase 12): campo 'reply' removido — breaking change intencional
     const mockRunner = {
       run: async (_event: unknown) => ({
         fullResponse: "Olá! Posso te ajudar.",
@@ -73,8 +74,11 @@ describe("WebhookTransport handler (TRANS-02, TRP-02)", () => {
     expect(res.status).toBe(200);
     const body = await res.json() as Record<string, unknown>;
     expect(body.status).toBe("ok");
-    expect(typeof body.reply).toBe("string");
-    expect(body.reply).toBe("Olá! Posso te ajudar.");
+    expect(typeof body.fullResponse).toBe("string");
+    expect(body.fullResponse).toBe("Olá! Posso te ajudar.");
+    expect(body.responseMode).toBe("text");
+    // D-02: campo 'reply' removido — não deve existir na resposta
+    expect(body.reply).toBeUndefined();
   });
 
   it("POST /api/v1/webhook with old payload { conversationId, stepIndex, userId, content } returns 400", async () => {
