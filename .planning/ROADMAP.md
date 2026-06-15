@@ -34,7 +34,7 @@
 **Milestone Goal:** Padronizar o contrato de saída dos Brains e o sistema de tools — toda resposta é estruturada, todo conjunto de tools é configurável via ENV.
 
 - [x] **Phase 10: Output Parser SDK** — Schema JSON estruturado definido e aplicado no core; todos os Brains retornam `BrainOutput` em vez de string plana (gap closure em andamento) (completed 2026-06-15)
-- [ ] **Phase 11: Tool Contracts SDK** — Whitelist de tools via `BRAIN_TOOLS` ENV e tools padrão (`pause_session`, `finish_conversation`) disponíveis no SDK
+- [x] **Phase 11: Tool Contracts SDK** — Whitelist de tools via `BRAIN_TOOLS` ENV e tools padrão (`pause_session`, `finish_conversation`) disponíveis no SDK (completed 2026-06-15)
 - [ ] **Phase 12: Brain SDR Integration** — Brain SDR migrado para Output Parser e com `pause_session`/`finish_conversation` habilitadas por padrão
 
 ## Phase Details
@@ -66,7 +66,7 @@ Plans:
   4. `finish_conversation` está disponível em `packages/core/tools`: quando invocada, altera `leads.ia_ativada` para `false` e `leads.fullpp` para `false` no banco do tenant ativo
 **Plans**: 2 plans
 Plans:
-- [ ] 11-01-PLAN.md — Testes Wave 0 + BrainBuildContext sql? + ToolsRegistry BRAIN_TOOLS guard + LeadService setFullpp/setIaAtivada
+- [x] 11-01-PLAN.md — Testes Wave 0 + BrainBuildContext sql? + ToolsRegistry BRAIN_TOOLS guard + LeadService setFullpp/setIaAtivada
 - [ ] 11-02-PLAN.md — Factories createPauseSessionTool e createFinishConversationTool + BrainRunner sql injection + barrel exports
 
 ### Phase 12: Brain SDR Integration
@@ -94,5 +94,5 @@ Plans:
 | 8. BrainRunner + Conversation History | v1.1 | 2/2 | Complete | 2026-06-14 |
 | 9. Brain SDR | v1.1 | 4/4 | Complete | 2026-06-14 |
 | 10. Output Parser SDK | v1.2 | 5/5 | Complete    | 2026-06-15 |
-| 11. Tool Contracts SDK | v1.2 | 0/2 | Not started | - |
+| 11. Tool Contracts SDK | v1.2 | 1/1 | Complete   | 2026-06-15 |
 | 12. Brain SDR Integration | v1.2 | 0/? | Not started | - |
