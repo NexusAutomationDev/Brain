@@ -4,13 +4,13 @@ milestone: v1.2
 milestone_name: Output Parser + Tool Contracts
 status: executing
 stopped_at: Phase 11 context gathered
-last_updated: "2026-06-15T16:44:06.922Z"
+last_updated: "2026-06-15T17:54:17.046Z"
 last_activity: 2026-06-15
 progress:
   total_phases: 3
-  completed_phases: 1
-  total_plans: 5
-  completed_plans: 5
+  completed_phases: 2
+  total_plans: 6
+  completed_plans: 7
   percent: 100
 ---
 
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-06-14 — after v1.1 milestone)
 
 ## Current Position
 
-Phase: 11
+Phase: 12
 Plan: Not started
 Status: Executing Phase 10
 Last activity: 2026-06-15
@@ -36,7 +36,7 @@ Progress (v1.2): [░░░░░░░░░░] 0%
 
 **Velocity:**
 
-- Total plans completed: 5 (v1.2)
+- Total plans completed: 7 (v1.2)
 - Average duration: —
 - Total execution time: —
 
@@ -45,6 +45,7 @@ Progress (v1.2): [░░░░░░░░░░] 0%
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 10 | 5 | - | - |
+| 11 | 2 | - | - |
 
 *Updated after each plan completion*
 
