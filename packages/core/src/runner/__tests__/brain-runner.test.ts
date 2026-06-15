@@ -1,8 +1,10 @@
 // SDK-02: BrainRunner — lifecycle init() + run() returning BrainOutput | null
 // Uses MemorySaver in tests (AI-01 allows MemorySaver ONLY in *.test.ts)
 import { describe, test, expect, mock, beforeEach, afterEach } from "bun:test";
-import type { BrainEvent } from "@brain-pkg/transport";
-import { AIMessage, HumanMessage } from "@langchain/core/messages";
+// NOTE: BrainEvent type defined inline to avoid loading @brain-pkg/transport at test startup.
+// Loading transport causes zod to initialize partially (via events.ts BrainEventSchema) before
+// schema.ts in core is loaded, triggering zod v4 "cached value already set" panic in bun 1.3.2.
+type BrainEvent = { Name: string; Message: string; Numero: string; IDLead: string };
 
 // --- Mocks setup (before imports that use them) ---
 
@@ -16,12 +18,39 @@ mock.module("../../prompts/loader.js", () => ({
   upsertPrompts: mockUpsertPrompts,
 }));
 
-// Mock createCheckpointer to use MemorySaver (AI-01: allowed in *.test.ts)
-const { MemorySaver } = await import("@langchain/langgraph");
-const mockMemorySaver = new MemorySaver();
+// NOTE: @langchain/langgraph and @langchain/core/messages are NOT imported directly here.
+// Loading those modules causes a zod v4 "cached value already set" panic in bun 1.3.2 when
+// schema.ts (which uses z.object()) is loaded afterward in the same process.
+// Solution: mock both modules to avoid loading the real zod-dependent code.
+// AI-01: MemorySaver is allowed in *.test.ts — we use a lightweight mock class instead of
+// the real LangGraph MemorySaver since the compiledGraph itself is fully mocked in these tests.
+class MockMemorySaver {
+  storage: Record<string, unknown> = {};
+}
+class MockAIMessage {
+  constructor(public content: string) {}
+}
+class MockHumanMessage {
+  constructor(public content: string) {}
+}
+
+mock.module("@langchain/langgraph", () => ({
+  MemorySaver: MockMemorySaver,
+  StateGraph: class {},
+  START: "__start__",
+  END: "__end__",
+}));
+
+mock.module("@langchain/core/messages", () => ({
+  AIMessage: MockAIMessage,
+  HumanMessage: MockHumanMessage,
+  BaseMessage: MockAIMessage,
+}));
+
+const mockMemorySaver = new MockMemorySaver();
 mock.module("@brain-pkg/ai", () => ({
   createCheckpointer: mock(async () => mockMemorySaver),
-  createLLM: mock(async () => ({ invoke: mock(async () => new AIMessage("test reply")) })),
+  createLLM: mock(async () => ({ invoke: mock(async () => new MockAIMessage("test reply")) })),
   BrainStateAnnotation: {},
 }));
 
@@ -68,6 +97,9 @@ mock.module("@brain-pkg/database", () => ({
 
 // Satisfy MIGRATIONS_FOLDER check in runner.init() — prevents process.exit(1) before runMigrations
 process.env.MIGRATIONS_FOLDER = "/tmp/test-migrations";
+// Satisfy DATABASE_URL check in _compileGraph() — prevents process.exit(1) when createCheckpointer is called
+// The value is fake but the mock of @brain-pkg/ai.createCheckpointer intercepts before any real connection.
+process.env.DATABASE_URL = "postgresql://test:test@localhost:5432/testdb";
 
 // Mock LeadService — LEAD-03: gate ia_ativada controlled per test
 const mockUpsertLead = mock(async () => ({
@@ -102,8 +134,8 @@ function makeBrain(promptKeys = ["system"]): IBrain {
       compile: mock(() => ({
         invoke: mock(async () => ({
           messages: [
-            new HumanMessage("hello"),
-            new AIMessage("test reply"),
+            new MockHumanMessage("hello"),
+            new MockAIMessage("test reply"),
           ],
           // SDK-06: D-08 — nó do grafo seta brainOutput manualmente
           brainOutput: {
@@ -342,7 +374,7 @@ describe("BrainRunner", () => {
         buildGraph: mock(() => ({
           compile: mock(() => ({
             invoke: mock(async () => ({
-              messages: [new HumanMessage("hello"), new AIMessage("reply")],
+              messages: [new MockHumanMessage("hello"), new MockAIMessage("reply")],
               brainOutput: null,  // nó não setou brainOutput
             })),
             getState: mock(async () => ({ values: { messages: [] } })),
@@ -361,7 +393,7 @@ describe("BrainRunner", () => {
         buildGraph: mock(() => ({
           compile: mock(() => ({
             invoke: mock(async () => ({
-              messages: [new HumanMessage("hello"), new AIMessage("reply")],
+              messages: [new MockHumanMessage("hello"), new MockAIMessage("reply")],
               brainOutput: { fullResponse: "", responseMode: "text" },  // fullResponse vazia falha no Zod
             })),
             getState: mock(async () => ({ values: { messages: [] } })),
@@ -430,7 +462,7 @@ describe("BrainRunner", () => {
         buildGraph: mock(() => ({
           compile: mock(() => ({
             invoke: mock(async () => ({
-              messages: [new HumanMessage("hello"), new AIMessage("test reply")],
+              messages: [new MockHumanMessage("hello"), new MockAIMessage("test reply")],
               brainOutput: {
                 fullResponse: "test reply",
                 responseMode: "text",
