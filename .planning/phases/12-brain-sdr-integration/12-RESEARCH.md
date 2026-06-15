@@ -510,9 +510,9 @@ it("POST /api/v1/webhook with runner injected returns 200 { status: 'ok', fullRe
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Verificar onde `handler.test.ts` está localizado no pacote transport**
+1. RESOLVED: **Verificar onde `handler.test.ts` está localizado no pacote transport**
    - O que sabemos: o arquivo existe em `packages/transport/src/webhook/handler.test.ts` (verificado)
    - O que é incerto: se `turbo run test` para `@brain-pkg/transport` roda tests neste path ou se precisa de ajuste no `test` script do `package.json` do transport
    - Recomendação: verificar `packages/transport/package.json` antes de editar `handler.test.ts` — garantir que o script `test` cobre o path correto
