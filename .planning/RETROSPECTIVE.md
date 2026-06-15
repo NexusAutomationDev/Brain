@@ -104,9 +104,65 @@
 
 ---
 
+## Milestone: v1.2 — Output Parser + Tool Contracts
+
+**Shipped:** 2026-06-15
+**Phases:** 4 (10-13) | **Plans:** 11 | **Timeline:** 2 dias (2026-06-14 → 2026-06-15)
+**Commits:** 122 | **Files changed:** 163 | **Lines:** +13.153
+
+### What Was Built
+
+- Output Parser SDK: `BrainOutput` type em shared, `BrainOutputSchema` Zod com `superRefine` em core, `BrainRunner.run()` valida saída e lança `BrainOutputValidationError` — contrato de saída estruturado em todos os Brains
+- Tool Contracts SDK: `createPauseSessionTool(sql)` e `createFinishConversationTool(sql)` como factories; `BRAIN_TOOLS` ENV como whitelist CSV em `enableTool()`; `BrainBuildContext.sql?` injetado pelo BrainRunner
+- Brain SDR migrado para contrato v1.2: 3 tools no ToolNode LangGraph, webhook retorna `{ fullResponse, responseMode }` (breaking change — campo `reply` removido), 25/25 testes passando
+- PgBouncer compatibility: `prepare: false` em TenantPoolManager, row-lock transacional via `_schema_lock` substitui `pg_advisory_lock`, `saver.end()` em `finally` corrige CR-01 connection leak
+
+### What Worked
+
+- **Separação type vs schema em camadas distintas**: `BrainOutput` interface em shared (sem Zod), `BrainOutputSchema` em core (com Zod) evitou ciclo de dependência ai→core completamente — zero refatoração necessária após a decisão inicial
+- **Factory pattern para tools com closure**: `createPauseSessionTool(sql)` seguiu o padrão já estabelecido do `boundQualifyTool` — a consistência tornou a implementação trivial
+- **Duck typing IBrainRunnerLike em transport**: evitar import de `@brain-pkg/core` em packages/transport via duck typing foi clean e impediu ciclo de dependência
+- **Row-lock via tabela `_schema_lock` (PgBouncer)**: substituição de `pg_advisory_lock` por row-lock transacional foi a solução correta — `pg_advisory_lock` é connection-scoped e silenciosamente falha sob pool rotation
+- **Nyquist Wave 0 como gate de qualidade**: todas as 4 fases chegaram ao audit com `nyquist_compliant: true` — stubs de teste antes da implementação continuou sendo a pattern mais valiosa do projeto
+
+### What Was Inefficient
+
+- **REQUIREMENTS.md traceability nunca atualizado (novamente)**: pela 3ª vez consecutiva, os 8 checkboxes de REQUIREMENTS.md ficaram como `[ ]` durante todo o desenvolvimento — o audit teve que ser a fonte de verdade. A tabela de traceability precisa de automação ou deve ser eliminada como artefato
+- **qualifier.ts com `postgres()` sem `prepare: false` (TD-01)**: Phase 13 entregou PgBouncer compatibility no TenantPoolManager mas perdeu uma instância direta de `postgres()` no qualifier.ts — a inconsistência só foi descoberta no audit de integração, não durante a phase
+- **BRAIN_TOOLS whitelist com cobertura parcial (TD-03)**: o contrato documentado em TOOLS-ENV-01 ("apenas tools habilitadas no ToolsRegistry") não cobre tools bound diretamente em `buildGraph()` — a spec foi satisfeita tecnicamente mas o comportamento observável diverge da intenção
+- **`enableTool("sdr", "pause_session/finish_conversation")` inerte**: Phase 12 registrou as tools no ToolsRegistry mas elas já estavam bound diretamente em buildGraph() — código morto descoberto somente no audit
+
+### Patterns Established
+
+- **`IBrainRunnerLike` como contrato local em transport**: duck typing para evitar import cross-package é padrão a seguir quando dois pacotes não podem ter dependência direta
+- **Zod em core, tipos puros em shared**: sempre que um schema de validação é necessário, o tipo fica em shared (sem deps) e o schema Zod fica em core — padrão a documentar no SDK guide
+- **Factories com closure sobre `sql`**: toda tool que precisa de acesso ao banco deve ser uma factory function que recebe `sql` e retorna `StructuredTool` — não usar variável global nem DI container
+- **`prepare: false` como requisito universal**: qualquer `postgres()` criado fora do `TenantPoolManager` deve ter `prepare: false` explicitamente — adicionar ao checklist de code review
+
+### Key Lessons
+
+1. **Audit de integração ainda encontra gaps que testes unitários não encontram**: TD-01 (qualifier.ts sem prepare:false) e TD-03 (whitelist inerte para tools em buildGraph()) foram invisíveis para os testes de cada phase mas visíveis no audit cross-phase — o audit não é opcional
+2. **Cobertura de specs deve incluir "quais code paths passam por esse mecanismo"**: TOOLS-ENV-01 estava tecnicamente correto mas não especificou quais tools passam por `getTools()` vs quais são bound diretamente — a ambiguidade virou tech debt
+3. **REQUIREMENTS.md como tracking tool não funciona sem automação**: 3 milestones, 3 vezes com todos os checkboxes `[ ]` ao final. Para v1.3, ou automatizar a atualização via gsd-tools, ou substituir por um formato que não exija manutenção manual
+4. **Breaking changes precisam de migration guide explícito**: remover o campo `reply` do webhook (Phase 12) é breaking change para consumidores (WhatsApp/CRM) — deveria haver um documento de migration, não apenas um comentário em SUMMARY.md
+
+### Cost Observations
+
+- Timeline de 2 dias = mesmo ritmo do v1.1; o projeto atingiu velocidade de cruzeiro em phases bem-scoped
+- Sem substituições de biblioteca: todas as decisões de stack de v1.0 continuaram válidas
+- Phase 10 teve 5 plans (vs 2 esperados): gap closure plans (10-04, 10-05) foram necessários para fechar PARSER-02; indica que o scope inicial de output parser subestimou a complexidade de reconstruir dist/ e corrigir mocks de bun
+
+---
+
 ## Cross-Milestone Trends
 
 | Milestone | Phases | Plans | Timeline | Requirements | E2E |
 |-----------|--------|-------|----------|--------------|-----|
 | v1.0 MVP | 4 | 28 | 23 dias | 28/30 (93%) | 3/3 ✅ |
 | v1.1 SDR | 5 | 12 | 2 dias | 17/20 satisfied + 3 partial (85%) | 1/2 ✅ (Flow 2 ativado pós-audit) |
+| v1.2 Output Parser | 4 | 11 | 2 dias | 8/8 (100%) | 2/2 ✅ |
+
+**Trends:**
+- Velocidade estabilizou em ~2 dias por milestone após v1.0; esperado para scopes bem-definidos
+- Cobertura de requisitos melhorando: 93% → 85% (v1.1 com tech debt herdado) → 100% (v1.2)
+- REQUIREMENTS.md como artefato de tracking: 0/3 milestones com checkboxes atualizados durante execução — padrão consistente de falha; precisa de solução sistêmica no v1.3

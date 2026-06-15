@@ -1,5 +1,30 @@
 # Milestones
 
+## v1.2 Output Parser + Tool Contracts (Shipped: 2026-06-15)
+
+**Phases completed:** 4 phases (10-13), 11 plans, 122 commits
+**Timeline:** 2026-06-14 → 2026-06-15 (2 days)
+**Files changed:** 163 files, +13.153 linhas
+
+**Key accomplishments:**
+
+1. Output Parser SDK entregue: `BrainOutput` (fullResponse + responseMode obrigatórios, mediaType/mediaUrl condicionais) como tipo shared; `BrainOutputSchema` Zod com `superRefine` em packages/core; `BrainRunner.run()` valida saída e lança `BrainOutputValidationError` — 17 testes verdes (PARSER-01, PARSER-02)
+2. Tool Contracts SDK: `createPauseSessionTool(sql)` e `createFinishConversationTool(sql)` como factories tipadas; guard `BRAIN_TOOLS` CSV em `enableTool()`; `BrainBuildContext.sql?` + BrainRunner injeta sql no buildGraph — 22 testes verdes (TOOLS-ENV-01/02, TOOLS-STD-01/02)
+3. Brain SDR migrado para contrato v1.2 completo: 3 tools bound no ToolNode LangGraph (qualify_lead + pause_session + finish_conversation); nó llm seta `brainOutput`; webhook retorna `{ fullResponse, responseMode }` (campo `reply` removido — breaking change documentado) — 25/25 testes passando (PARSER-03, TOOLS-STD-03)
+4. PgBouncer compatibility (Phase 13): `prepare: false` em TenantPoolManager e no CLI de migrate.ts; row-lock transacional via `_schema_lock` substitui `pg_advisory_lock`; `saver.end()` em `finally` corrige connection leak CR-01 em qualifier.ts — 11/11 must-haves verificados (PGB-01..05)
+
+### Known Gaps (Tech Debt)
+
+Documentado no audit `milestones/v1.2-MILESTONE-AUDIT.md`:
+
+- **TD-01** (Médio): `qualifier.ts` — `postgres(dbUrl, { max: 1 })` sem `prepare: false`; falha sob PgBouncer transaction mode
+- **TD-03** (Baixo): `enableTool("sdr", "pause_session/finish_conversation")` inerte — essas tools não passam por `getTools()` pois são bound diretamente em `buildGraph()`
+- **TD-04** (Baixo): `LeadService.setFullpp()` e `setIaAtivada()` sem callers de produção — tools fazem UPDATE Drizzle diretamente
+- **TD-02** (Baixo): `brain-echo/src/index.ts` — `postgres()` sem `prepare: false`; inconsistente com estratégia PgBouncer
+- 2 falhas pré-existentes em testes de integração (`brain-runner.integration.test.ts`, `checkpointer.test.ts`) — não introduzidas por v1.2
+
+---
+
 ## v1.0 MVP (Shipped: 2026-06-13)
 
 **Phases completed:** 4 phases, 28 plans, ~234 commits

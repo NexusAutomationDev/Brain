@@ -10,15 +10,9 @@ O primeiro Brain real (SDR) foi entregue no v1.1 — atende leads no WhatsApp co
 
 Uma infraestrutura de agentes modular onde novos Brains são criados definindo apenas prompts, tools, embeddings e fluxos — sem reescrever a base.
 
-## Current Milestone: v1.2 Output Parser + Tool Contracts
+## Current State: v1.2 Shipped
 
-**Goal:** Padronizar o contrato de saída dos Brains e o sistema de tools — tornando toda resposta estruturada e o conjunto de tools configurável via ENV.
-
-**Target features:**
-- Output Parser padrão (JSON schema com `fullResponse`, `responseMode`, `mediaType`/`mediaUrl` opcionais)
-- Controle de tools via ENV (override do `enableTool()` em runtime)
-- Tool padrão: Pausar sessão (`fullpp`: true → false)
-- Tool padrão: Finalizar conversa (`ia_ativada` → false, `fullpp` → false)
+Brain Core v1.2 entregou o contrato completo de saída estruturada e tool contracts para todos os Brains. O Brain SDR é o primeiro Brain com output parser, tools padrão (pause_session + finish_conversation) e PgBouncer-compatible connection pooling. Pronto para próximo milestone.
 
 ## Requirements
 
@@ -50,49 +44,55 @@ Uma infraestrutura de agentes modular onde novos Brains são criados definindo a
 - ✓ Multi-tenant: TenantPoolManager ativo em produção no Brain SDR — v1.1
 - ✓ Brain SDR: primeiro Brain real com fluxo de atendimento, qualificação e sub-agente — v1.1
 
+**v1.2 — Output Parser + Tool Contracts**
+
+- ✓ Output Parser SDK: `BrainOutput` type (fullResponse + responseMode obrigatórios) + `BrainOutputSchema` Zod com validação condicional — v1.2
+- ✓ BrainRunner.run() valida saída do grafo e lança `BrainOutputValidationError` se null ou schema inválido — v1.2
+- ✓ Tool Contracts SDK: `createPauseSessionTool(sql)` e `createFinishConversationTool(sql)` disponíveis no core — v1.2
+- ✓ `BRAIN_TOOLS` ENV como whitelist CSV para `enableTool()` — controle de tools em runtime — v1.2
+- ✓ Brain SDR migrado para contrato v1.2: BrainOutput estruturado, 3 tools no grafo, webhook sem campo `reply` — v1.2
+- ✓ PgBouncer compatibility: `prepare: false` em TenantPoolManager, row-lock transacional em migrate, CR-01 fix em qualifier.ts — v1.2
+
 ### Active
 
 - [ ] Arquitetura de memória semântica (embeddings + RAG): busca por similaridade em produção
 - [ ] Outros Brains: Suporte, Customer Success — próximo milestone
 - [ ] Sub-agente de qualificação avançada com SPIN/BANT completo — próximo milestone
+- [ ] Brain SDR publicando respostas de volta ao RabbitMQ (canal de resposta async) — pós v1.2
+- [ ] Resolver TD-01: qualifier.ts sem `prepare: false` (falha sob PgBouncer transaction mode)
+- [ ] Resolver TD-03: `BRAIN_TOOLS` whitelist não cobre tools bound diretamente em buildGraph()
 
 ### Out of Scope
 
-- Brain SDR com sub-agente de qualificação avançada (SPIN/BANT completo) — simplificado para v1.1; SPIN/BANT é v1.2
+- Brain SDR com sub-agente de qualificação avançada (SPIN/BANT completo) — simplificado para v1.1; deferido para próximo milestone
 - Mecanismo de licenciamento (LICENSE_KEY) — futuro
 - UI de gerenciamento de Brains — futuro
 - Migração para tenant_id nas tabelas — futuro quando escala demandar
 - fullpp com regra de negócio — futuro quando necessário
-- Brain SDR publicando respostas de volta ao RabbitMQ — apenas consume em v1.1 (amqplib-bun large-message bug evitado via rabbitmq-client)
-- Outros Brains específicos (Suporte, CS, Cobrança, RH) — pós v1.1
+- Outros Brains específicos (Suporte, CS, Cobrança, RH) — pós v1.2
+- `BRAIN_TOOLS_DISABLED` (lista de exclusão) — whitelist é suficiente por ora
 
 ## Context
 
-**Estado v1.2 (Phase 13 completa 2026-06-15):** PgBouncer compatibility entregue — `prepare: false` em TenantPoolManager e CLI de migrate.ts; `pg_advisory_lock` substituído por row-lock transacional via `_schema_lock`; `saver.end()` em `finally` corrige connection leak CR-01 em qualifier.ts; JSDoc documenta limitação de PostgresSaver com transaction mode. 11/11 must-haves verificados. PGB-01..05 satisfeitos.
+**v1.2 (shipped 2026-06-15):** 4 fases (10-13), 11 planos, 122 commits, 163 arquivos alterados (+13.153 linhas), 2 dias de desenvolvimento. Contrato de saída estruturado entregue em todos os Brains; PgBouncer-compatible desde Phase 13.
 
-**Estado v1.2 (Phase 12 completa 2026-06-15):** Brain SDR integrado ao contrato v1.2 — 3 tools bound no LangGraph (qualify_lead, pause_session, finish_conversation), nó llm seta `brainOutput`, standard tools registradas no ToolsRegistry, webhook retorna `{ fullResponse, responseMode }` (campo `reply` removido). 25/25 testes passando. PARSER-03 e TOOLS-STD-03 satisfeitos.
+**v1.1 (shipped 2026-06-14):** 5 fases (5-9), 12 planos, ~124 commits, 2 dias.
 
-**Estado v1.2 (Phase 11 completa 2026-06-15):** Tool Contracts SDK entregue — `createPauseSessionTool(sql)` e `createFinishConversationTool(sql)` como factories tipadas; guard `BRAIN_TOOLS` em `enableTool()` (whitelist CSV via ENV); `BrainBuildContext` com `sql?: Sql`; `BrainRunner` injeta `sql: this.sql`; 22 testes verdes (7/7 truths verificadas). TOOLS-ENV-01/02 e TOOLS-STD-01/02 satisfeitos.
-
-**Estado v1.2 (Phase 10 completa 2026-06-15):** Output Parser SDK entregue — contrato de saída estruturado `BrainOutput` com `fullResponse`, `responseMode` e validação Zod; BrainRunner retorna `BrainOutput | null`; 68 testes verdes (8/8 truths verificadas).
-
-**Estado v1.1 (shipped 2026-06-14):** 2 Brains implementados (brain-echo, brain-sdr), ~9 pacotes no monorepo, 367 commits totais.
-
-**v1.0 (shipped 2026-06-13):** ~7.094 linhas TypeScript, 8 pacotes, 234 commits, 23 dias de desenvolvimento.
+**v1.0 (shipped 2026-06-13):** ~7.094 linhas TypeScript, 4 fases (1-4), 28 planos, 234 commits, 23 dias.
 
 Stack validado: Bun + Hono + Drizzle (postgres.js driver) + LangGraph + PostgresSaver + pgvector + Pino + Langfuse.
 
-O Brain SDR tem uma arquitetura com sub-agente de qualificação: o Brain principal conversa com leads e aciona o sub-agente quando chega o momento de qualificar. O sub-agente lê o histórico via PostgresSaver.getTuple() e retorna {qualificado, motivo, proximo_passo}. Toda comunicação de transport é via webhook (TRANSPORT=webhook) ou RabbitMQ (TRANSPORT=rabbitmq), selecionável via ENV.
+O Brain SDR tem uma arquitetura com sub-agente de qualificação stateless: o Brain principal conversa com leads e aciona o sub-agente quando chega o momento de qualificar. O sub-agente lê o histórico via PostgresSaver.getTuple() e retorna {qualificado, motivo, proximo_passo}. Toda comunicação de transport é via webhook (TRANSPORT=webhook) ou RabbitMQ (TRANSPORT=rabbitmq), selecionável via ENV. Desde v1.2, toda resposta é `BrainOutput` estruturado.
 
 Brains planejados para o futuro: Suporte, Customer Success, Cobrança, RH, Jurídico, E-commerce, Agendamento.
 
-**Tech debt v1.1 para v1.2:**
-- MEM-03: semantic write path (dead code) — createEmbeddings() nunca chamado pelo BrainRunner
+**Tech debt acumulado (carry-over para próximo milestone):**
+- TD-01: `qualifier.ts` — `postgres()` sem `prepare: false` (falha sob PgBouncer transaction mode)
+- TD-03: `BRAIN_TOOLS` whitelist inerte para tools bound diretamente em `buildGraph()`
+- TD-04: `LeadService.setFullpp()` / `setIaAtivada()` sem callers de produção
+- MEM-03: semantic write path (dead code) — createEmbeddings() nunca chamado
 - OBS-02: transport status ausente no GET /health
-- users table obsoleta — deprecar em v2
 - handler.ts sem try/catch em runner.run() — unhandled errors → 500 genérico
-- apps/brain-sdr sem lint script (brain-echo também)
-- GAP-2: brain-sdr .env usa OPENAI_API_KEY em vez de API_KEY (dev-only)
 
 ## Constraints
 
@@ -118,6 +118,11 @@ Brains planejados para o futuro: Suporte, Customer Success, Cobrança, RH, Jurí
 | rabbitmq-client@5.0.8 (não amqplib-bun) | Zero deps, Bun-compatible, auto-reconnect built-in; amqplib-bun tem bugs com large-message | ✓ Good — testes passaram, DLQ implementada sem dependência de configuração de broker |
 | Sub-agente de qualificação stateless (sem checkpointer) | Lê histórico via PostgresSaver.getTuple() mas não persiste estado próprio | ✓ Good — evita acumulação de checkpoints do sub-agente; fallback gracioso em todos os pontos de falha |
 | Drizzle _journal.json para migrations (GAP-1 v1.1) | Drizzle exige entrada no journal para executar SQL — 0005 foi adicionado pós-audit | ✓ Fixed — migrate() agora aplica seed de prompts SDR na inicialização |
+| BrainOutput em shared, BrainOutputSchema em core (v1.2) | Evitar ciclo de dependência ai→core; type sem Zod em shared, schema Zod somente em core | ✓ Good — separação funcionou em todas as fases; transport usa duck typing IBrainRunnerLike |
+| Tools padrão como factories com closure sobre sql (v1.2) | Mesmo padrão do boundQualifyTool — factory recebe sql e retorna StructuredTool | ✓ Good — pause_session e finish_conversation funcionando; thread_id vem de configurable, nunca do LLM |
+| BRAIN_TOOLS como whitelist CSV via ENV (v1.2) | Controle de tools em runtime sem recompilação — enableTool() silenciosamente ignora tools fora da whitelist | ⚠ Revisit — whitelist não cobre tools bound diretamente em buildGraph() (TD-03); cobertura parcial |
+| row-lock via _schema_lock (v1.2, substitui pg_advisory_lock) | pg_advisory_lock não funciona sob PgBouncer (connection-level lock perdido na devolução do pool) | ✓ Good — row-lock transacional funciona em qualquer pooler; DDL idempotente fora de transação |
+| rabbitmq-client (não amqplib-bun) mantido em v1.2 | Sem mudança de decisão — zero deps, Bun-compatible, auto-reconnect built-in | ✓ Good — RabbitMQ consumer fire-and-forget por design; TD-05 documentado mas não é bug |
 
 ## Evolution
 
@@ -137,4 +142,4 @@ Este documento evolui nas transições de fase e marcos de milestone.
 4. Atualizar Context com estado atual
 
 ---
-*Last updated: 2026-06-15 after Phase 13 — PgBouncer compatibility: prepare:false + row-lock + CR-01 fix*
+*Last updated: 2026-06-15 after v1.2 milestone — Output Parser + Tool Contracts + PgBouncer compatibility shipped*

@@ -4,7 +4,7 @@
 
 - ✅ **v1.0 MVP** — Phases 1-4 (shipped 2026-06-13) — [archive](milestones/v1.0-ROADMAP.md)
 - ✅ **v1.1 Brain SDR + Infraestrutura Produção** — Phases 5-9 (shipped 2026-06-14) — [archive](milestones/v1.1-ROADMAP.md)
-- 🚧 **v1.2 Output Parser + Tool Contracts** — Phases 10-12 (in progress)
+- ✅ **v1.2 Output Parser + Tool Contracts** — Phases 10-13 (shipped 2026-06-15) — [archive](milestones/v1.2-ROADMAP.md)
 
 ## Phases
 
@@ -29,59 +29,15 @@
 
 </details>
 
-### 🚧 v1.2 Output Parser + Tool Contracts (In Progress)
+<details>
+<summary>✅ v1.2 Output Parser + Tool Contracts (Phases 10-13) — SHIPPED 2026-06-15</summary>
 
-**Milestone Goal:** Padronizar o contrato de saída dos Brains e o sistema de tools — toda resposta é estruturada, todo conjunto de tools é configurável via ENV.
+- [x] Phase 10: Output Parser SDK (5/5 plans) — BrainOutput type + BrainOutputSchema Zod + BrainRunner validation — completed 2026-06-15
+- [x] Phase 11: Tool Contracts SDK (2/2 plans) — BRAIN_TOOLS ENV guard + createPauseSessionTool + createFinishConversationTool — completed 2026-06-15
+- [x] Phase 12: Brain SDR Integration (2/2 plans) — Brain SDR migrado para contrato v1.2, webhook retorna BrainOutput — completed 2026-06-15
+- [x] Phase 13: Suporte a PgBouncer (2/2 plans) — prepare:false + row-lock + CR-01 connection leak fix — completed 2026-06-15
 
-- [x] **Phase 10: Output Parser SDK** — Schema JSON estruturado definido e aplicado no core; todos os Brains retornam `BrainOutput` em vez de string plana (gap closure em andamento) (completed 2026-06-15)
-- [x] **Phase 11: Tool Contracts SDK** — Whitelist de tools via `BRAIN_TOOLS` ENV e tools padrão (`pause_session`, `finish_conversation`) disponíveis no SDK (completed 2026-06-15)
-- [x] **Phase 12: Brain SDR Integration** — Brain SDR migrado para Output Parser e com `pause_session`/`finish_conversation` habilitadas por padrão (completed 2026-06-15)
-
-## Phase Details
-
-### Phase 10: Output Parser SDK
-**Goal**: O SDK define e aplica um contrato de saída estruturado — todo Brain retorna `BrainOutput` com `fullResponse` e `responseMode` obrigatórios; string plana deixa de ser output válido
-**Depends on**: Phase 9 (v1.1 complete)
-**Requirements**: PARSER-01, PARSER-02
-**Success Criteria** (what must be TRUE):
-  1. `packages/core` exporta `BrainOutputSchema` (Zod) e o tipo `BrainOutput` com `fullResponse` (string obrigatória), `responseMode` (obrigatório), `mediaType`/`mediaUrl` (condicionalmente obrigatórios entre si)
-  2. `BrainRunner.run()` rejeita (lança erro) qualquer saída do LangGraph que não valide contra `BrainOutputSchema`
-  3. O contrato da interface `IBrain.run()` retorna `BrainOutput` em vez de `string` — qualquer Brain que retorne string não compila
-  4. brain-echo compila e seus testes passam com o novo contrato de saída
-**Plans**: 4 plans
-Plans:
-- [x] 10-01-PLAN.md — BrainOutput type em shared, BrainOutputSchema em core, testes unitários do schema
-- [x] 10-02-PLAN.md — BrainStateAnnotation com brainOutput, BrainRunner.run() novo retorno e validação
-- [x] 10-03-PLAN.md — brain-echo migrado para setar brainOutput, IBrainRunnerLike e handler.ts atualizados
-- [x] 10-04-PLAN.md — [gap closure] remover .js stale de packages/shared/src/, reconstruir dist/, verificar 17 testes do runner
-
-### Phase 11: Tool Contracts SDK
-**Goal**: O SDK suporta controle de tools via ENV e disponibiliza `pause_session` e `finish_conversation` como tools padrão que qualquer Brain pode habilitar
-**Depends on**: Phase 10
-**Requirements**: TOOLS-ENV-01, TOOLS-ENV-02, TOOLS-STD-01, TOOLS-STD-02
-**Success Criteria** (what must be TRUE):
-  1. Quando `BRAIN_TOOLS=pause_session,finish_conversation` está no ENV, apenas essas tools são habilitadas no ToolsRegistry — `enableTool()` de tools fora da whitelist é silenciosamente ignorado
-  2. Quando `BRAIN_TOOLS` está ausente, o comportamento de `enableTool()` é idêntico ao atual — nenhum Brain existente quebra
-  3. `pause_session` está disponível em `packages/core/tools`: quando invocada, altera `leads.fullpp` para `false` no banco do tenant ativo
-  4. `finish_conversation` está disponível em `packages/core/tools`: quando invocada, altera `leads.ia_ativada` para `false` e `leads.fullpp` para `false` no banco do tenant ativo
-**Plans**: 2 plans
-Plans:
-- [x] 11-01-PLAN.md — Testes Wave 0 + BrainBuildContext sql? + ToolsRegistry BRAIN_TOOLS guard + LeadService setFullpp/setIaAtivada
-- [x] 11-02-PLAN.md — Factories createPauseSessionTool e createFinishConversationTool + BrainRunner sql injection + barrel exports
-
-### Phase 12: Brain SDR Integration
-**Goal**: Brain SDR consome o Output Parser e habilita `pause_session` e `finish_conversation` por padrão — primeiro Brain a usar o contrato completo de v1.2
-**Depends on**: Phase 11
-**Requirements**: PARSER-03, TOOLS-STD-03
-**Success Criteria** (what must be TRUE):
-  1. Brain SDR retorna `BrainOutput` estruturado em todas as respostas — webhook e RabbitMQ entregam JSON com `fullResponse` e `responseMode` (não mais string plana)
-  2. Brain SDR tem `pause_session` e `finish_conversation` registradas via `enableTool()` no Brain SDR init — ambas aparecem no grafo LangGraph como ferramentas disponíveis
-  3. Um POST ao `/api/v1/webhook` do brain-sdr retorna body JSON com os campos do `BrainOutput` validáveis por schema
-  4. `turbo run build` e `turbo run lint` passam em todos os pacotes incluindo brain-sdr após a migração
-**Plans**: 2 plans
-Plans:
-- [x] 12-01-PLAN.md — brain.ts migrado: 3 tools bound + nó llm com brainOutput; index.ts: 2 enableTool(); brain.test.ts: cobertura 3 tools; package.json: lint script
-- [x] 12-02-PLAN.md — handler.ts: resposta { fullResponse, responseMode } sem reply; handler.test.ts: assertions do novo contrato
+</details>
 
 ## Progress
 
@@ -96,16 +52,7 @@ Plans:
 | 7. LeadService + RabbitMQ Transport | v1.1 | 2/2 | Complete | 2026-06-14 |
 | 8. BrainRunner + Conversation History | v1.1 | 2/2 | Complete | 2026-06-14 |
 | 9. Brain SDR | v1.1 | 4/4 | Complete | 2026-06-14 |
-| 10. Output Parser SDK | v1.2 | 5/5 | Complete    | 2026-06-15 |
-| 11. Tool Contracts SDK | v1.2 | 2/1 | Complete    | 2026-06-15 |
-| 12. Brain SDR Integration | v1.2 | 2/2 | Complete    | 2026-06-15 |
-
-### Phase 13: Suporte a PgBouncer para connection pooling
-
-**Goal:** [To be planned]
-**Requirements**: TBD
-**Depends on:** Phase 12
-**Plans:** 2/2 plans complete
-
-Plans:
-- [x] TBD (run /gsd-plan-phase 13 to break down) (completed 2026-06-15)
+| 10. Output Parser SDK | v1.2 | 5/5 | Complete | 2026-06-15 |
+| 11. Tool Contracts SDK | v1.2 | 2/2 | Complete | 2026-06-15 |
+| 12. Brain SDR Integration | v1.2 | 2/2 | Complete | 2026-06-15 |
+| 13. Suporte a PgBouncer | v1.2 | 2/2 | Complete | 2026-06-15 |
