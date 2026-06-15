@@ -76,6 +76,30 @@ curl http://localhost:3002/health
 { "status": "ok" }
 ```
 
+## Recarregar prompts em runtime
+
+Força o reload dos prompts do banco e recompila o grafo **sem reiniciar o container**.
+
+```bash
+curl -X POST http://localhost:3002/reload-prompts \
+  -H "X-Admin-Token: <ADMIN_TOKEN>"
+```
+
+**Resposta:**
+```json
+{ "status": "ok" }
+```
+
+| Status | Causa |
+|--------|-------|
+| 200    | Prompts recarregados com sucesso |
+| 401    | Token ausente ou incorreto |
+| 503    | `ADMIN_TOKEN` não configurado no container |
+
+> O valor de `ADMIN_TOKEN` está no `.env` do brain-sdr.
+
+---
+
 ## Erros
 
 | Status | Body                                          | Causa                        |
