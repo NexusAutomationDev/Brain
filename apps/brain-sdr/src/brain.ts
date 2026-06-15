@@ -70,7 +70,7 @@ export const sdrBrain: IBrain = {
           { role: "system", content: ctx.prompts["system"] },
           ...messagesForLLM,
         ]);
-        return { messages: [...state.messages, response] };
+        return { messages: [response] };
       })
       // D-02: ToolNode com [boundQualifyTool] — executa em paralelo, trata erros, retorna ToolMessages
       .addNode("tools", new ToolNode([boundQualifyTool]))

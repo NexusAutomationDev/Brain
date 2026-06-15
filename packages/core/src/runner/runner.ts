@@ -233,7 +233,7 @@ export class BrainRunner {
     await this.memoryManager.saveContext({
       userId: event.IDLead,
       profileKey: "context",
-      profileValue: { lastReply: reply, conversationId: threadId },
+      profileValue: { lastUserMessage: event.Message, lastReply: reply, conversationId: threadId },
     });
 
     return { reply };
