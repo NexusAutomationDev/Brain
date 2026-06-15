@@ -94,7 +94,7 @@ describe("Webhook Bearer token authentication", () => {
     expect(body.status).toBe("accepted");
   });
 
-  it("processa normalmente com token correto e runner injetado (retorna ok + reply)", async () => {
+  it("processa normalmente com token correto e runner injetado (retorna ok + fullResponse)", async () => {
     process.env.WEBHOOK_TOKEN = "meu-token-secreto";
     // Duck typed — compatível com nova IBrainRunnerLike (SDK-06)
     const mockRunner = {
@@ -118,6 +118,9 @@ describe("Webhook Bearer token authentication", () => {
     expect(res.status).toBe(200);
     const body = await res.json() as Record<string, unknown>;
     expect(body.status).toBe("ok");
-    expect(body.reply).toBe("Olá! Como posso ajudar?");
+    // D-01/D-02 (Fase 12): campo 'reply' removido — usar fullResponse e responseMode
+    expect(body.fullResponse).toBe("Olá! Como posso ajudar?");
+    expect(body.responseMode).toBe("text");
+    expect(body.reply).toBeUndefined();
   });
 });
