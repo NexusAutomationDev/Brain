@@ -195,9 +195,16 @@ export async function runQualificationAgent(
     // Pitfall 4: NÃO chamar saver.setup() aqui
     const saver = PostgresSaver.fromConnString(dbUrl);
 
-    const tuple = await saver.getTuple({
-      configurable: { thread_id: sessionId },
-    });
+    // CR-01 fix: fechar pg.Pool após getTuple() — saver não é usado após esta chamada
+    // compiledQualificationGraph é stateless e não depende do saver (Pitfall 5 do RESEARCH.md)
+    let tuple: Awaited<ReturnType<typeof saver.getTuple>>;
+    try {
+      tuple = await saver.getTuple({
+        configurable: { thread_id: sessionId },
+      });
+    } finally {
+      await saver.end(); // D-09: API pública tipada — fecha o pg.Pool interno
+    }
 
     // Extrair mensagens — tuple pode ser undefined se sessão não tem checkpoint
     const allMessages: BaseMessage[] =
