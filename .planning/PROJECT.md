@@ -10,6 +10,16 @@ O primeiro Brain real (SDR) foi entregue no v1.1 — atende leads no WhatsApp co
 
 Uma infraestrutura de agentes modular onde novos Brains são criados definindo apenas prompts, tools, embeddings e fluxos — sem reescrever a base.
 
+## Current Milestone: v1.2 Output Parser + Tool Contracts
+
+**Goal:** Padronizar o contrato de saída dos Brains e o sistema de tools — tornando toda resposta estruturada e o conjunto de tools configurável via ENV.
+
+**Target features:**
+- Output Parser padrão (JSON schema com `fullResponse`, `responseMode`, `mediaType`/`mediaUrl` opcionais)
+- Controle de tools via ENV (override do `enableTool()` em runtime)
+- Tool padrão: Pausar sessão (`fullpp`: true → false)
+- Tool padrão: Finalizar conversa (`ia_ativada` → false, `fullpp` → false)
+
 ## Requirements
 
 ### Validated
