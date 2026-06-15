@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { ConfigurationError } from "@brain-pkg/shared";
+import { ConfigurationError, BrainOutputValidationError } from "@brain-pkg/shared";
 import { createLogger } from "@brain-pkg/observability";
 import type { ITransport } from "../interface.js";
 import { BrainEventSchema } from "./events.js";
@@ -84,6 +84,10 @@ export function createWebhookApp(runner?: IBrainRunnerLike): Hono {
         return c.json({ status: "ok", reply: result.fullResponse });
       } catch (err) {
         // Log internally but never surface internals to the caller
+        if (err instanceof BrainOutputValidationError) {
+          logger.error({ err }, "BrainOutput contract violation — Brain node did not set brainOutput");
+          return c.json({ error: "Brain output error" }, 502);
+        }
         logger.error({ err }, "BrainRunner.run() failed");
         return c.json({ error: "Internal error" }, 500);
       }
