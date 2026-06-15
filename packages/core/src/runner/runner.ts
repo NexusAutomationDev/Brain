@@ -219,7 +219,7 @@ export class BrainRunner {
     const rawOutput = result.brainOutput;
     if (rawOutput === null || rawOutput === undefined) {
       throw new BrainOutputValidationError(
-        "Brain graph returned null brainOutput — node must set state.brainOutput before '__end__'",
+        "BrainOutput is null — graph node must set state.brainOutput before '__end__'",
         { brainId: this.brain.id, threadId }
       );
     }
