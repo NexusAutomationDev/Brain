@@ -72,4 +72,33 @@ export class LeadService {
 
     return rows[0] ?? null;
   }
+
+  /**
+   * TOOLS-STD-01: Atualiza leads.fullpp por uniqueId.
+   * Usado por createPauseSessionTool (pause_session).
+   *
+   * @param uniqueId - lead.uniqueId (IDLead canonical = thread_id do BrainRunner)
+   * @param value - novo valor de fullpp
+   */
+  async setFullpp(uniqueId: string, value: boolean): Promise<void> {
+    await this.db
+      .update(leads)
+      .set({ fullpp: value, updatedAt: new Date() })
+      .where(eq(leads.uniqueId, uniqueId));
+  }
+
+  /**
+   * TOOLS-STD-02: Atualiza leads.iaAtivada por uniqueId.
+   * Usado para atualização avulsa de iaAtivada fora do contexto de tool.
+   * Nota: finish_conversation faz update atômico direto — este método é para uso avulso.
+   *
+   * @param uniqueId - lead.uniqueId (IDLead canonical = thread_id do BrainRunner)
+   * @param value - novo valor de iaAtivada
+   */
+  async setIaAtivada(uniqueId: string, value: boolean): Promise<void> {
+    await this.db
+      .update(leads)
+      .set({ iaAtivada: value, updatedAt: new Date() })
+      .where(eq(leads.uniqueId, uniqueId));
+  }
 }

@@ -33,6 +33,13 @@ export class ToolsRegistry {
    * Creates the brainType entry if it does not exist.
    */
   enableTool(brainType: string, toolName: string): void {
+    // D-07/D-08/D-09: BRAIN_TOOLS whitelist — ausente = sem filtro (TOOLS-ENV-01, TOOLS-ENV-02)
+    const envWhitelist = process.env.BRAIN_TOOLS
+      ?.split(",")
+      .map((s) => s.trim());
+    if (envWhitelist !== undefined && !envWhitelist.includes(toolName)) {
+      return; // silently ignored — sem log, sem erro (D-07)
+    }
     if (!this.registry.has(brainType)) {
       this.registry.set(brainType, new Set());
     }

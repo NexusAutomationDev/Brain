@@ -8,6 +8,7 @@ import type { BaseChatModel } from "@langchain/core/language_models/chat_models"
 import type { StructuredTool } from "@langchain/core/tools";
 import type { StateGraph } from "@langchain/langgraph";
 import type { BrainStateAnnotation } from "@brain-pkg/ai";
+import type { Sql } from "postgres";
 
 /**
  * Dependencies injected by BrainRunner into buildGraph().
@@ -20,6 +21,8 @@ export interface BrainBuildContext {
   prompts: Record<string, string>;
   /** Brain's tools[] filtered by ToolsRegistry for this brainType */
   tools: StructuredTool[];
+  /** D-01: sql opcional — injetado pelo BrainRunner para tools de DB via buildGraph(). Brains sem DB tools ignoram. */
+  sql?: Sql;
 }
 
 /**
