@@ -11,6 +11,7 @@ import { StateGraph } from "@langchain/langgraph";
 import { ToolNode, toolsCondition } from "@langchain/langgraph/prebuilt";
 import { BrainStateAnnotation } from "@brain-pkg/ai";
 import type { IBrain, BrainBuildContext } from "@brain-pkg/core";
+import { createPauseSessionTool, createFinishConversationTool } from "@brain-pkg/core";
 import { qualifyLeadTool, runQualificationAgent } from "./qualifier.js";
 import { createLogger } from "@brain-pkg/observability";
 
@@ -47,6 +48,11 @@ export const sdrBrain: IBrain = {
       }
     );
 
+    // D-04 (Fase 12): bound com closure sobre ctx.sql — injetado pelo BrainRunner (sempre presente para brain-sdr)
+    // ctx.sql! é seguro: index.ts passa sql no construtor do BrainRunner (linha 67)
+    const boundPauseSessionTool = createPauseSessionTool(ctx.sql!);
+    const boundFinishConversationTool = createFinishConversationTool(ctx.sql!);
+
     // CRITICAL: bindTools() com [boundQualifyTool] — não ctx.tools
     // ctx.tools vem do ToolsRegistry e contém qualifyLeadTool sem closure;
     // usar boundQualifyTool garante que o prompt do banco é injetado.
@@ -54,7 +60,12 @@ export const sdrBrain: IBrain = {
     if (!ctx.llm.bindTools) {
       throw new Error("LLM provider não suporta tool calling — configure um provider compatível (ex: OpenAI, Anthropic, Gemini)");
     }
-    const llmWithTools = ctx.llm.bindTools([boundQualifyTool]);
+    // D-08 (Fase 12): bind com 3 tools — qualify_lead, pause_session, finish_conversation
+    const llmWithTools = ctx.llm.bindTools([
+      boundQualifyTool,
+      boundPauseSessionTool,
+      boundFinishConversationTool,
+    ]);
 
     // HIST-03: context window — slice feito no nó, não no invoke() (Pitfall 3 do runner.ts)
     const getContextWindow = (): number => {
@@ -70,10 +81,16 @@ export const sdrBrain: IBrain = {
           { role: "system", content: ctx.prompts["system"] },
           ...messagesForLLM,
         ]);
-        return { messages: [response] };
+        // D-09 (Fase 12): setar brainOutput — mesmo padrão do brain-echo
+        // ATENÇÃO: messages: [response] sem spread — brain-sdr usa ReAct; append reducer adiciona ao histórico
+        const fullResponse = typeof response.content === "string" ? response.content : "";
+        return {
+          messages: [response],
+          brainOutput: { fullResponse, responseMode: "text" as const },
+        };
       })
-      // D-02: ToolNode com [boundQualifyTool] — executa em paralelo, trata erros, retorna ToolMessages
-      .addNode("tools", new ToolNode([boundQualifyTool]))
+      // D-07 (Fase 12): ToolNode com 3 tools — qualify_lead, pause_session, finish_conversation
+      .addNode("tools", new ToolNode([boundQualifyTool, boundPauseSessionTool, boundFinishConversationTool]))
       .addEdge("__start__", "llm")
       // D-02: toolsCondition verifica tool_calls no último AIMessage — roteia para tools ou __end__
       .addConditionalEdges("llm", toolsCondition, ["tools", "__end__"])

@@ -99,13 +99,3 @@ Plans:
 | 10. Output Parser SDK | v1.2 | 5/5 | Complete    | 2026-06-15 |
 | 11. Tool Contracts SDK | v1.2 | 2/1 | Complete    | 2026-06-15 |
 | 12. Brain SDR Integration | v1.2 | 0/2 | Not started | - |
-
-### Phase 13: Suporte a PgBouncer para connection pooling
-
-**Goal:** [To be planned]
-**Requirements**: TBD
-**Depends on:** Phase 12
-**Plans:** 0 plans
-
-Plans:
-- [ ] TBD (run /gsd-plan-phase 13 to break down)

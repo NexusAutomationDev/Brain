@@ -8,6 +8,7 @@
     "test": "bun test src/__tests__/unit",
     "test:integration": "bun test src/__tests__/integration",
     "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit",
     "start": "bun dist/index.js"
   },
   "dependencies": {

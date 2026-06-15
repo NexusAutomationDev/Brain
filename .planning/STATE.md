@@ -4,14 +4,14 @@ milestone: v1.2
 milestone_name: Output Parser + Tool Contracts
 status: executing
 stopped_at: Phase 12 context gathered
-last_updated: "2026-06-15T19:33:21.784Z"
-last_activity: 2026-06-15 -- Phase 12 planning complete
+last_updated: "2026-06-15T18:48:42.215Z"
+last_activity: 2026-06-15
 progress:
-  total_phases: 4
+  total_phases: 3
   completed_phases: 2
-  total_plans: 8
+  total_plans: 6
   completed_plans: 7
-  percent: 88
+  percent: 100
 ---
 
 # Project State
@@ -27,8 +27,8 @@ See: .planning/PROJECT.md (updated 2026-06-14 — after v1.1 milestone)
 
 Phase: 12
 Plan: Not started
-Status: Ready to execute
-Last activity: 2026-06-15 -- Phase 12 planning complete
+Status: Executing Phase 10
+Last activity: 2026-06-15
 
 Progress (v1.2): [░░░░░░░░░░] 0%
 
@@ -75,10 +75,6 @@ Decisões relevantes para v1.2:
 | 260614-u6j | ajustar reload-prompts para buscar e upsert prompts do banco | 2026-06-15 | c6c23d7 | [link](./quick/260614-u6j-ajustar-reload-prompts-para-buscar-e-ups/) |
 | 260614-u9h | corrigir salvamento de respostas da IA nas memories do DB | 2026-06-15 | d857f8f | [link](./quick/260614-u9h-investigar-por-que-as-respostas-da-ia-na/) |
 | 260614-vcu | proteger o webhook com token de autenticação | 2026-06-15 | 8729677 | [link](./quick/260614-vcu-uma-coisa-que-foi-faltando-foi-proteger-/) |
-
-### Roadmap Evolution
-
-- Phase 13 added: Suporte a PgBouncer para connection pooling
 
 ### Blockers/Concerns
 

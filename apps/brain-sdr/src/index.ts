@@ -63,6 +63,10 @@ async function main() {
   // CRITICAL: se "sdr" não estiver registrado quando getTools() for chamado, lança ConfigurationError
   const toolsRegistry = new ToolsRegistry();
   toolsRegistry.enableTool("sdr", "qualify_lead");
+  // D-06 (Fase 12): registrar standard tools no ToolsRegistry — evita ConfigurationError e respeita BRAIN_TOOLS ENV
+  // NOTA: sdrBrain.tools[] NÃO inclui estas tools (D-05) — o registro aqui é apenas para o ToolsRegistry
+  toolsRegistry.enableTool("sdr", "pause_session");
+  toolsRegistry.enableTool("sdr", "finish_conversation");
 
   const runner = new BrainRunner({ brain: sdrBrain, sql, toolsRegistry });
   await runner.init();
