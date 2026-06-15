@@ -64,10 +64,7 @@ Plans:
   2. Quando `BRAIN_TOOLS` está ausente, o comportamento de `enableTool()` é idêntico ao atual — nenhum Brain existente quebra
   3. `pause_session` está disponível em `packages/core/tools`: quando invocada, altera `leads.fullpp` para `false` no banco do tenant ativo
   4. `finish_conversation` está disponível em `packages/core/tools`: quando invocada, altera `leads.ia_ativada` para `false` e `leads.fullpp` para `false` no banco do tenant ativo
-**Plans**: 2 plans
-Plans:
-- [ ] 11-01-PLAN.md — Testes Wave 0 + BrainBuildContext sql? + ToolsRegistry BRAIN_TOOLS guard + LeadService setFullpp/setIaAtivada
-- [ ] 11-02-PLAN.md — Factories createPauseSessionTool e createFinishConversationTool + BrainRunner sql injection + barrel exports
+**Plans**: TBD
 
 ### Phase 12: Brain SDR Integration
 **Goal**: Brain SDR consome o Output Parser e habilita `pause_session` e `finish_conversation` por padrão — primeiro Brain a usar o contrato completo de v1.2
@@ -94,5 +91,5 @@ Plans:
 | 8. BrainRunner + Conversation History | v1.1 | 2/2 | Complete | 2026-06-14 |
 | 9. Brain SDR | v1.1 | 4/4 | Complete | 2026-06-14 |
 | 10. Output Parser SDK | v1.2 | 5/5 | Complete    | 2026-06-15 |
-| 11. Tool Contracts SDK | v1.2 | 0/2 | Not started | - |
+| 11. Tool Contracts SDK | v1.2 | 0/? | Not started | - |
 | 12. Brain SDR Integration | v1.2 | 0/? | Not started | - |
