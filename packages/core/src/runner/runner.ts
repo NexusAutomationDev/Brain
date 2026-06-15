@@ -176,23 +176,17 @@ export class BrainRunner {
     // HIST-03: Ler tamanho do histórico atual para auditoria/logging.
     // O slice para controlar o contexto enviado ao LLM é feito dentro do nó do grafo.
     // NÃO re-injetar historicalMessages no invoke() — causaria duplicação (Pitfall 1).
-    const contextWindowSize = (() => {
-      const n = parseInt(process.env.CONTEXT_WINDOW_MESSAGES ?? "40", 10);
-      return n > 0 && isFinite(n) ? n : 40;  // SECURITY: T-08-ENV
-    })();
-
     const snapshot = await this.compiledGraph.getState({
       configurable: { thread_id: threadId },
     });
     const historicalMessages: BaseMessage[] = snapshot?.values?.messages ?? [];
+    // HIST-03: Log historical message count; slicing is performed inside the graph node.
     this.logger.debug(
       {
         threadId,
         historicalCount: historicalMessages.length,
-        contextWindow: contextWindowSize,
-        willTruncate: historicalMessages.length > contextWindowSize,
       },
-      "HIST-03: context window"
+      "HIST-03: context window snapshot"
     );
 
     // Step 1: Hydrate memory — retrieve context from all 3 layers (MEM-04)
