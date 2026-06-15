@@ -33,6 +33,9 @@ export async function runMigrations(sql: Sql, migrationsFolder: string): Promise
   await sql`CREATE TABLE IF NOT EXISTS _schema_lock (id INTEGER PRIMARY KEY, locked_at TIMESTAMPTZ)`;
   await sql`INSERT INTO _schema_lock (id, locked_at) VALUES (1, NOW()) ON CONFLICT (id) DO NOTHING`;
 
+  // drizzle(sql) precisa do client raiz (options.parsers) — não pode ser o tx de transação
+  const db = drizzle(sql);
+
   // D-06: Row-lock transaction-scoped — compatível com PgBouncer transaction mode
   // Retry até 3 tentativas com 200ms de sleep entre elas (D-14: comportamento desejável)
   const MAX_RETRIES = 3;
@@ -47,7 +50,6 @@ export async function runMigrations(sql: Sql, migrationsFolder: string): Promise
         console.log('[migrate] Row-lock adquirido — iniciando migrations');
 
         // D-08: Comportamento observável idêntico — CREATE EXTENSION + migrate()
-        const db = drizzle(tx as unknown as Sql);
         await tx`CREATE EXTENSION IF NOT EXISTS vector`;
         await migrate(db, { migrationsFolder });
 
