@@ -23,6 +23,8 @@ export interface IBrainRunnerLike {
  *
  * Security (T-05-01, ASVS V5): BrainEvent body validated with zod safeParse.
  * Security (T-05-03): Internal state (thread_id, checkpoint data) NEVER returned in response.
+ * Security (T-vcu-01): Bearer token authentication via WEBHOOK_TOKEN env var.
+ * Security (T-vcu-03): Fail-closed — 503 when WEBHOOK_TOKEN not configured.
  * D-03: X-Request-Id dedup REMOVIDO — header não é mais obrigatório nem verificado.
  *
  * @param runner - Optional BrainRunner-compatible instance. If provided, events are
@@ -33,6 +35,21 @@ export function createWebhookApp(runner?: IBrainRunnerLike): Hono {
   const app = new Hono();
 
   app.post("/api/v1/webhook", async (c) => {
+    // T-vcu-03: Fail-closed — reject all requests when token not configured
+    const webhookToken = process.env.WEBHOOK_TOKEN;
+    if (!webhookToken) {
+      return c.json({ error: "Service unavailable — webhook not configured" }, 503);
+    }
+
+    // T-vcu-01: Verify Authorization: Bearer <token> header
+    const authHeader = c.req.header("Authorization");
+    const bearer = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : undefined;
+    if (!bearer || bearer !== webhookToken) {
+      // T-vcu-02: Log attempt without revealing received token value
+      logger.warn({}, "/api/v1/webhook unauthorized attempt");
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+
     // T-05-01: Validate body structure before any processing
     let body: unknown;
     try {
