@@ -82,3 +82,39 @@ describe("LeadService (LEAD-02)", () => {
     expect(setArg).not.toHaveProperty("uniqueId");
   });
 });
+
+describe("LeadService — métodos de atualização de lead (TOOLS-STD-01, TOOLS-STD-02)", () => {
+  // Mock para o chain update → set → where
+  const mockWhere2 = mock(async () => []);
+  const mockSet2 = mock(() => ({ where: mockWhere2 }));
+  const mockUpdate2 = mock(() => ({ set: mockSet2 }));
+
+  let service2: LeadService;
+
+  beforeEach(() => {
+    mockWhere2.mockClear();
+    mockSet2.mockClear();
+    mockUpdate2.mockClear();
+    // Injetar update no mockDb compartilhado (mesmo objeto retornado pelo drizzle mock)
+    (mockDb as Record<string, unknown>).update = mockUpdate2;
+    service2 = new LeadService({} as never);
+  });
+
+  it("setFullpp() chama db.update com { fullpp: value, updatedAt } onde eq(leads.uniqueId, uniqueId)", async () => {
+    await service2.setFullpp("lead-abc", false);
+    expect(mockUpdate2).toHaveBeenCalledTimes(1);
+    expect(mockSet2).toHaveBeenCalledTimes(1);
+    const setArg = mockSet2.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(setArg).toHaveProperty("fullpp", false);
+    expect(setArg).toHaveProperty("updatedAt");
+  });
+
+  it("setIaAtivada() chama db.update com { iaAtivada: value, updatedAt } onde eq(leads.uniqueId, uniqueId)", async () => {
+    await service2.setIaAtivada("lead-abc", false);
+    expect(mockUpdate2).toHaveBeenCalledTimes(1);
+    expect(mockSet2).toHaveBeenCalledTimes(1);
+    const setArg = mockSet2.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(setArg).toHaveProperty("iaAtivada", false);
+    expect(setArg).toHaveProperty("updatedAt");
+  });
+});
