@@ -13,7 +13,6 @@ const logger = createLogger();
  * If handler.ts imported from @brain-pkg/core it would create a cycle:
  *   core → transport → core.
  * SDK-06: Duck typed to BrainOutput shape — structurally compatible with BrainRunner.run() return.
- * Mantém campo 'reply' na resposta HTTP para não quebrar clientes existentes do webhook.
  */
 export interface IBrainRunnerLike {
   run(event: BrainEvent): Promise<{
@@ -80,8 +79,15 @@ export function createWebhookApp(runner?: IBrainRunnerLike): Hono {
         if (result === null) {
           return c.json({ status: "ignored" }, 200);
         }
-        // Mantém campo 'reply' na resposta HTTP — API pública do webhook não muda
-        return c.json({ status: "ok", reply: result.fullResponse });
+        // D-01 (Fase 12): retornar BrainOutput completo — fullResponse, responseMode, mediaType?, mediaUrl?
+        // D-02 (Fase 12): campo 'reply' removido — breaking change intencional; downstream deve usar fullResponse
+        return c.json({
+          status: "ok",
+          fullResponse: result.fullResponse,
+          responseMode: result.responseMode,
+          ...(result.mediaType && { mediaType: result.mediaType }),
+          ...(result.mediaUrl && { mediaUrl: result.mediaUrl }),
+        });
       } catch (err) {
         // Log internally but never surface internals to the caller
         if (err instanceof BrainOutputValidationError) {
