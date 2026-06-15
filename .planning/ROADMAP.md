@@ -33,7 +33,7 @@
 
 **Milestone Goal:** Padronizar o contrato de saída dos Brains e o sistema de tools — toda resposta é estruturada, todo conjunto de tools é configurável via ENV.
 
-- [ ] **Phase 10: Output Parser SDK** — Schema JSON estruturado definido e aplicado no core; todos os Brains retornam `BrainOutput` em vez de string plana
+- [ ] **Phase 10: Output Parser SDK** — Schema JSON estruturado definido e aplicado no core; todos os Brains retornam `BrainOutput` em vez de string plana (gap closure em andamento)
 - [ ] **Phase 11: Tool Contracts SDK** — Whitelist de tools via `BRAIN_TOOLS` ENV e tools padrão (`pause_session`, `finish_conversation`) disponíveis no SDK
 - [ ] **Phase 12: Brain SDR Integration** — Brain SDR migrado para Output Parser e com `pause_session`/`finish_conversation` habilitadas por padrão
 
@@ -48,11 +48,12 @@
   2. `BrainRunner.run()` rejeita (lança erro) qualquer saída do LangGraph que não valide contra `BrainOutputSchema`
   3. O contrato da interface `IBrain.run()` retorna `BrainOutput` em vez de `string` — qualquer Brain que retorne string não compila
   4. brain-echo compila e seus testes passam com o novo contrato de saída
-**Plans**: 3 plans
+**Plans**: 4 plans
 Plans:
-- [ ] 10-01-PLAN.md — BrainOutput type em shared, BrainOutputSchema em core, testes unitários do schema
-- [ ] 10-02-PLAN.md — BrainStateAnnotation com brainOutput, BrainRunner.run() novo retorno e validação
-- [ ] 10-03-PLAN.md — brain-echo migrado para setar brainOutput, IBrainRunnerLike e handler.ts atualizados
+- [x] 10-01-PLAN.md — BrainOutput type em shared, BrainOutputSchema em core, testes unitários do schema
+- [x] 10-02-PLAN.md — BrainStateAnnotation com brainOutput, BrainRunner.run() novo retorno e validação
+- [x] 10-03-PLAN.md — brain-echo migrado para setar brainOutput, IBrainRunnerLike e handler.ts atualizados
+- [ ] 10-04-PLAN.md — [gap closure] remover .js stale de packages/shared/src/, reconstruir dist/, verificar 17 testes do runner
 
 ### Phase 11: Tool Contracts SDK
 **Goal**: O SDK suporta controle de tools via ENV e disponibiliza `pause_session` e `finish_conversation` como tools padrão que qualquer Brain pode habilitar
@@ -89,6 +90,6 @@ Plans:
 | 7. LeadService + RabbitMQ Transport | v1.1 | 2/2 | Complete | 2026-06-14 |
 | 8. BrainRunner + Conversation History | v1.1 | 2/2 | Complete | 2026-06-14 |
 | 9. Brain SDR | v1.1 | 4/4 | Complete | 2026-06-14 |
-| 10. Output Parser SDK | v1.2 | 0/3 | Planned | - |
+| 10. Output Parser SDK | v1.2 | 3/4 | Gap closure | 2026-06-15 |
 | 11. Tool Contracts SDK | v1.2 | 0/? | Not started | - |
 | 12. Brain SDR Integration | v1.2 | 0/? | Not started | - |
