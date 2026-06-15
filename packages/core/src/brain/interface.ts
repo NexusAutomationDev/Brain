@@ -34,6 +34,12 @@ export interface IBrain {
   brainType: string;
   /** Keys to load from prompts table for this brainType at startup */
   promptKeys: string[];
+  /**
+   * Optional default prompt content — { [key]: content } where keys match promptKeys.
+   * When defined, POST /reload-prompts upserts these to the DB before reloading.
+   * Allows code to be the source of truth: deploy new code → call /reload-prompts → done.
+   */
+  defaultPrompts?: Record<string, string>;
   /** Full tool list — Runner filters via ToolsRegistry before injection */
   tools: StructuredTool[];
   /**

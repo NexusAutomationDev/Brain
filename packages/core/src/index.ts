@@ -12,8 +12,8 @@ export type { BrainRunnerOptions, BrainRunResult } from "./runner/runner.js";
 // SDK-03: ToolsRegistry
 export { ToolsRegistry } from "./tools/registry.js";
 
-// SDK-04: Prompts loader (used by BrainRunner internally, exposed for testing/advanced use)
-export { loadPrompts } from "./prompts/loader.js";
+// SDK-04: Prompts loader/upserter (used by BrainRunner internally, exposed for testing/advanced use)
+export { loadPrompts, upsertPrompts } from "./prompts/loader.js";
 
 // SDK-05: Core server (createCoreApp — exposes /reload-prompts endpoint)
 export { createCoreApp } from "./server.js";

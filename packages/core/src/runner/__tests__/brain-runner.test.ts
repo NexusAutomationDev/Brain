@@ -9,9 +9,11 @@ import { AIMessage, HumanMessage } from "@langchain/core/messages";
 const mockLoadPrompts = mock(async () => ({
   "system": "You are a test assistant",
 }));
+const mockUpsertPrompts = mock(async () => {});
 
 mock.module("../../prompts/loader.js", () => ({
   loadPrompts: mockLoadPrompts,
+  upsertPrompts: mockUpsertPrompts,
 }));
 
 // Mock createCheckpointer to use MemorySaver (AI-01: allowed in *.test.ts)
@@ -241,6 +243,34 @@ describe("BrainRunner", () => {
     expect(mockLoadPrompts.mock.calls.length).toBeGreaterThan(callCountBefore);
     // Verify graph was recompiled by checking buildGraph was called again
     expect((brain.buildGraph as ReturnType<typeof mock>).mock.calls.length).toBeGreaterThan(1);
+  });
+
+  test("refreshPrompts() calls upsertPrompts when brain.defaultPrompts is defined", async () => {
+    mockUpsertPrompts.mockClear();
+    const brain: IBrain = {
+      ...makeBrain(["system"]),
+      defaultPrompts: { system: "Updated system prompt" },
+    };
+    const runner = new BrainRunner({ brain, sql: {} as never, toolsRegistry: registry });
+    await runner.init();
+
+    await runner.refreshPrompts();
+
+    expect(mockUpsertPrompts).toHaveBeenCalledTimes(1);
+    const [, brainType, prompts] = mockUpsertPrompts.mock.calls[0] as [unknown, string, Record<string, string>];
+    expect(brainType).toBe("test");
+    expect(prompts).toEqual({ system: "Updated system prompt" });
+  });
+
+  test("refreshPrompts() does NOT call upsertPrompts when brain.defaultPrompts is undefined", async () => {
+    mockUpsertPrompts.mockClear();
+    const brain = makeBrain(["system"]); // no defaultPrompts
+    const runner = new BrainRunner({ brain, sql: {} as never, toolsRegistry: registry });
+    await runner.init();
+
+    await runner.refreshPrompts();
+
+    expect(mockUpsertPrompts).not.toHaveBeenCalled();
   });
 
   // --- Testes LEAD-03: gate ia_ativada ---

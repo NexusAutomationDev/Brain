@@ -18,7 +18,7 @@ import type { BrainEvent } from "@brain-pkg/transport";
 import type { Sql } from "postgres";
 import type { IBrain, BrainBuildContext } from "../brain/interface.js";
 import { ToolsRegistry } from "../tools/registry.js";
-import { loadPrompts } from "../prompts/loader.js";
+import { loadPrompts, upsertPrompts } from "../prompts/loader.js";
 import { LeadService } from "../leads/lead-service.js";
 import type { Lead } from "../leads/lead-service.js";
 
@@ -130,6 +130,11 @@ export class BrainRunner {
    */
   async refreshPrompts(): Promise<void> {
     this.logger.info({ brainId: this.brain.id }, "Refreshing prompts");
+    // D-07: If Brain defines defaultPrompts, upsert them to DB before reloading.
+    // This lets code be the source of truth: modify defaultPrompts → deploy → call /reload-prompts.
+    if (this.brain.defaultPrompts) {
+      await upsertPrompts(this.sql, this.brain.brainType, this.brain.defaultPrompts);
+    }
     this.prompts = await loadPrompts(this.sql, this.brain.brainType, this.brain.promptKeys);
     await this._compileGraph();
     this.logger.info({ brainId: this.brain.id }, "Prompts refreshed and graph recompiled");
