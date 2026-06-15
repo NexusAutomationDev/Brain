@@ -16,7 +16,23 @@ import type { StructuredTool } from "@langchain/core/tools";
  */
 export class ToolsRegistry {
   // brainType → Set of allowed tool names (whitelist)
-  private registry = new Map<string, Set<string>>();
+  private readonly registry = new Map<string, Set<string>>();
+
+  // WR-03: BRAIN_TOOLS parsed once at construction to avoid inconsistency if env
+  // changes between enableTool() calls during startup. null = no filter (all allowed).
+  private readonly envWhitelist: Set<string> | null;
+
+  constructor() {
+    const raw = process.env.BRAIN_TOOLS;
+    if (raw !== undefined) {
+      // WR-02: filter(Boolean) removes empty strings produced by BRAIN_TOOLS=""
+      const parsed = raw.split(",").map((s) => s.trim()).filter(Boolean);
+      // WR-02: treat BRAIN_TOOLS="" (parsed.length === 0) as "unset" — all tools allowed
+      this.envWhitelist = parsed.length > 0 ? new Set(parsed) : null;
+    } else {
+      this.envWhitelist = null;
+    }
+  }
 
   /**
    * Register a brainType with no tools (for brains that use tools: []).
@@ -33,16 +49,18 @@ export class ToolsRegistry {
    * Creates the brainType entry if it does not exist.
    */
   enableTool(brainType: string, toolName: string): void {
-    // D-07/D-08/D-09: BRAIN_TOOLS whitelist — ausente = sem filtro (TOOLS-ENV-01, TOOLS-ENV-02)
-    const envWhitelist = process.env.BRAIN_TOOLS
-      ?.split(",")
-      .map((s) => s.trim());
-    if (envWhitelist !== undefined && !envWhitelist.includes(toolName)) {
-      return; // silently ignored — sem log, sem erro (D-07)
-    }
+    // WR-01: Always register the brainType entry first so getTools() never throws
+    // ConfigurationError when BRAIN_TOOLS filters out all tools for this brainType.
     if (!this.registry.has(brainType)) {
       this.registry.set(brainType, new Set());
     }
+
+    // D-07/D-08/D-09: BRAIN_TOOLS whitelist — ausente = sem filtro (TOOLS-ENV-01, TOOLS-ENV-02)
+    // envWhitelist is null when BRAIN_TOOLS is unset or empty (WR-02, WR-03)
+    if (this.envWhitelist !== null && !this.envWhitelist.has(toolName)) {
+      return; // silently ignored — sem log, sem erro (D-07)
+    }
+
     this.registry.get(brainType)!.add(toolName);
   }
 
