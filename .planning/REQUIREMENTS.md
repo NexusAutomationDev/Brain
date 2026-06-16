@@ -68,4 +68,4 @@
 
 ---
 *Requirements defined: 2026-06-15*
-*Last updated: 2026-06-15 — milestone v1.3 initial definition*
+*Last updated: 2026-06-15 — traceability confirmed after roadmap creation (phases 14-16)*

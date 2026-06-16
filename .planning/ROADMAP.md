@@ -5,6 +5,7 @@
 - ✅ **v1.0 MVP** — Phases 1-4 (shipped 2026-06-13) — [archive](milestones/v1.0-ROADMAP.md)
 - ✅ **v1.1 Brain SDR + Infraestrutura Produção** — Phases 5-9 (shipped 2026-06-14) — [archive](milestones/v1.1-ROADMAP.md)
 - ✅ **v1.2 Output Parser + Tool Contracts** — Phases 10-13 (shipped 2026-06-15) — [archive](milestones/v1.2-ROADMAP.md)
+- 🚧 **v1.3 MCP Integration + Dynamic responseMode** — Phases 14-16 (in progress)
 
 ## Phases
 
@@ -39,6 +40,59 @@
 
 </details>
 
+### 🚧 v1.3 MCP Integration + Dynamic responseMode (In Progress)
+
+**Milestone Goal:** Conectar Brains a ferramentas externas via MCP e deixar o LLM controlar o formato de resposta dinamicamente.
+
+- [ ] **Phase 14: TD-01 Fix** — qualifier.ts com prepare: false, elimina blocker de produção com PgBouncer
+- [ ] **Phase 15: MCP Integration** — Brain conecta a servidor MCP externo, registra tools no startup, SIGTERM limpo
+- [ ] **Phase 16: Dynamic responseMode** — LLM escolhe responseMode via schema-as-tool, sem hardcode, multi-provider
+
+## Phase Details
+
+### Phase 14: TD-01 Fix
+**Goal**: qualifier.ts opera com prepare: false, compatível com PgBouncer transaction mode em produção
+**Depends on**: Phase 13
+**Requirements**: TD-01
+**Success Criteria** (what must be TRUE):
+  1. qualifier.ts abre conexão postgres com `prepare: false` — mesma configuração do TenantPoolManager
+  2. Sub-agente de qualificação executa sem erro em ambiente com PgBouncer transaction mode
+  3. Testes existentes do qualifier continuam passando após a mudança
+**Plans**: TBD
+
+Plans:
+- [ ] TBD
+
+### Phase 15: MCP Integration
+**Goal**: Brain SDR conecta a servidor MCP externo via ENV, usa MCP tools como LangGraph tools nativas, e encerra conexão de forma limpa no SIGTERM
+**Depends on**: Phase 14
+**Requirements**: MCP-01, MCP-02, MCP-03, MCP-04, MCP-05
+**Success Criteria** (what must be TRUE):
+  1. Com MCP_URL e MCP_TOOLS definidos, Brain lista e usa MCP tools no grafo junto com tools nativas (qualify_lead, pause_session, finish_conversation)
+  2. Com MCP server inacessível no startup, Brain inicializa normalmente com zero MCP tools e log de warn — tools nativas permanecem intactas
+  3. Timeout ou erro em MCP tool durante execução gera ToolMessage de erro no histórico — thread_id do lead não fica corrompido em chamadas subsequentes
+  4. SIGTERM encerra processo Bun sem hang — `runner.close()` fecha MultiServerMCPClient antes do `process.exit(0)`
+  5. Sem MCP_URL definido, BrainRunner ignora MCP completamente — comportamento idêntico ao v1.2
+**Plans**: TBD
+**UI hint**: no
+
+Plans:
+- [ ] TBD
+
+### Phase 16: Dynamic responseMode
+**Goal**: LLM escolhe responseMode (text/audio/image) dinamicamente via schema-as-tool — sem valor hardcoded no código, funcionando em OpenAI e Anthropic
+**Depends on**: Phase 15
+**Requirements**: RESP-01, RESP-02, RESP-03
+**Success Criteria** (what must be TRUE):
+  1. LLM retorna responseMode "audio" ou "image" quando o contexto da conversa exige — sem instrução explícita de prompt para cada valor
+  2. fullResponse contém o texto da resposta sem alteração pelo mecanismo de seleção de formato
+  3. Brain SDR com provider OpenAI e com provider Anthropic produz BrainOutput válido com responseMode correto — mesmo código de grafo, sem branching por provider
+  4. Remover `responseMode: "text"` hardcoded do nó llm não quebra nenhum teste existente — BrainOutputValidationError não é disparado em fluxo normal
+**Plans**: TBD
+
+Plans:
+- [ ] TBD
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -56,6 +110,9 @@
 | 11. Tool Contracts SDK | v1.2 | 2/2 | Complete | 2026-06-15 |
 | 12. Brain SDR Integration | v1.2 | 2/2 | Complete | 2026-06-15 |
 | 13. Suporte a PgBouncer | v1.2 | 2/2 | Complete | 2026-06-15 |
+| 14. TD-01 Fix | v1.3 | 0/? | Not started | - |
+| 15. MCP Integration | v1.3 | 0/? | Not started | - |
+| 16. Dynamic responseMode | v1.3 | 0/? | Not started | - |
 
 ## Backlog
 
@@ -70,3 +127,13 @@
 
 Plans:
 - [ ] TBD (promote with /gsd-review-backlog when ready)
+
+### Phase 1000: Expor contagem de tokens gastos na resposta da API REST e RabbitMQ
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 999
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 1000 to break down)
