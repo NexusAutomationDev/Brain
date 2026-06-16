@@ -25,7 +25,7 @@ async function saveQualificationToMemories(
   motivo: string,
   proximo_passo: string
 ): Promise<void> {
-  const sql = postgres(dbUrl, { max: 1 });
+  const sql = postgres(dbUrl, { max: 1, prepare: false }); // PGB-TD01: prepare:false — PgBouncer transaction mode nao suporta prepared statements
   try {
     const value = { qualificado, motivo, proximo_passo, timestamp: new Date().toISOString() };
     await sql`
@@ -193,6 +193,8 @@ export async function runQualificationAgent(
   try {
     // D-06: PostgresSaver.fromConnString sem setup() — tabelas já existem
     // Pitfall 4: NÃO chamar saver.setup() aqui
+    // D-03: PostgresSaver usa driver pg (node-postgres v8.21) internamente — nao aceita prepare:false.
+    // Limitacao documentada em packages/ai/src/graph/checkpointer.ts. Fora do escopo de TD-01.
     const saver = PostgresSaver.fromConnString(dbUrl);
 
     // CR-01 fix: fechar pg.Pool após getTuple() — saver não é usado após esta chamada
