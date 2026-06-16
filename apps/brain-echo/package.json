@@ -22,6 +22,7 @@
     "drizzle-orm": "0.45.2"
   },
   "devDependencies": {
+    "@langchain/core": "^1.1.48",
     "@types/bun": "latest",
     "typescript": "^5.0.0"
   }

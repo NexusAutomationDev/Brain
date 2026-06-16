@@ -1,4 +1,5 @@
 import { describe, test, expect, mock, afterEach } from "bun:test";
+import { AIMessage } from "@langchain/core/messages";
 
 describe("EchoBrain — IBrain contract", () => {
   test("placeholder: arquivo existe e é parseável", () => {
@@ -156,5 +157,121 @@ describe("HIST-03: context window no nó do grafo", () => {
       expect(sliced.length).toBe(2);
       expect(sliced[sliced.length - 1]).toMatchObject({ content: "msg5" });
     }
+  });
+});
+
+describe("BrainEcho — Fase 16: routeAfterLlm + nó respond (D-01, RESP-01)", () => {
+  test("bindTools com mcpTools=[] chama bindTools com 1 tool (respond)", async () => {
+    const mod = await import("../../brain.js");
+    const bindToolsMock = mock(() => ({
+      invoke: mock(async () => ({ content: "resposta", tool_calls: [] })),
+    }));
+    const ctx = {
+      llm: { bindTools: bindToolsMock },
+      prompts: { system: "s" },
+      tools: [],
+      mcpTools: [],
+    };
+    mod.echoBrain.buildGraph(ctx as any);
+    expect(bindToolsMock).toHaveBeenCalledTimes(1);
+    const callArgs = (bindToolsMock as any).mock.calls[0][0] as Array<{ name: string }>;
+    expect(callArgs).toHaveLength(1);
+    expect(callArgs[0].name).toBe("respond");
+  });
+
+  test("buildGraph() retorna grafo com nó 'respond' (addConditionalEdges para 3 destinos)", async () => {
+    const mod = await import("../../brain.js");
+    const ctx = {
+      llm: {
+        bindTools: mock(() => ({
+          invoke: mock(async () => ({ content: "ok", tool_calls: [] })),
+        })),
+      },
+      prompts: { system: "s" },
+      tools: [],
+      mcpTools: [],
+    };
+    const graph = mod.echoBrain.buildGraph(ctx as any) as any;
+    // O grafo deve ter um nó "respond" registrado
+    const nodes = graph.nodes ?? graph._nodes ?? {};
+    const nodeNames = Object.keys(nodes);
+    expect(nodeNames).toContain("respond");
+  });
+
+  test("LLM chamando respond tool seta brainOutput.responseMode corretamente", async () => {
+    const mod = await import("../../brain.js");
+    const bindToolsMock = mock(() => ({
+      invoke: mock(async () =>
+        new AIMessage({ content: "", tool_calls: [{ name: "respond", args: { fullResponse: "olá", responseMode: "audio" }, id: "tc-echo-1", type: "tool_call" }] })
+      ),
+    }));
+    const ctx = {
+      llm: { bindTools: bindToolsMock },
+      prompts: { system: "s" },
+      tools: [],
+      mcpTools: [],
+    };
+    const graph = mod.echoBrain.buildGraph(ctx as any);
+    const compiled = graph.compile();
+    const result = await compiled.invoke(
+      { messages: [{ role: "user", content: "responda em áudio" }] },
+      { configurable: { thread_id: "test-echo-respond-audio" } }
+    );
+    expect(result.brainOutput).toBeDefined();
+    expect(result.brainOutput.responseMode).toBe("audio");
+    expect(result.brainOutput.fullResponse).toBe("olá");
+  });
+
+  test("fallback D-10: responseMode 'undefined' quando LLM não chama nenhuma tool", async () => {
+    const mod = await import("../../brain.js");
+    const bindToolsMock = mock(() => ({
+      invoke: mock(async () =>
+        new AIMessage({ content: "texto plano sem tool", tool_calls: [] })
+      ),
+    }));
+    const ctx = {
+      llm: { bindTools: bindToolsMock },
+      prompts: { system: "s" },
+      tools: [],
+      mcpTools: [],
+    };
+    const graph = mod.echoBrain.buildGraph(ctx as any);
+    const compiled = graph.compile();
+    const result = await compiled.invoke(
+      { messages: [{ role: "user", content: "olá" }] },
+      { configurable: { thread_id: "test-echo-fallback-d10" } }
+    );
+    expect(result.brainOutput).toBeDefined();
+    expect(result.brainOutput.responseMode).toBe("undefined");
+  });
+});
+
+describe("BrainEcho — routeAfterLlm guarda ToolNode vazio (mcpTools=[])", () => {
+  test("quando mcpTools=[] e LLM chama tool desconhecida, roteia para END (não para 'tools')", async () => {
+    const mod = await import("../../brain.js");
+    // LLM simula tool call com nome desconhecido (não é "respond", não é MCP tool)
+    const bindToolsMock = mock(() => ({
+      invoke: mock(async () =>
+        new AIMessage({ content: "", tool_calls: [{ name: "tool_inexistente", args: {}, id: "tc-unknown", type: "tool_call" }] })
+      ),
+    }));
+    const ctx = {
+      llm: { bindTools: bindToolsMock },
+      prompts: { system: "s" },
+      tools: [],
+      sql: {} as any,
+      mcpTools: [], // sem MCP tools — ToolNode de "tools" estaria vazio
+    };
+    const graph = mod.echoBrain.buildGraph(ctx as any);
+    const compiled = graph.compile();
+    // O grafo deve terminar sem lançar erro (fallback D-10 via END)
+    // brainOutput.responseMode será "undefined" pois o nó llm seta fallback quando sem respond call
+    const result = await compiled.invoke(
+      { messages: [{ role: "user", content: "olá" }] },
+      { configurable: { thread_id: "test-echo-guard-empty-toolnode" } }
+    );
+    // Não deve lançar erro de ToolNode vazio; brainOutput deve existir com responseMode undefined
+    expect(result.brainOutput).toBeDefined();
+    expect(result.brainOutput.responseMode).toBe("undefined");
   });
 });
