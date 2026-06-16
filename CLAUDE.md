@@ -289,6 +289,15 @@ Novo Brain = novo app em `apps/brain-{tipo}/` que:
 4. Tem seu próprio `Dockerfile` (imagem independente)
 
 O SDK (`packages/core`) cuida de todo o resto: lifecycle, migrations, transport, LangGraph, PostgresSaver.
+
+### Onde Colocar Código Novo — packages/ vs apps/
+
+O projeto é multi-Brain por design. Antes de criar qualquer coisa, perguntar: **"outro Brain poderia usar isso?"**
+
+- **`packages/`** → código reutilizável por qualquer Brain (SDK, core, transport, utils, serviços genéricos)
+- **`apps/brain-{tipo}/`** → apenas o que for **explicitamente exclusivo** de um único tipo de Brain (prompts, tools específicas, fluxos particulares)
+
+Nunca colocar em `apps/` algo que outro Brain poderia aproveitar — isso vai contra o propósito da arquitetura compartilhada.
 <!-- GSD:architecture-end -->
 
 <!-- GSD:skills-start source:skills/ -->
