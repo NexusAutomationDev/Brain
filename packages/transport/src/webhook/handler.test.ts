@@ -55,10 +55,14 @@ describe("WebhookTransport handler (TRANS-02, TRP-02)", () => {
   it("POST /api/v1/webhook with runner injected returns 200 { status: 'ok', fullResponse, responseMode } (D-01, D-02)", async () => {
     // D-01 (Fase 12): resposta com BrainOutput completo — fullResponse, responseMode
     // D-02 (Fase 12): campo 'reply' removido — breaking change intencional
+    // TOK-05: runner agora retorna wrapper { brainOutput, tokenUsage }
     const mockRunner = {
       run: async (_event: unknown) => ({
-        fullResponse: "Olá! Posso te ajudar.",
-        responseMode: "text" as const,
+        brainOutput: {
+          fullResponse: "Olá! Posso te ajudar.",
+          responseMode: "text" as const,
+        },
+        tokenUsage: { inputTokens: 512, outputTokens: 128, totalTokens: 640 },
       }),
     };
     const appWithRunner = createWebhookApp(mockRunner);
@@ -79,6 +83,56 @@ describe("WebhookTransport handler (TRANS-02, TRP-02)", () => {
     expect(body.responseMode).toBe("text");
     // D-02: campo 'reply' removido — não deve existir na resposta
     expect(body.reply).toBeUndefined();
+  });
+
+  it("POST /api/v1/webhook with runner returns tokenUsage in response body (D-09, TOK-05)", async () => {
+    const mockRunner = {
+      run: async (_event: unknown) => ({
+        brainOutput: {
+          fullResponse: "Resposta do Brain.",
+          responseMode: "text" as const,
+        },
+        tokenUsage: { inputTokens: 512, outputTokens: 128, totalTokens: 640 },
+      }),
+    };
+    const appWithRunner = createWebhookApp(mockRunner);
+    const req = new Request("http://localhost/api/v1/webhook", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${TEST_TOKEN}`,
+      },
+      body: JSON.stringify(validEvent),
+    });
+    const res = await appWithRunner.fetch(req);
+    expect(res.status).toBe(200);
+    const body = await res.json() as Record<string, unknown>;
+    expect(body.status).toBe("ok");
+    expect(body.tokenUsage).toBeDefined();
+    const usage = body.tokenUsage as Record<string, number>;
+    expect(usage.inputTokens).toBe(512);
+    expect(usage.outputTokens).toBe(128);
+    expect(usage.totalTokens).toBe(640);
+  });
+
+  it("POST /api/v1/webhook with runner returning null returns { status: 'ignored' } without tokenUsage (TOK-05d)", async () => {
+    const mockRunner = {
+      run: async (_event: unknown) => null,
+    };
+    const appWithNullRunner = createWebhookApp(mockRunner);
+    const req = new Request("http://localhost/api/v1/webhook", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${TEST_TOKEN}`,
+      },
+      body: JSON.stringify(validEvent),
+    });
+    const res = await appWithNullRunner.fetch(req);
+    expect(res.status).toBe(200);
+    const body = await res.json() as Record<string, unknown>;
+    expect(body.status).toBe("ignored");
+    expect(body.tokenUsage).toBeUndefined();
   });
 
   it("POST /api/v1/webhook with old payload { conversationId, stepIndex, userId, content } returns 400", async () => {
