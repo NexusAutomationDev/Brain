@@ -142,6 +142,8 @@ function makeBrain(promptKeys = ["system"]): IBrain {
             fullResponse: "test reply",
             responseMode: "text",
           },
+          // TOK-03: tokenUsage acumulado pelo BrainStateAnnotation reducer
+          tokenUsage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
         })),
         getState: mock(async () => ({ values: { messages: [] } })),  // HIST-03
       })),
@@ -233,7 +235,7 @@ describe("BrainRunner", () => {
     }
   });
 
-  test("run(event) retorna BrainOutput com fullResponse e responseMode", async () => {
+  test("run(event) retorna wrapper com brainOutput.fullResponse e brainOutput.responseMode", async () => {
     const brain = makeBrain(["system"]);
     const runner = new BrainRunner({
       brain,
@@ -245,11 +247,11 @@ describe("BrainRunner", () => {
     const result = await runner.run(makeEvent());
 
     expect(result).not.toBeNull();
-    expect(result!.fullResponse).toBe("test reply");
-    expect(result!.responseMode).toBe("text");
+    expect(result?.brainOutput.fullResponse).toBe("test reply");
+    expect(result?.brainOutput.responseMode).toBe("text");
   });
 
-  test("run() retorna BrainOutput — sem vazamento de estado interno", async () => {
+  test("run() retorna wrapper com brainOutput — sem vazamento de estado interno", async () => {
     const brain = makeBrain(["system"]);
     const runner = new BrainRunner({
       brain,
@@ -260,10 +262,77 @@ describe("BrainRunner", () => {
     await runner.init();
     const result = await runner.run(makeEvent());
 
-    expect(result).toHaveProperty("fullResponse");
-    expect(result).toHaveProperty("responseMode");
+    expect(result?.brainOutput).toHaveProperty("fullResponse");
+    expect(result?.brainOutput).toHaveProperty("responseMode");
     expect(result).not.toHaveProperty("messages");  // T-05-03: estado interno não vaza
     expect(result).not.toHaveProperty("sessionId");
+  });
+
+  // --- Testes TOK-04: wrapper { brainOutput, tokenUsage } ---
+
+  test("run() returns wrapper { brainOutput, tokenUsage } (D-02, D-08, TOK-04a)", async () => {
+    const brain = makeBrain(["system"]);
+    const runner = new BrainRunner({ brain, sql: {} as never, toolsRegistry: registry });
+    await runner.init();
+    const result = await runner.run(makeEvent());
+
+    expect(result).not.toBeNull();
+    expect(result?.brainOutput).toBeDefined();
+    expect(result?.brainOutput.fullResponse).toBe("test reply");
+    expect(result?.brainOutput.responseMode).toBe("text");
+    expect(result?.tokenUsage).toEqual({ inputTokens: 10, outputTokens: 5, totalTokens: 15 });
+  });
+
+  test("run() returns null when ia_ativada=false (behavior preserved, TOK-04b)", async () => {
+    mockUpsertLead.mockImplementationOnce(async () => ({
+      id: "uuid-1",
+      uniqueId: "lead-abc",
+      numero: "5511999990001",
+      nome: "Test User",
+      iaAtivada: false,
+      fullpp: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }));
+    const brain = makeBrain(["system"]);
+    const runner = new BrainRunner({ brain, sql: {} as never, toolsRegistry: registry });
+    await runner.init();
+    const result = await runner.run(makeEvent());
+    expect(result).toBeNull();
+  });
+
+  test("run() tokenUsage usa valores do state.tokenUsage retornado pelo grafo (TOK-04c)", async () => {
+    const brain = makeBrain(["system"]);
+    const runner = new BrainRunner({ brain, sql: {} as never, toolsRegistry: registry });
+    await runner.init();
+    const result = await runner.run(makeEvent());
+
+    // Valores vêm do mock de invoke() que retorna tokenUsage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 }
+    expect(result?.tokenUsage.inputTokens).toBe(10);
+    expect(result?.tokenUsage.outputTokens).toBe(5);
+    expect(result?.tokenUsage.totalTokens).toBe(15);
+  });
+
+  test("run() tokenUsage retorna zeros quando invoke() não inclui tokenUsage (TOK-04d — fallback seguro)", async () => {
+    const brainSemTokenUsage: IBrain = {
+      ...makeBrain(),
+      buildGraph: mock(() => ({
+        compile: mock(() => ({
+          invoke: mock(async () => ({
+            messages: [new MockHumanMessage("hello"), new MockAIMessage("test reply")],
+            brainOutput: { fullResponse: "test reply", responseMode: "text" },
+            // tokenUsage ausente — simula provider antigo sem suporte a usage_metadata
+          })),
+          getState: mock(async () => ({ values: { messages: [] } })),
+        })),
+      })) as unknown as IBrain["buildGraph"],
+    };
+    const runner = new BrainRunner({ brain: brainSemTokenUsage, sql: {} as never, toolsRegistry: registry });
+    await runner.init();
+    const result = await runner.run(makeEvent());
+
+    expect(result).not.toBeNull();
+    expect(result?.tokenUsage).toEqual({ inputTokens: 0, outputTokens: 0, totalTokens: 0 });
   });
 
   test("refreshPrompts() reloads prompts from DB and recompiles the graph", async () => {
@@ -339,7 +408,7 @@ describe("BrainRunner", () => {
       expect(result).toBeNull();
     });
 
-    test("run() retorna BrainOutput quando iaAtivada=true", async () => {
+    test("run() retorna wrapper quando iaAtivada=true", async () => {
       // mockUpsertLead default já retorna iaAtivada: true — sem override necessário
       const brain = makeBrain(["system"]);
       const runner = new BrainRunner({ brain, sql: {} as never, toolsRegistry: registry });
@@ -347,7 +416,7 @@ describe("BrainRunner", () => {
 
       const result = await runner.run(makeEvent());
       expect(result).not.toBeNull();
-      expect(result?.fullResponse).toBe("test reply");
+      expect(result?.brainOutput.fullResponse).toBe("test reply");
     });
 
     test("run() chama upsertLead com Numero, IDLead e Name do evento", async () => {
@@ -468,7 +537,7 @@ describe("BrainRunner", () => {
       // run() não deve lançar erro — getState retorna values.messages=[]
       const result = await runner.run(makeEvent());
       expect(result).not.toBeNull();
-      expect(result?.fullResponse).toBe("test reply");
+      expect(result?.brainOutput.fullResponse).toBe("test reply");
     });
 
     test("usa CONTEXT_WINDOW_MESSAGES=10 quando definida", async () => {
@@ -478,7 +547,7 @@ describe("BrainRunner", () => {
       await runner.init();
       const result = await runner.run(makeEvent());
       expect(result).not.toBeNull();
-      expect(result?.fullResponse).toBe("test reply");
+      expect(result?.brainOutput.fullResponse).toBe("test reply");
     });
 
     test("fallback para 40 quando CONTEXT_WINDOW_MESSAGES é inválida ('abc')", async () => {
@@ -489,7 +558,7 @@ describe("BrainRunner", () => {
       // Não deve lançar, não deve usar NaN como window size
       const result = await runner.run(makeEvent());
       expect(result).not.toBeNull();
-      expect(result?.fullResponse).toBe("test reply");
+      expect(result?.brainOutput.fullResponse).toBe("test reply");
     });
 
     test("run() chama getState() com thread_id correto antes do invoke", async () => {
