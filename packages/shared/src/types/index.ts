@@ -26,3 +26,14 @@ export interface BrainOutput {
   /** URL externa do arquivo — obrigatório para image/video/document (D-06: sem upload base64) */
   mediaUrl?: string;
 }
+
+/**
+ * Contagem de tokens consumidos em um turno de conversa.
+ * Soma de todos os LLM calls no turno (D-06).
+ * Zeros explícitos quando o provider não reporta tokens (D-05).
+ */
+export interface TokenUsage {
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+}
