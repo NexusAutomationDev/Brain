@@ -89,10 +89,11 @@ Plans:
   2. fullResponse contém o texto da resposta sem alteração pelo mecanismo de seleção de formato
   3. Brain SDR com provider OpenAI e com provider Anthropic produz BrainOutput válido com responseMode correto — mesmo código de grafo, sem branching por provider
   4. Remover `responseMode: "text"` hardcoded do nó llm não quebra nenhum teste existente — BrainOutputValidationError não é disparado em fluxo normal
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] TBD
+- [ ] 16-01-PLAN.md — createRespondTool() + ResponseMode "undefined" + ResponseModeSchema + barrel export + testes unitários
+- [ ] 16-02-PLAN.md — brain-sdr e brain-echo: routeAfterLlm + nó respond + testes atualizados + docs recriados
 
 ### Phase 17: Expor contagem de tokens gastos na resposta da API REST e RabbitMQ
 **Goal**: Capturar e expor consumo de tokens LLM (inputTokens/outputTokens/totalTokens) por turno — acumulado via BrainStateAnnotation, retornado no wrapper de BrainRunner.run(), exposto na resposta HTTP e logado no RabbitMQ consumer
@@ -130,7 +131,7 @@ Plans:
 | 13. Suporte a PgBouncer | v1.2 | 2/2 | Complete | 2026-06-15 |
 | 14. TD-01 Fix | v1.3 | 1/1 | Complete    | 2026-06-16 |
 | 15. MCP Integration | v1.3 | 3/3 | Complete    | 2026-06-16 |
-| 16. Dynamic responseMode | v1.3 | 0/? | Not started | - |
+| 16. Dynamic responseMode | v1.3 | 0/2 | Not started | - |
 | 17. Expor contagem de tokens gastos | v1.3 | 3/3 | Complete    | 2026-06-16 |
 
 ## Backlog
