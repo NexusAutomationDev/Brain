@@ -541,17 +541,19 @@ Fase 16 é puramente código TypeScript — sem dependências externas adicionai
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Opção A vs Opção B para o nó respond**
    - O que sabemos: ToolNode padrão retorna apenas `{ messages: [ToolMessage] }` — não atualiza `brainOutput`
    - O que é incerto: LangGraph suporta `Command` como retorno de tool para atualizar estado arbitrário — se a respond tool usar `Command`, poderia ser um ToolNode
    - Recomendação: Usar Opção A (nó regular). É o padrão mais simples, não requer importar `Command`, e mantém consistência com o estilo do projeto. ToolNode sem `handleToolErrors` (D-02) para falhar explicitamente se schema inválido ainda é satisfeito com um nó regular.
+   - RESOLVED: Opção A (nó regular `addNode("respond", async (state) => {...})`) escolhida — adotada nos planos 16-01 e 16-02. ToolMessage é emitido explicitamente no nó, preservando paridade AIMessage/ToolMessage de D-02.
 
 2. **brain-echo não tem respond tool como default — precisa?**
    - O que sabemos: brain-echo existe como brain de validação/eco; não tem tools nativas; usa mcpTools
    - O que é incerto: D-01 e D-02 do CONTEXT.md mencionam "brain-sdr e brain-echo" — implica que ambos recebem a mudança
    - Recomendação: Implementar em ambos conforme CONTEXT.md. brain-echo sem `respond` tool quebraria o contrato de `brainOutput` quando usado sem MCP tools (responderia apenas texto plano → D-10 fallback).
+   - RESOLVED: Implementado em ambos conforme D-01/D-02 do CONTEXT.md — plano 16-02 Task 2 cobre brain-echo.
 
 ---
 
