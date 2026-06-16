@@ -81,3 +81,15 @@ describe("CR-01: PostgresSaver connection leak — saver.end() em finally", () =
     expect(endLine).not.toMatch(/as any/);
   });
 });
+
+describe("PGB-TD01: prepare: false em saveQualificationToMemories", () => {
+  const src = readFileSync(resolve(import.meta.dir, "../../qualifier.ts"), "utf-8");
+  // Excluir linhas de comentario para evitar falsos positivos
+  const codeLines = src.split("\n").filter(l => !l.trim().startsWith("//")).join("\n");
+
+  test("postgres() em saveQualificationToMemories passa prepare: false (PgBouncer transaction mode)", () => {
+    // Mesmo padrao de PGB-05 em migrate.test.ts (linhas 126-132)
+    const hasPrepare = /postgres\(dbUrl,\s*\{[^}]*prepare:\s*false/.test(codeLines);
+    expect(hasPrepare).toBe(true);
+  });
+});
