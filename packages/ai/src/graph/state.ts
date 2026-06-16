@@ -1,6 +1,6 @@
 import { Annotation, messagesStateReducer } from "@langchain/langgraph";
 import type { BaseMessage } from "@langchain/core/messages";
-import type { BrainOutput } from "@brain-pkg/shared";
+import type { BrainOutput, TokenUsage } from "@brain-pkg/shared";
 
 /**
  * AI-03: Brain graph state schema.
@@ -16,7 +16,7 @@ import type { BrainOutput } from "@brain-pkg/shared";
 export const BrainStateAnnotation = Annotation.Root({
   // AI-03: schema_version uses last-write-wins reducer — NOT messagesStateReducer
   schema_version: Annotation<number>({
-    default: () => 1,
+    default: () => 2, // incrementado: tokenUsage adicionado ao shape
     reducer: (_, next) => next,
   }),
   messages: Annotation<BaseMessage[]>({
@@ -40,6 +40,18 @@ export const BrainStateAnnotation = Annotation.Root({
   brainOutput: Annotation<BrainOutput | null>({
     default: () => null,
     reducer: (_, next) => next,
+  }),
+  // D-06, D-07: tokenUsage — acumulador de tokens por turno
+  // Reducer de soma (diferente de last-write-wins): cada nó llm retorna delta,
+  // BrainStateAnnotation acumula todos os LLM calls do turno.
+  // Default: zeros (não null) — garante que state.tokenUsage nunca é undefined após invoke() (Pitfall 2)
+  tokenUsage: Annotation<TokenUsage>({
+    default: () => ({ inputTokens: 0, outputTokens: 0, totalTokens: 0 }),
+    reducer: (prev, next) => ({
+      inputTokens: (prev?.inputTokens ?? 0) + (next?.inputTokens ?? 0),
+      outputTokens: (prev?.outputTokens ?? 0) + (next?.outputTokens ?? 0),
+      totalTokens: (prev?.totalTokens ?? 0) + (next?.totalTokens ?? 0),
+    }),
   }),
 });
 

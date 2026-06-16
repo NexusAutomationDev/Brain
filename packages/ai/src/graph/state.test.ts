@@ -53,7 +53,14 @@ describe("BrainStateAnnotation (AI-03)", () => {
       messages: [],
       userId: "u1",
       sessionId: "s1",
+      brainOutput: null,
+      tokenUsage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
     };
     expect(_typeCheck.schema_version).toBe(1);
+  });
+
+  it("state schema contains tokenUsage field", () => {
+    const state = BrainStateAnnotation.spec;
+    expect("tokenUsage" in state).toBe(true);
   });
 });
