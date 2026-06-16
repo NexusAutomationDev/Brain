@@ -3,7 +3,7 @@
 // D-03: buildGraph() retorna StateGraph NÃO compilado — BrainRunner chama .compile({ checkpointer })
 
 import { StateGraph } from "@langchain/langgraph";
-import { BrainStateAnnotation } from "@brain-pkg/ai";
+import { BrainStateAnnotation, extractTokenUsage } from "@brain-pkg/ai";
 import type { IBrain, BrainBuildContext } from "@brain-pkg/core";
 
 export const echoBrain: IBrain = {
@@ -46,6 +46,7 @@ export const echoBrain: IBrain = {
             fullResponse,
             responseMode: "text" as const,  // brain-echo é text-only em v1.2
           },
+          tokenUsage: extractTokenUsage(response),  // D-07: delta do LLM call atual
         };
       })
       .addEdge("__start__", "llm")
