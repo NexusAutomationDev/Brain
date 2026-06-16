@@ -9,7 +9,7 @@
 import { tool } from "@langchain/core/tools";
 import { StateGraph } from "@langchain/langgraph";
 import { ToolNode, toolsCondition } from "@langchain/langgraph/prebuilt";
-import { BrainStateAnnotation } from "@brain-pkg/ai";
+import { BrainStateAnnotation, extractTokenUsage } from "@brain-pkg/ai";
 import type { IBrain, BrainBuildContext } from "@brain-pkg/core";
 import { createPauseSessionTool, createFinishConversationTool } from "@brain-pkg/core";
 import { qualifyLeadTool, runQualificationAgent } from "./qualifier.js";
@@ -87,6 +87,7 @@ export const sdrBrain: IBrain = {
         return {
           messages: [response],
           brainOutput: { fullResponse, responseMode: "text" as const },
+          tokenUsage: extractTokenUsage(response),  // D-07: delta do LLM call atual
         };
       })
       // D-07 (Fase 12): ToolNode com 3 tools — qualify_lead, pause_session, finish_conversation

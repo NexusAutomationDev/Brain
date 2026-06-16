@@ -1,5 +1,5 @@
 // SDK-02: BrainRunner — host that orchestrates a complete conversation turn.
-// D-12: run() returns { brainOutput, tokenUsage } | null — wrapper with structured output + token consumption.
+// D-12: run() returns BrainOutput | null — structured output contract, LangGraph internal state does NOT leak.
 // D-06: Lifecycle: new BrainRunner({...}) sync → await runner.init() async → runner.run(event) per request.
 // D-06: init() fails with process.exit(1) if any promptKey is missing — fail-fast startup pattern.
 // D-07: refreshPrompts() reloads prompts AND recompiles graph (prompts are snapshot in buildGraph closure).
@@ -13,7 +13,7 @@ import { MemoryManager } from "@brain-pkg/memory";
 import { createTracingCallbacks } from "@brain-pkg/observability";
 import { createLogger } from "@brain-pkg/observability";
 import { ConfigurationError, BrainOutputValidationError } from "@brain-pkg/shared";
-import type { BrainOutput, TokenUsage } from "@brain-pkg/shared";
+import type { BrainOutput } from "@brain-pkg/shared";
 import type { BaseMessage } from "@langchain/core/messages";
 import type { BrainEvent } from "@brain-pkg/transport";
 import type { Sql } from "postgres";
@@ -140,13 +140,13 @@ export class BrainRunner {
 
   /**
    * D-12: Run a single conversation turn.
-   * Returns { brainOutput, tokenUsage } wrapper — structured output + token consumption.
+   * Returns BrainOutput — structured output contract (fullResponse + responseMode).
    * Returns null when ia_ativada=false (LEAD-03).
    * Throws BrainOutputValidationError if brainOutput is null or fails BrainOutputSchema.
    *
    * @param event - BrainEvent from transport layer (validated by BrainEventSchema before reaching here)
    */
-  async run(event: BrainEvent): Promise<{ brainOutput: BrainOutput; tokenUsage: TokenUsage } | null> {
+  async run(event: BrainEvent): Promise<BrainOutput | null> {
     if (!this.compiledGraph || !this.memoryManager) {
       throw new ConfigurationError(
         "BrainRunner.init() must be called before run()",
@@ -248,10 +248,7 @@ export class BrainRunner {
       },
     });
 
-    // D-02, D-08: extrair tokenUsage do estado retornado pelo grafo
-    // D-05: fallback para zeros quando provider não reporta usage_metadata
-    const tokenUsage: TokenUsage = result.tokenUsage ?? { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
-    return { brainOutput, tokenUsage };
+    return brainOutput;
   }
 
   /** Internal: compile the graph with checkpointer and inject context */

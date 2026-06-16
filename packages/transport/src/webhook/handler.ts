@@ -12,21 +12,14 @@ const logger = createLogger();
  * packages/core imports from @brain-pkg/transport (for BrainEvent).
  * If handler.ts imported from @brain-pkg/core it would create a cycle:
  *   core → transport → core.
- * D-02: Duck typed to wrapper { brainOutput, tokenUsage } — structurally compatible with BrainRunner.run() return.
+ * SDK-06: Duck typed to BrainOutput shape — structurally compatible with BrainRunner.run() return.
  */
 export interface IBrainRunnerLike {
   run(event: BrainEvent): Promise<{
-    brainOutput: {
-      fullResponse: string;
-      responseMode: string;
-      mediaType?: string;
-      mediaUrl?: string;
-    };
-    tokenUsage: {
-      inputTokens: number;
-      outputTokens: number;
-      totalTokens: number;
-    };
+    fullResponse: string;
+    responseMode: string;
+    mediaType?: string;
+    mediaUrl?: string;
   } | null>;
 }
 
@@ -88,15 +81,12 @@ export function createWebhookApp(runner?: IBrainRunnerLike): Hono {
         }
         // D-01 (Fase 12): retornar BrainOutput completo — fullResponse, responseMode, mediaType?, mediaUrl?
         // D-02 (Fase 12): campo 'reply' removido — breaking change intencional; downstream deve usar fullResponse
-        // D-09: incluir tokenUsage na resposta HTTP — sempre presente (D-05 garante zeros quando provider não reporta)
-        const { brainOutput, tokenUsage } = result;
         return c.json({
           status: "ok",
-          fullResponse: brainOutput.fullResponse,
-          responseMode: brainOutput.responseMode,
-          ...(brainOutput.mediaType && { mediaType: brainOutput.mediaType }),
-          ...(brainOutput.mediaUrl && { mediaUrl: brainOutput.mediaUrl }),
-          tokenUsage,
+          fullResponse: result.fullResponse,
+          responseMode: result.responseMode,
+          ...(result.mediaType && { mediaType: result.mediaType }),
+          ...(result.mediaUrl && { mediaUrl: result.mediaUrl }),
         });
       } catch (err) {
         // Log internally but never surface internals to the caller

@@ -110,12 +110,7 @@ export class RabbitMQTransport implements ITransport {
         this.retryMap.set(msgKey, attempt);
 
         try {
-          // D-10: capturar retorno para logar tokenUsage — sem publicação em fila
-          const result = await this.runner.run(parsed.data);
-          if (result) {
-            // D-10: log de consumo de tokens por turno — apenas números, sem PII (T-17-04)
-            this.logger.info({ tokenUsage: result.tokenUsage }, "turn token usage");
-          }
+          await this.runner.run(parsed.data);
           // Sucesso — limpar contador e ACK
           this.retryMap.delete(msgKey);
           return ConsumerStatus.ACK;

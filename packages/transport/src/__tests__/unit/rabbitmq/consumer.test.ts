@@ -1,23 +1,6 @@
 // TRP-03, TRP-04, TRP-05: RabbitMQTransport — consumer com ack manual, retry e DLQ
-// TOK-06: captura resultado de runner.run() e loga tokenUsage com pino.info
 import { describe, it, expect, mock, beforeEach, afterEach } from "bun:test";
 import { ConfigurationError } from "@brain-pkg/shared";
-
-// Mock @brain-pkg/observability ANTES do import do consumer — para capturar logger.info calls
-const mockLoggerInfo = mock((_obj: unknown, _msg?: string) => {});
-const mockLoggerError = mock((_obj: unknown, _msg?: string) => {});
-const mockLoggerWarn = mock((_obj: unknown, _msg?: string) => {});
-const mockLoggerDebug = mock((_obj: unknown, _msg?: string) => {});
-const mockLogger = {
-  info: mockLoggerInfo,
-  error: mockLoggerError,
-  warn: mockLoggerWarn,
-  debug: mockLoggerDebug,
-};
-
-mock.module("@brain-pkg/observability", () => ({
-  createLogger: mock(() => mockLogger),
-}));
 
 // Mock rabbitmq-client ANTES do import do consumer
 const mockHandlerRef: { fn: ((msg: unknown) => Promise<number>) | null } = { fn: null };
@@ -55,12 +38,8 @@ mock.module("rabbitmq-client", () => ({
 
 import { RabbitMQTransport } from "../../../rabbitmq/consumer.js";
 
-// TOK-06: wrapper shape — runner agora retorna { brainOutput, tokenUsage }
 const mockRunner = {
-  run: mock(async (_event: unknown) => ({
-    brainOutput: { fullResponse: "ok", responseMode: "text" as const },
-    tokenUsage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
-  })),
+  run: mock(async (_event: unknown) => ({ reply: "ok" })),
 };
 
 function makeMsg(body: unknown, deliveryTag = BigInt(1)) {
@@ -87,13 +66,7 @@ describe("RabbitMQTransport (TRP-03, TRP-04, TRP-05)", () => {
     mockPubClose.mockClear();
     mockRabbitClose.mockClear();
     (mockRunner.run as ReturnType<typeof mock>).mockClear();
-    // TOK-06: wrapper shape para reset padrão entre testes
-    (mockRunner.run as ReturnType<typeof mock>).mockResolvedValue({
-      brainOutput: { fullResponse: "ok", responseMode: "text" as const },
-      tokenUsage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
-    });
-    mockLoggerInfo.mockClear();
-    mockLoggerError.mockClear();
+    (mockRunner.run as ReturnType<typeof mock>).mockResolvedValue({ reply: "ok" });
     mockHandlerRef.fn = null;
 
     // Ambiente padrao valido
@@ -196,59 +169,5 @@ describe("RabbitMQTransport (TRP-03, TRP-04, TRP-05)", () => {
     expect(mockSubClose).toHaveBeenCalled();
     expect(mockPubClose).toHaveBeenCalled();
     expect(mockRabbitClose).toHaveBeenCalled();
-  });
-
-  // --- Testes TOK-06: log de tokenUsage ---
-
-  it("TOK-06a: loga tokenUsage com logger.info quando run() retorna wrapper (D-10)", async () => {
-    const transport = new RabbitMQTransport(mockRunner);
-    await transport.start();
-
-    const handler = mockHandlerRef.fn;
-    expect(handler).not.toBeNull();
-    await handler!(makeMsg(validBody));
-
-    // Verificar que logger.info foi chamado com { tokenUsage } e mensagem "turn token usage"
-    const infoCallsWithTokenUsage = mockLoggerInfo.mock.calls.filter(
-      (args) => {
-        const [obj, msg] = args as [unknown, string?];
-        return msg === "turn token usage" && typeof obj === "object" && obj !== null && "tokenUsage" in (obj as object);
-      }
-    );
-    expect(infoCallsWithTokenUsage.length).toBeGreaterThan(0);
-    const [logObj] = infoCallsWithTokenUsage[0] as [{ tokenUsage: { inputTokens: number; outputTokens: number; totalTokens: number } }];
-    expect(logObj.tokenUsage).toEqual({ inputTokens: 10, outputTokens: 5, totalTokens: 15 });
-  });
-
-  it("TOK-06b: não loga tokenUsage quando run() retorna null (ia_ativada=false)", async () => {
-    (mockRunner.run as ReturnType<typeof mock>).mockResolvedValueOnce(null);
-
-    const transport = new RabbitMQTransport(mockRunner);
-    await transport.start();
-
-    const handler = mockHandlerRef.fn;
-    expect(handler).not.toBeNull();
-    await handler!(makeMsg(validBody));
-
-    // Nenhuma chamada de logger.info com "turn token usage" deve ter ocorrido
-    const infoCallsWithTokenUsage = mockLoggerInfo.mock.calls.filter(
-      (args) => {
-        const [, msg] = args as [unknown, string?];
-        return msg === "turn token usage";
-      }
-    );
-    expect(infoCallsWithTokenUsage.length).toBe(0);
-  });
-
-  it("TOK-06d: não publica em fila quando runner.run() retorna wrapper (D-10 — sem publicação)", async () => {
-    const transport = new RabbitMQTransport(mockRunner);
-    await transport.start();
-
-    const handler = mockHandlerRef.fn;
-    expect(handler).not.toBeNull();
-    await handler!(makeMsg(validBody));
-
-    // pub.send() NÃO deve ser chamado no caminho de sucesso (apenas DLQ recebe pub.send)
-    expect(mockPubSend).not.toHaveBeenCalled();
   });
 });
