@@ -36,7 +36,7 @@ O escopo é limitado a:
 ### Captura e Aggregação
 
 - **D-06:** Somar tokens de **todos os LLM calls do turno** (não só o último). Custo real para billing — especialmente importante no ReAct do Brain SDR (llm → tools → llm → __end__).
-- **D-07:** Captura via acumulador em `BrainState`: `BrainStateAnnotation` em `packages/ai/src/graph/state.ts` ganha campo `tokenUsage` com reducer de soma. O nó `llm` de cada Brain é responsável por retornar `tokenUsage` acumulado a partir de `response.usage_metadata`.
+- **D-07:** Captura via acumulador em `BrainState`: `BrainStateAnnotation` em `packages/ai/src/graph/state.ts` ganha campo `tokenUsage` com reducer de soma. O nó `llm` de cada Brain retorna `tokenUsage` usando uma função helper **`extractTokenUsage(response: AIMessage): TokenUsage`** exportada de `packages/ai` — a lógica de extração de `response.usage_metadata` fica centralizada no package, não inline em cada Brain (CLAUDE.md: código reutilizável vai em `packages/`, não em `apps/`).
 - **D-08:** `BrainRunner.run()` extrai `state.tokenUsage` após o `compiledGraph.invoke()` e retorna no wrapper `{ brainOutput, tokenUsage }`.
 
 ### Exposição via Transporte
@@ -79,8 +79,9 @@ O escopo é limitado a:
 ### Estado do Grafo e Captura
 
 - `packages/ai/src/graph/state.ts` — `BrainStateAnnotation`; adicionar campo `tokenUsage` com reducer de soma (D-07)
-- `apps/brain-sdr/src/brain.ts` — nó `llm`; deve acumular `response.usage_metadata` em `tokenUsage` no retorno do nó (D-07)
-- `apps/brain-echo/src/brain.ts` — Brain echo também precisa do mesmo padrão no nó llm
+- `packages/ai/src/index.ts` (ou novo `packages/ai/src/utils/token.ts`) — exportar `extractTokenUsage(response: AIMessage): TokenUsage` helper (D-07, CLAUDE.md)
+- `apps/brain-sdr/src/brain.ts` — nó `llm`; usa `extractTokenUsage()` de `@brain-pkg/ai` para retornar `tokenUsage` (D-07)
+- `apps/brain-echo/src/brain.ts` — idem; usa o mesmo helper
 
 ### LangChain Token API
 
