@@ -41,8 +41,8 @@ created: 2026-06-16
 | 15-01-01 | 01 | 1 | MCP-01 | — | mcpTools array vazio quando MCP_URL ausente | unit | `bun test packages/core/src/__tests__/unit/mcp-init.test.ts` | ❌ W0 | ⬜ pending |
 | 15-01-02 | 01 | 1 | MCP-02 | — | MCP server inacessível → warn log + tools nativas intactas | unit | `bun test packages/core/src/__tests__/unit/mcp-init.test.ts` | ❌ W0 | ⬜ pending |
 | 15-01-03 | 01 | 1 | MCP-03 | — | ToolNode handleToolErrors captura erro MCP sem corromper thread | unit | `bun test packages/core/src/__tests__/unit/mcp-tool-error.test.ts` | ❌ W0 | ⬜ pending |
-| 15-01-04 | 01 | 2 | MCP-04 | — | SIGTERM → close() → process.exit(0) sem hang | manual | veja Manual-Only | — | ⬜ pending |
-| 15-01-05 | 01 | 2 | MCP-05 | — | MCP_TOOLS CSV filtra tools por nome exato | unit | `bun test packages/core/src/__tests__/unit/mcp-init.test.ts` | ❌ W0 | ⬜ pending |
+| 15-01-04 | 01 | 2 | MCP-05 | — | SIGTERM → close() → process.exit(0) sem hang | manual | veja Manual-Only | — | ⬜ pending |
+| 15-01-05 | 01 | 2 | MCP-01 | — | MCP_TOOLS CSV filtra tools por nome exato | unit | `bun test packages/core/src/__tests__/unit/mcp-init.test.ts` | ❌ W0 | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 

@@ -558,17 +558,17 @@ buildGraph(ctx: BrainBuildContext): any {
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **brain-echo com zero MCP tools — ToolNode break?**
    - O que sabemos: `new ToolNode([], { handleToolErrors: true })` com array vazio
-   - O que é incerto: se `toolsCondition` funciona corretamente quando `tool_calls` vem de `ctx.llm.bindTools([])` (LLM sem tools disponíveis)
-   - Recomendação: o planner pode optar por adicionar `toolsCondition` condicional em brain-echo somente quando `ctx.mcpTools.length > 0`, e manter o grafo simples sem tool calling quando array é vazio. Isso evita edge case.
+   - O que era incerto: se `toolsCondition` funciona corretamente quando `tool_calls` vem de `ctx.llm.bindTools([])` (LLM sem tools disponíveis)
+   - **RESOLVED:** Adotada a abordagem `toolsCondition` com `allTools = []` incondicionalmente. Com array vazio, `ctx.llm.bindTools([])` não expõe tools ao LLM, portanto o LLM nunca emite `tool_calls` — `toolsCondition` sempre roteia para `__end__`. `new ToolNode([], { handleToolErrors: true })` não lança na construção (verificado em 15-01 Task 1, teste "ToolNode com array vazio e handleToolErrors:true não lança em construção"). Implementado em 15-02 Task 2.
 
 2. **`onConnectionError: "ignore"` cobre erros de `getTools()`?**
    - O que sabemos: `onConnectionError` controla falhas na fase de `initializeConnections()`; `getTools()` chama `initializeConnections()` internamente
-   - O que é incerto: erros que ocorrem DEPOIS da conexão (ex: timeout na listagem de tools) podem não ser cobertos
-   - Recomendação: manter try/catch em torno de `getTools()` per D-12 como dupla proteção — não depender exclusivamente de `onConnectionError`.
+   - O que era incerto: erros que ocorrem DEPOIS da conexão (ex: timeout na listagem de tools) podem não ser cobertos
+   - **RESOLVED:** Adotada dupla proteção per D-12: `onConnectionError: "ignore"` cobre falhas na fase de conexão inicial; try/catch em torno de `getTools()` captura erros que ocorrem após a conexão (timeout na listagem, resposta malformada). Implementado em 15-01 Task 2 no bloco MCP de `_compileGraph()`.
 
 ---
 
