@@ -1,0 +1,71 @@
+# Requirements: Brain Core v1.3
+
+**Defined:** 2026-06-15
+**Core Value:** Infraestrutura de agentes modular onde novos Brains são criados definindo apenas prompts, tools, embeddings e fluxos — sem reescrever a base
+
+## v1.3 Requirements
+
+### MCP Integration
+
+- [ ] **MCP-01**: Brain se conecta a servidor MCP externo via `MCP_URL` ENV e carrega tools selecionadas por `MCP_TOOLS` CSV
+- [ ] **MCP-02**: Brain registra MCP tools como LangGraph `StructuredTool[]` no startup e as usa no grafo junto com tools nativas
+- [ ] **MCP-03**: Se MCP server estiver inacessível no startup, Brain continua operando com tools nativas (warn, sem falha)
+- [ ] **MCP-04**: Timeout ou falha de execução de MCP tool não corrompe o histórico de conversa do lead
+- [ ] **MCP-05**: Brain encerra conexão MCP de forma limpa no SIGTERM (processo Bun não trava no shutdown)
+
+### responseMode Dinâmico
+
+- [ ] **RESP-01**: LLM escolhe `responseMode` (`text`/`audio`/`image`) dinamicamente como parte do `BrainOutput` — sem valor hardcoded
+- [ ] **RESP-02**: Conteúdo de `fullResponse` não é alterado pelo mecanismo de seleção de formato
+- [ ] **RESP-03**: responseMode dinâmico funciona com OpenAI e Anthropic sem branching de código por provider
+
+### Tech Debt
+
+- [ ] **TD-01**: `qualifier.ts` usa `prepare: false` na conexão postgres — compatível com PgBouncer transaction mode
+
+## Future Requirements
+
+### MCP (pós v1.3)
+
+- **MCP-F01**: Suporte a múltiplos MCP servers simultâneos (multi-server config)
+- **MCP-F02**: MCP tools disponíveis para todos os Brains via config global (hoje: por Brain via ENV)
+- **MCP-F03**: Reload de MCP tools em runtime sem restart do container
+
+### responseMode (pós v1.3)
+
+- **RESP-F01**: responseMode `video` e `document` como valores adicionais
+- **RESP-F02**: Brain SDR publica `responseMode` + `mediaUrl` de volta ao RabbitMQ no canal de resposta
+
+## Out of Scope
+
+| Feature | Reason |
+|---------|--------|
+| Implementação do MCP server | Responsabilidade do cliente (n8n, custom) — Brain é apenas o consumidor |
+| SSE transport para MCP | Deprecated no spec MCP (março 2025); bug no Bun (ReferenceError: EventSource is not defined) |
+| `responseFormat` de `createReactAgent` | Segunda chamada LLM reescreve `fullResponse` (LangGraph #4756) — anti-pattern confirmado |
+| `withStructuredOutput()` no LLM do agente | Incompatível com `bindTools()` (langchainjs #7757) — silenciosamente descarta tool schemas |
+| UI de configuração de MCP | Futuro |
+| MCP com autenticação complexa (OAuth) | ENV simples (bearer token) suficiente para v1.3 |
+
+## Traceability
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| TD-01 | Phase 14 | Pending |
+| MCP-01 | Phase 15 | Pending |
+| MCP-02 | Phase 15 | Pending |
+| MCP-03 | Phase 15 | Pending |
+| MCP-04 | Phase 15 | Pending |
+| MCP-05 | Phase 15 | Pending |
+| RESP-01 | Phase 16 | Pending |
+| RESP-02 | Phase 16 | Pending |
+| RESP-03 | Phase 16 | Pending |
+
+**Coverage:**
+- v1.3 requirements: 9 total
+- Mapped to phases: 9
+- Unmapped: 0 ✓
+
+---
+*Requirements defined: 2026-06-15*
+*Last updated: 2026-06-15 — milestone v1.3 initial definition*
