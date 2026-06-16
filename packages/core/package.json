@@ -20,6 +20,7 @@
     "@brain-pkg/transport": "workspace:*",
     "@langchain/core": "^1.1.48",
     "@langchain/langgraph": "^1.4.1",
+    "@langchain/mcp-adapters": "1.1.3",
     "drizzle-orm": "0.45.2",
     "hono": "^4.12.0",
     "postgres": "^3.4.9",
