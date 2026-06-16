@@ -4,13 +4,13 @@ milestone: v1.3
 milestone_name: MCP Integration + Dynamic responseMode
 status: planning
 stopped_at: Phase 17 context gathered
-last_updated: "2026-06-16T00:59:56.788Z"
+last_updated: "2026-06-16T02:54:26.577Z"
 last_activity: 2026-06-16
 progress:
   total_phases: 5
-  completed_phases: 1
-  total_plans: 1
-  completed_plans: 1
+  completed_phases: 2
+  total_plans: 4
+  completed_plans: 4
   percent: 100
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-06-15 — milestone v1.3 started)
 
 ## Current Position
 
-Phase: 17 of 17 (expor contagem de tokens gastos na resposta da api rest e ra)
+Phase: 999.1 of 17 (responsemode dinâmico via structured output multi provider (backlog))
 Plan: Not started
 Status: Ready to plan
 Last activity: 2026-06-16
@@ -37,7 +37,7 @@ Progress: [░░░░░░░░░░] 0%
 
 **Velocity:**
 
-- Total plans completed: 1 (v1.3)
+- Total plans completed: 4 (v1.3)
 - Average duration: — (no plans yet)
 - Total execution time: —
 
@@ -46,6 +46,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 14 | 1 | - | - |
+| 17 | 3 | - | - |
 
 *Updated after each plan completion*
 

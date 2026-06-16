@@ -106,9 +106,9 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 17-01-PLAN.md — TokenUsage type + extractTokenUsage helper + BrainStateAnnotation.tokenUsage reducer
-- [ ] 17-02-PLAN.md — BrainRunner.run() wrapper + handler.ts HTTP response + consumer.ts log
-- [ ] 17-03-PLAN.md — Integrar extractTokenUsage nos nós llm de brain-sdr e brain-echo
+- [x] 17-01-PLAN.md — TokenUsage type + extractTokenUsage helper + BrainStateAnnotation.tokenUsage reducer
+- [x] 17-02-PLAN.md — BrainRunner.run() wrapper + handler.ts HTTP response + consumer.ts log
+- [x] 17-03-PLAN.md — Integrar extractTokenUsage nos nós llm de brain-sdr e brain-echo
 
 ## Progress
 
@@ -130,7 +130,7 @@ Plans:
 | 14. TD-01 Fix | v1.3 | 1/1 | Complete    | 2026-06-16 |
 | 15. MCP Integration | v1.3 | 0/? | Not started | - |
 | 16. Dynamic responseMode | v1.3 | 0/? | Not started | - |
-| 17. Expor contagem de tokens gastos | v1.3 | 0/3 | Not started | - |
+| 17. Expor contagem de tokens gastos | v1.3 | 3/3 | Complete    | 2026-06-16 |
 
 ## Backlog
 
@@ -141,7 +141,7 @@ Plans:
 **Context:** Hoje o brain-sdr sempre retorna `responseMode: "text"`. O system prompt contém o bloco `<response_format>` como referência comportamental (o LLM conhece os modos), mas sem um mecanismo de saída estruturada o LLM não consegue sinalizar `"audio"` quando o usuário pede. A solução correta é usar `response_format` (OpenAI) ou `generationConfig.responseMimeType` (Google) no nível da API — não instrução de prompt.
 
 **Requirements:** TBD
-**Plans:** 1/1 plans complete
+**Plans:** 3/3 plans complete
 
 Plans:
 - [ ] TBD (promote with /gsd-review-backlog when ready)
