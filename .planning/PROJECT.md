@@ -10,9 +10,9 @@ O primeiro Brain real (SDR) foi entregue no v1.1 — atende leads no WhatsApp co
 
 Uma infraestrutura de agentes modular onde novos Brains são criados definindo apenas prompts, tools, embeddings e fluxos — sem reescrever a base.
 
-## Current State: Planning v1.3
+## Current State: Phase 14 complete — TD-01 fix deployed
 
-Brain Core v1.2 entregou o contrato completo de saída estruturada e tool contracts para todos os Brains. v1.3 foca em conectar Brains a ferramentas externas via MCP e deixar o LLM controlar o formato de resposta dinamicamente.
+Brain Core v1.2 entregou o contrato completo de saída estruturada e tool contracts para todos os Brains. v1.3 foca em conectar Brains a ferramentas externas via MCP e deixar o LLM controlar o formato de resposta dinamicamente. Phase 14 complete: `prepare: false` aplicado em qualifier.ts — sub-agente de qualificação compatível com PgBouncer transaction mode.
 
 ## Current Milestone: v1.3 MCP Integration + Dynamic responseMode
 
