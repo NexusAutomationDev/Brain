@@ -6,6 +6,7 @@
 import { z } from "zod";
 
 export const ResponseModeSchema = z.enum([
+  "undefined",
   "text",
   "image",
   "audio",

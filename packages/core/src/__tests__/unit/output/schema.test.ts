@@ -1,6 +1,6 @@
 // PARSER-01: BrainOutputSchema — validação de contrato de saída
 import { describe, test, expect } from "bun:test";
-import { BrainOutputSchema } from "../../../output/schema.js";
+import { BrainOutputSchema, ResponseModeSchema } from "../../../output/schema.js";
 import { ZodError } from "zod";
 
 describe("BrainOutputSchema — PARSER-01", () => {
@@ -83,5 +83,31 @@ describe("BrainOutputSchema — PARSER-01", () => {
   test("safeParse retorna success=false sem lançar (API alternativa)", () => {
     const result = BrainOutputSchema.safeParse({ fullResponse: "", responseMode: "text" });
     expect(result.success).toBe(false);
+  });
+
+  test("undefined mode: fullResponse + responseMode são suficientes — fallback D-10", () => {
+    expect(() =>
+      BrainOutputSchema.parse({ fullResponse: "oi", responseMode: "undefined" })
+    ).not.toThrow();
+    const result = BrainOutputSchema.parse({ fullResponse: "oi", responseMode: "undefined" });
+    expect(result.responseMode).toBe("undefined");
+  });
+});
+
+describe("ResponseModeSchema — D-04, D-07", () => {
+  test("aceita 'undefined' como valor explícito (D-04)", () => {
+    expect(ResponseModeSchema.parse("undefined")).toBe("undefined");
+  });
+
+  test("aceita todos os valores originais do enum", () => {
+    expect(ResponseModeSchema.parse("text")).toBe("text");
+    expect(ResponseModeSchema.parse("audio")).toBe("audio");
+    expect(ResponseModeSchema.parse("image")).toBe("image");
+    expect(ResponseModeSchema.parse("video")).toBe("video");
+    expect(ResponseModeSchema.parse("document")).toBe("document");
+  });
+
+  test("rejeita valor inválido fora do enum", () => {
+    expect(() => ResponseModeSchema.parse("invalid_value")).toThrow(ZodError);
   });
 });

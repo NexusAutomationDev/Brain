@@ -5,11 +5,12 @@
 
 /**
  * Tipo de mídia da resposta do Brain.
+ * - "undefined": sem preferência de formato específica — valor padrão do fallback D-10
  * - "text": resposta textual pura
  * - "audio": texto para conversão TTS pelo sistema downstream (D-03)
  * - "image" | "video" | "document": requer mediaType + mediaUrl (D-04)
  */
-export type ResponseMode = "text" | "image" | "audio" | "video" | "document";
+export type ResponseMode = "undefined" | "text" | "image" | "audio" | "video" | "document";
 
 /**
  * Contrato de saída estruturado de todos os Brains.
