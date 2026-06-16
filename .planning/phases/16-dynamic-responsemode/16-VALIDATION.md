@@ -6,6 +6,7 @@ nyquist_compliant: true
 wave_0_complete: true
 created: 2026-06-16
 audited: 2026-06-16
+last_verified: 2026-06-16
 ---
 
 # Phase 16 — Validation Strategy
@@ -85,3 +86,15 @@ Existing infrastructure covers all phase requirements — bun test runner já in
 | Escalated (manual-only) | 0 |
 
 **Gap resolvido:** `apps/brain-sdr/src/brain.ts:172` — fallback D-10 retornava `responseMode: "text"` em vez de `"undefined"` (discrepância entre SUMMARY self-check e código real). Corrigido via edição direta; 16 testes passando após fix.
+
+---
+
+## Validation Audit 2026-06-16 (re-audit)
+
+| Metric | Count |
+|--------|-------|
+| Gaps found | 0 |
+| Resolved | 0 |
+| Escalated (manual-only) | 0 |
+
+**Resultado:** 54 testes executados, 0 falhas. Todos os 4 arquivos de teste confirmados verdes. VALIDATION.md consistente com o estado real do código.
