@@ -58,10 +58,10 @@
   1. qualifier.ts abre conexão postgres com `prepare: false` — mesma configuração do TenantPoolManager
   2. Sub-agente de qualificação executa sem erro em ambiente com PgBouncer transaction mode
   3. Testes existentes do qualifier continuam passando após a mudança
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] TBD
+- [ ] 14-01-PLAN.md — Adicionar prepare:false em qualifier.ts + static analysis test PGB-TD01
 
 ### Phase 15: MCP Integration
 **Goal**: Brain SDR conecta a servidor MCP externo via ENV, usa MCP tools como LangGraph tools nativas, e encerra conexão de forma limpa no SIGTERM
@@ -110,7 +110,7 @@ Plans:
 | 11. Tool Contracts SDK | v1.2 | 2/2 | Complete | 2026-06-15 |
 | 12. Brain SDR Integration | v1.2 | 2/2 | Complete | 2026-06-15 |
 | 13. Suporte a PgBouncer | v1.2 | 2/2 | Complete | 2026-06-15 |
-| 14. TD-01 Fix | v1.3 | 0/? | Not started | - |
+| 14. TD-01 Fix | v1.3 | 0/1 | Not started | - |
 | 15. MCP Integration | v1.3 | 0/? | Not started | - |
 | 16. Dynamic responseMode | v1.3 | 0/? | Not started | - |
 
