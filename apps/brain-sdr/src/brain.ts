@@ -169,7 +169,7 @@ export const sdrBrain: IBrain = {
           }
           return {
             messages: [response],
-            brainOutput: { fullResponse: fallback, responseMode: "text" as const },
+            brainOutput: { fullResponse: fallback, responseMode: "undefined" as const },
             tokenUsage: extractTokenUsage(response),
           };
         }
