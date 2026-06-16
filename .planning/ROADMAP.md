@@ -73,11 +73,12 @@ Plans:
   3. Timeout ou erro em MCP tool durante execução gera ToolMessage de erro no histórico — thread_id do lead não fica corrompido em chamadas subsequentes
   4. SIGTERM encerra processo Bun sem hang — `runner.close()` fecha MultiServerMCPClient antes do `process.exit(0)`
   5. Sem MCP_URL definido, BrainRunner ignora MCP completamente — comportamento idêntico ao v1.2
-**Plans**: TBD
-**UI hint**: no
+**Plans**: 3 plans
 
 Plans:
-- [ ] TBD
+- [ ] 15-01-PLAN.md — Instalar @langchain/mcp-adapters + testes Wave 0 + mcpTools em interface.ts + MCP lifecycle em runner.ts
+- [ ] 15-02-PLAN.md — brain-sdr e brain-echo espalham ctx.mcpTools + .env.example com variáveis MCP
+- [ ] 15-03-PLAN.md — Suite completa + checkpoint verificação manual SIGTERM
 
 ### Phase 16: Dynamic responseMode
 **Goal**: LLM escolhe responseMode (text/audio/image) dinamicamente via schema-as-tool — sem valor hardcoded no código, funcionando em OpenAI e Anthropic
@@ -128,7 +129,7 @@ Plans:
 | 12. Brain SDR Integration | v1.2 | 2/2 | Complete | 2026-06-15 |
 | 13. Suporte a PgBouncer | v1.2 | 2/2 | Complete | 2026-06-15 |
 | 14. TD-01 Fix | v1.3 | 1/1 | Complete    | 2026-06-16 |
-| 15. MCP Integration | v1.3 | 0/? | Not started | - |
+| 15. MCP Integration | v1.3 | 0/3 | Not started | - |
 | 16. Dynamic responseMode | v1.3 | 0/? | Not started | - |
 | 17. Expor contagem de tokens gastos | v1.3 | 3/3 | Complete    | 2026-06-16 |
 
