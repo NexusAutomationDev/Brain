@@ -63,6 +63,11 @@ export class BrainRunner {
   private memoryManager: MemoryManager | null = null;
   private mcpClient: MultiServerMCPClient | null = null;
   private leadService!: LeadService; // inicializado no construtor
+  // MCP session TTL: n8n fecha a sessão após inatividade; recompilamos antes de expirar.
+  // Configurável via MCP_SESSION_TTL_MS ENV (default: 4 min).
+  private mcpInitTime = 0;
+  private readonly mcpSessionTtlMs =
+    parseInt(process.env.MCP_SESSION_TTL_MS ?? "240000", 10);
 
   constructor(options: BrainRunnerOptions) {
     this.brain = options.brain;
@@ -165,6 +170,15 @@ export class BrainRunner {
       );
     }
 
+    // Reconexão automática de MCP: n8n fecha sessão após inatividade.
+    // Se MCP_URL está configurada e a sessão passou do TTL, recompila o grafo
+    // para obter um novo mcpClient e tools frescos antes de invocar.
+    const hasMcp = !!process.env.MCP_URL?.trim();
+    if (hasMcp && this.mcpInitTime > 0 && Date.now() - this.mcpInitTime > this.mcpSessionTtlMs) {
+      this.logger.info({ brainId: this.brain.id }, "MCP session TTL exceeded — reconnecting");
+      await this._compileGraph();
+    }
+
     // D-06: Fluxo — upsert lead → gate ia_ativada → LLM (LEAD-02, LEAD-03)
     const lead: Lead = await this.leadService.upsertLead(
       event.Numero,
@@ -217,6 +231,7 @@ export class BrainRunner {
         messages: [{ role: "human", content: event.Message }],
         userId: event.IDLead,
         sessionId: threadId,
+        leadName: lead.nome ?? "",
       },
       {
         configurable: { thread_id: threadId },
@@ -313,6 +328,11 @@ export class BrainRunner {
     const mcpUrl = process.env.MCP_URL?.trim();
 
     if (mcpUrl) {
+      // Fechar client antigo antes de reconectar — evita vazamento de conexão no TTL reconnect
+      if (this.mcpClient) {
+        await this.mcpClient.close().catch(() => {});
+        this.mcpClient = null;
+      }
       try {
         this.mcpClient = new MultiServerMCPClient({
           mcpServers: {
@@ -341,8 +361,9 @@ export class BrainRunner {
         }
 
         mcpTools = allTools;
+        this.mcpInitTime = Date.now();
         this.logger.info(
-          { brainId: this.brain.id, mcpToolCount: mcpTools.length },
+          { brainId: this.brain.id, mcpToolCount: mcpTools.length, mcpToolNames: mcpTools.map(t => t.name) },
           "MCP tools loaded successfully"
         );
       } catch (err) {
