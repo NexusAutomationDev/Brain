@@ -1,5 +1,5 @@
 import { describe, test, expect, mock } from "bun:test";
-import { AIMessage } from "@langchain/core/messages";
+import { AIMessage, HumanMessage } from "@langchain/core/messages";
 
 describe("BrainSDR — IBrain contract (SDR-01, SDR-04)", () => {
   test("sdrBrain.id é 'brain-sdr'", async () => {
@@ -174,6 +174,39 @@ describe("BrainSDR — MCP tools integration (MCP-02, D-03)", () => {
     expect(toolNames).toContain("pause_session");
     expect(toolNames).toContain("finish_conversation");
     expect(toolNames).toContain("respond");
+  });
+});
+
+describe("tokenUsage em BrainSDR llm node (D-06, D-07, TOK-07)", () => {
+  test("TOK-07: llm node populates tokenUsage from usage_metadata (D-07)", async () => {
+    const mod = await import("../../brain.js");
+    const mockLlm = {
+      bindTools: mock(() => ({
+        invoke: mock(async () =>
+          new AIMessage({
+            content: "resposta direta",
+            tool_calls: [],
+            usage_metadata: { input_tokens: 100, output_tokens: 50, total_tokens: 150 },
+          })
+        ),
+      })),
+    };
+    const ctx = {
+      llm: mockLlm,
+      prompts: { system: "You are helpful.", qualification: "Qual é o score?" },
+      tools: [],
+      sql: {} as any,
+      mcpTools: [],
+    };
+    const graph = mod.sdrBrain.buildGraph(ctx as any);
+    const compiled = graph.compile();
+    const result = await compiled.invoke(
+      { messages: [new HumanMessage("teste")] },
+      { configurable: { thread_id: "test-tok-07" } }
+    );
+    expect(result.tokenUsage.inputTokens).toBe(100);
+    expect(result.tokenUsage.outputTokens).toBe(50);
+    expect(result.tokenUsage.totalTokens).toBe(150);
   });
 });
 

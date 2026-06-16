@@ -275,3 +275,33 @@ describe("BrainEcho — routeAfterLlm guarda ToolNode vazio (mcpTools=[])", () =
     expect(result.brainOutput.responseMode).toBe("undefined");
   });
 });
+
+describe("tokenUsage em BrainEcho llm node (D-06, D-07, TOK-08)", () => {
+  test("TOK-08: llm node populates tokenUsage from usage_metadata (D-07)", async () => {
+    const mod = await import("../../brain.js");
+    const bindToolsMock = mock(() => ({
+      invoke: mock(async () =>
+        new AIMessage({
+          content: "resposta direta",
+          tool_calls: [],
+          usage_metadata: { input_tokens: 100, output_tokens: 50, total_tokens: 150 },
+        })
+      ),
+    }));
+    const ctx = {
+      llm: { bindTools: bindToolsMock },
+      prompts: { system: "You are helpful." },
+      tools: [],
+      mcpTools: [],
+    };
+    const graph = mod.echoBrain.buildGraph(ctx as any);
+    const compiled = graph.compile();
+    const result = await compiled.invoke(
+      { messages: [{ role: "user", content: "teste" }] },
+      { configurable: { thread_id: "test-tok-08" } }
+    );
+    expect(result.tokenUsage.inputTokens).toBe(100);
+    expect(result.tokenUsage.outputTokens).toBe(50);
+    expect(result.tokenUsage.totalTokens).toBe(150);
+  });
+});
