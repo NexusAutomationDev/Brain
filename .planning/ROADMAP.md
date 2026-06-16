@@ -5,7 +5,7 @@
 - ✅ **v1.0 MVP** — Phases 1-4 (shipped 2026-06-13) — [archive](milestones/v1.0-ROADMAP.md)
 - ✅ **v1.1 Brain SDR + Infraestrutura Produção** — Phases 5-9 (shipped 2026-06-14) — [archive](milestones/v1.1-ROADMAP.md)
 - ✅ **v1.2 Output Parser + Tool Contracts** — Phases 10-13 (shipped 2026-06-15) — [archive](milestones/v1.2-ROADMAP.md)
-- 🚧 **v1.3 MCP Integration + Dynamic responseMode** — Phases 14-16 (in progress)
+- 🚧 **v1.3 MCP Integration + Dynamic responseMode** — Phases 14-17 (in progress)
 
 ## Phases
 
@@ -110,9 +110,10 @@ Plans:
 | 11. Tool Contracts SDK | v1.2 | 2/2 | Complete | 2026-06-15 |
 | 12. Brain SDR Integration | v1.2 | 2/2 | Complete | 2026-06-15 |
 | 13. Suporte a PgBouncer | v1.2 | 2/2 | Complete | 2026-06-15 |
-| 14. TD-01 Fix | v1.3 | 1/1 | Complete   | 2026-06-16 |
+| 14. TD-01 Fix | v1.3 | 1/1 | Complete    | 2026-06-16 |
 | 15. MCP Integration | v1.3 | 0/? | Not started | - |
 | 16. Dynamic responseMode | v1.3 | 0/? | Not started | - |
+| 17. Expor contagem de tokens gastos | v1.3 | 0/? | Not started | - |
 
 ## Backlog
 
@@ -128,12 +129,12 @@ Plans:
 Plans:
 - [ ] TBD (promote with /gsd-review-backlog when ready)
 
-### Phase 1000: Expor contagem de tokens gastos na resposta da API REST e RabbitMQ
+### Phase 17: Expor contagem de tokens gastos na resposta da API REST e RabbitMQ
 
 **Goal:** [To be planned]
 **Requirements**: TBD
-**Depends on:** Phase 999
+**Depends on:** Phase 16
 **Plans:** 0 plans
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 1000 to break down)
+- [ ] TBD (run /gsd-plan-phase 17 to break down)

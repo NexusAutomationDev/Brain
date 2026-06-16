@@ -4,14 +4,14 @@ milestone: v1.3
 milestone_name: MCP Integration + Dynamic responseMode
 status: planning
 stopped_at: Phase 14 context gathered
-last_updated: "2026-06-16T00:20:29.949Z"
-last_activity: 2026-06-15 — Roadmap v1.3 created (phases 14-16)
+last_updated: "2026-06-16T00:44:20.313Z"
+last_activity: 2026-06-16
 progress:
   total_phases: 5
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+  completed_phases: 1
+  total_plans: 1
+  completed_plans: 1
+  percent: 100
 ---
 
 # Project State
@@ -26,10 +26,10 @@ See: .planning/PROJECT.md (updated 2026-06-15 — milestone v1.3 started)
 
 ## Current Position
 
-Phase: 14 of 16 (TD-01 Fix)
-Plan: — (not yet planned)
+Phase: 17 of 17 (expor contagem de tokens gastos na resposta da api rest e ra)
+Plan: Not started
 Status: Ready to plan
-Last activity: 2026-06-15 — Roadmap v1.3 created (phases 14-16)
+Last activity: 2026-06-16
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -37,7 +37,7 @@ Progress: [░░░░░░░░░░] 0%
 
 **Velocity:**
 
-- Total plans completed: 0 (v1.3)
+- Total plans completed: 1 (v1.3)
 - Average duration: — (no plans yet)
 - Total execution time: —
 
@@ -45,11 +45,15 @@ Progress: [░░░░░░░░░░] 0%
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| - | - | - | - |
+| 14 | 1 | - | - |
 
 *Updated after each plan completion*
 
 ## Accumulated Context
+
+### Roadmap Evolution
+
+- Phase 17 added: Expor contagem de tokens gastos na resposta da API REST e RabbitMQ
 
 ### Decisions
 
