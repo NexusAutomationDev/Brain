@@ -16,7 +16,7 @@ import type { BrainOutput, TokenUsage } from "@brain-pkg/shared";
 export const BrainStateAnnotation = Annotation.Root({
   // AI-03: schema_version uses last-write-wins reducer — NOT messagesStateReducer
   schema_version: Annotation<number>({
-    default: () => 2, // incrementado: tokenUsage adicionado ao shape
+    default: () => 3, // incrementado: leadName adicionado ao shape
     reducer: (_, next) => next,
   }),
   messages: Annotation<BaseMessage[]>({
@@ -29,6 +29,10 @@ export const BrainStateAnnotation = Annotation.Root({
     reducer: (_, next) => next,
   }),
   sessionId: Annotation<string>({
+    default: () => "",
+    reducer: (_, next) => next,
+  }),
+  leadName: Annotation<string>({
     default: () => "",
     reducer: (_, next) => next,
   }),
