@@ -401,17 +401,17 @@ Step 2.6: SKIPPED — fase é puramente code/type change. Nenhuma dependência e
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **`usage_metadata` para o nó `respond` (Phase 16 / Brain SDR com responseMode dinâmico)**
+1. **`usage_metadata` para o nó `respond` (Phase 16 / Brain SDR com responseMode dinâmico)** — DEFERRED: Phase 16 não implementada
    - O que sabemos: Phase 16 adiciona um nó `respond` separado com `respondTool`. Esse nó chama o LLM internamente.
    - O que está incerto: se o nó `respond` já retorna `tokenUsage` via `extractTokenUsage()` ou se o runner da fase 16 ainda não tem o campo `tokenUsage` no estado.
    - Recomendação: Verificar `apps/brain-sdr/src/brain.ts` após Phase 16 estar implementada. O planner deve tratar o nó `respond` como mais um nó `llm` que retorna `tokenUsage` delta.
 
-2. **`schema_version` — incrementar com adição de `tokenUsage` ao BrainState**
+2. **`schema_version` — incrementar com adição de `tokenUsage` ao BrainState** — RESOLVED: schema_version incrementado para 2 no Plan 01 Task 3
    - O que sabemos: `schema_version: 1` é o valor atual.
-   - O que está incerto: o comentário em `state.ts` diz "Increment when shape changes" — adição de campo é mudança de shape.
-   - Recomendação: Incrementar para `schema_version: 2` junto com a adição do campo `tokenUsage`. Sem migração de dados — o campo tem `default: () => zeros`, então estados antigos (sem `tokenUsage`) são compatíveis via forward-compatibility.
+   - O que estava incerto: o comentário em `state.ts` diz "Increment when shape changes" — adição de campo é mudança de shape.
+   - Resolução: Incrementar para `schema_version: 2` junto com a adição do campo `tokenUsage` (Plan 01 Task 3). Sem migração de dados — o campo tem `default: () => zeros`, então estados antigos (sem `tokenUsage`) são compatíveis via forward-compatibility.
 
 ---
 
