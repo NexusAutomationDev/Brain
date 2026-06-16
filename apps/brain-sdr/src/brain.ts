@@ -7,7 +7,8 @@
 // Anti-pattern: NUNCA usar ctx.tools no ToolNode — usar [boundQualifyTool] diretamente
 
 import { tool } from "@langchain/core/tools";
-import { AIMessage, ToolMessage } from "@langchain/core/messages";
+import { z } from "zod";
+import { AIMessage, HumanMessage, ToolMessage } from "@langchain/core/messages";
 import { StateGraph, END } from "@langchain/langgraph";
 import { ToolNode } from "@langchain/langgraph/prebuilt";
 import { BrainStateAnnotation, extractTokenUsage } from "@brain-pkg/ai";
@@ -32,12 +33,15 @@ export const sdrBrain: IBrain = {
     // D-04: boundQualifyTool — closure sobre ctx.prompts["qualification"] (SDR-04)
     // Garante que o prompt do banco é passado ao sub-agente em cada invocação da tool.
     // qualifyLeadTool (módulo) serve apenas como contrato de schema/name/description.
+    // Fix: session_id removido do schema — LLM não sabe o valor real.
+    // thread_id é injetado via RunnableConfig do LangGraph (config.configurable.thread_id).
     const boundQualifyTool = tool(
-      async ({ description, session_id }) => {
-        logger.info({ session_id }, "qualify_lead tool called (boundQualifyTool)");
+      async ({ description }, config) => {
+        const sessionId = (config as any)?.configurable?.thread_id ?? "";
+        logger.info({ sessionId }, "qualify_lead tool called (boundQualifyTool)");
         const result = await runQualificationAgent(
           description,
-          session_id,
+          sessionId,
           ctx.prompts["qualification"] // D-04: prompt do banco — zero hardcode
         );
         return JSON.stringify(result);
@@ -45,7 +49,13 @@ export const sdrBrain: IBrain = {
       {
         name: qualifyLeadTool.name,
         description: qualifyLeadTool.description,
-        schema: qualifyLeadTool.schema,
+        schema: z.object({
+          description: z
+            .string()
+            .describe(
+              "Breve descrição do momento da conversa e comportamento do lead que motivou a qualificação"
+            ),
+        }),
       }
     );
 
@@ -96,20 +106,62 @@ export const sdrBrain: IBrain = {
 
     return new StateGraph(BrainStateAnnotation)
       .addNode("llm", async (state) => {
-        // D-04: system prompt via ctx.prompts["system"] — zero hardcode (SDR-04)
-        const messagesForLLM = state.messages.slice(-getContextWindow());
+        // Substituição de {{ $json.Name }} no system prompt
+        const systemContent = ctx.prompts["system"]
+          .replace(/\{\{\s*\$json\.Name\s*\}\}/g, state.leadName || "");
+
+        // Fix: garantir que o slice começa em HumanMessage — evita AIMessage/ToolMessage
+        // órfão no início da janela, que o Gemini rejeita com 400 Bad Request.
+        const allMessages = state.messages;
+        const windowSize = getContextWindow();
+        let sliceStart = Math.max(0, allMessages.length - windowSize);
+        while (sliceStart < allMessages.length && allMessages[sliceStart]._getType() !== "human") {
+          sliceStart++;
+        }
+        const messagesForLLM = allMessages.slice(sliceStart);
+
+        // Injetar data/hora atual na última mensagem do lead (não persiste no checkpoint)
+        // Substitui {{ $now.format(...) }} e {{ $now.setLocale(...).weekdayLong }} (syntax n8n)
+        const nowTs = new Date();
+        const nowTz = 'America/Sao_Paulo';
+        const nowParts = new Intl.DateTimeFormat('pt-BR', {
+          timeZone: nowTz, day: '2-digit', month: '2-digit', year: 'numeric',
+          hour: '2-digit', minute: '2-digit', hour12: false,
+        }).formatToParts(nowTs);
+        const nowP: Record<string, string> = Object.fromEntries(nowParts.map(({ type, value }) => [type, value]));
+        const nowFormatted = `${nowP.day}/${nowP.month}/${nowP.year} ${nowP.hour}:${nowP.minute}`;
+        const nowWeekday = new Intl.DateTimeFormat('pt-BR', { timeZone: nowTz, weekday: 'long' }).format(nowTs);
+        const enrichedMessages = messagesForLLM.map((msg, idx) => {
+          if (idx === messagesForLLM.length - 1 && msg._getType() === "human") {
+            const original = typeof msg.content === "string" ? msg.content : "";
+            const enriched = `<informacoes>\nO horário atual é ${nowFormatted} de um(a) ${nowWeekday}\n</informacoes>\n\nmensagem:\n${original}`;
+            return new HumanMessage(enriched);
+          }
+          return msg;
+        });
+
         const response = await llmWithTools.invoke([
-          { role: "system", content: ctx.prompts["system"] },
-          ...messagesForLLM,
+          { role: "system", content: systemContent },
+          ...enrichedMessages,
         ]);
         // Fase 16: Lógica dual — caminho normal (respond tool) vs fallback D-10 (texto plano)
         const fullResponse = typeof response.content === "string" ? response.content : "";
         const toolCalls = (response as AIMessage).tool_calls ?? [];
         const hasRespondCall = toolCalls.some((tc: any) => tc.name === "respond");
+        const hasOtherToolCall = !hasRespondCall && toolCalls.length > 0;
+
+        if (hasOtherToolCall) {
+          // LLM chamou uma tool que não é respond (ex: getAvailableDate, qualify_lead)
+          // Deixar routeAfterLlm rotear para "tools" — NÃO setar brainOutput aqui
+          return {
+            messages: [response],
+            tokenUsage: extractTokenUsage(response),
+          };
+        }
 
         if (!hasRespondCall) {
-          // D-10 (Fase 16): fallback — LLM emitiu texto plano sem invocar respond tool (PITFALL-6)
-          // Comportamento degradado — não erro; logar como warn
+          // D-10 (Fase 16): PITFALL-6 real — LLM emitiu texto sem nenhuma tool call
+          const fallback = fullResponse || "Desculpe, tive um problema técnico. Pode repetir?";
           if (!fullResponse) {
             logger.warn("LLM emitiu resposta vazia sem tool call — PITFALL-6");
           } else {
@@ -117,7 +169,7 @@ export const sdrBrain: IBrain = {
           }
           return {
             messages: [response],
-            brainOutput: { fullResponse, responseMode: "undefined" as const },
+            brainOutput: { fullResponse: fallback, responseMode: "text" as const },
             tokenUsage: extractTokenUsage(response),
           };
         }
