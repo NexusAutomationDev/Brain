@@ -129,7 +129,7 @@ Plans:
 | 12. Brain SDR Integration | v1.2 | 2/2 | Complete | 2026-06-15 |
 | 13. Suporte a PgBouncer | v1.2 | 2/2 | Complete | 2026-06-15 |
 | 14. TD-01 Fix | v1.3 | 1/1 | Complete    | 2026-06-16 |
-| 15. MCP Integration | v1.3 | 3/3 | Complete | 2026-06-16 |
+| 15. MCP Integration | v1.3 | 3/3 | Complete    | 2026-06-16 |
 | 16. Dynamic responseMode | v1.3 | 0/? | Not started | - |
 | 17. Expor contagem de tokens gastos | v1.3 | 3/3 | Complete    | 2026-06-16 |
 
@@ -142,7 +142,7 @@ Plans:
 **Context:** Hoje o brain-sdr sempre retorna `responseMode: "text"`. O system prompt contém o bloco `<response_format>` como referência comportamental (o LLM conhece os modos), mas sem um mecanismo de saída estruturada o LLM não consegue sinalizar `"audio"` quando o usuário pede. A solução correta é usar `response_format` (OpenAI) ou `generationConfig.responseMimeType` (Google) no nível da API — não instrução de prompt.
 
 **Requirements:** TBD
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete
 
 Plans:
 - [ ] TBD (promote with /gsd-review-backlog when ready)
