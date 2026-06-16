@@ -195,3 +195,227 @@ Existing variables (`DATABASE_URL`, `OPENAI_API_KEY`, `LANGCHAIN_*`) are unchang
 
 *Stack research for: Brain Core v1.1 — RabbitMQ transport + Brain SDR (incremental)*
 *Researched: 2026-06-13*
+
+---
+
+---
+
+# Stack Research: v1.3 MCP Integration + Dynamic responseMode
+
+**Researched:** 2026-06-15
+**Scope:** New dependencies only — existing stack (Bun, Hono, LangGraph, Drizzle, postgres.js, pgvector, rabbitmq-client, Pino, Langfuse) is validated and unchanged.
+
+---
+
+## New Dependencies Needed
+
+| Package | Version | Purpose | Why |
+|---------|---------|---------|-----|
+| `@langchain/mcp-adapters` | `^1.1.3` | Convert MCP server tools into LangGraph-compatible `StructuredTool[]` | Official LangChain adapter; peer deps (`@langchain/core ^1.0.0`, `@langchain/langgraph ^1.3.4`) already satisfied by project; supports Streamable HTTP and SSE — both used by n8n MCP Server Trigger |
+| `@langchain/anthropic` | `^1.4.0` | Anthropic Claude provider with `.withStructuredOutput()` | **ALREADY INSTALLED** in `packages/ai/package.json` at `^1.4.0` (latest: 1.4.1 as of June 2026); no upgrade needed |
+
+**Total new packages: 1** (`@langchain/mcp-adapters`).
+
+The `@modelcontextprotocol/sdk` (`^1.29.0`) is a direct dependency of `@langchain/mcp-adapters` and installs automatically as a transitive dep — do not add it explicitly.
+
+### Where to Install
+
+```bash
+# packages/ai is where @langchain/langgraph and @langchain/core live
+cd packages/ai
+bun add @langchain/mcp-adapters
+```
+
+---
+
+## MCP Transport Protocol
+
+### What n8n MCP Server Trigger Exposes
+
+n8n's MCP Server Trigger node exposes HTTP endpoints. The transport evolved across n8n versions:
+
+| n8n Version | Transport | Endpoint Pattern |
+|-------------|-----------|-----------------|
+| Pre-v1.99 | SSE (HTTP+SSE, deprecated) | `/mcp/{id}/sse` |
+| v1.99+ (current, 2026) | Streamable HTTP | `/mcp/{id}` (no `/sse` suffix) |
+
+**The `/sse` postfix was removed in n8n v1.99** as part of the MCP spec migration to Streamable HTTP (spec revision 2025-03-26). The URL shown in the n8n trigger panel is used as-is — no manual modification required.
+
+The MCP Server Trigger node also still supports SSE for backward compatibility with older MCP clients.
+
+### Connecting from LangGraph via `MultiServerMCPClient`
+
+`@langchain/mcp-adapters` exports `MultiServerMCPClient` which supports three transport types: `stdio`, `sse`, and `http` (Streamable HTTP). For n8n:
+
+```typescript
+import { MultiServerMCPClient } from "@langchain/mcp-adapters";
+
+// Streamable HTTP — correct for n8n v1.99+ (2026 default)
+const client = new MultiServerMCPClient({
+  mcpServers: {
+    n8n: {
+      transport: "http",                     // Streamable HTTP
+      url: process.env.MCP_URL!,            // e.g. https://n8n.example.com/mcp/abc123
+      headers: {
+        Authorization: `Bearer ${process.env.MCP_TOKEN}`,
+      },
+      automaticSSEFallback: true,           // auto-fallback to SSE if server signals it
+    },
+  },
+});
+
+// Returns StructuredTool[] — plug directly into LangGraph ToolNode
+const mcpTools = await client.getTools();
+```
+
+For older n8n instances (pre-v1.99), use `transport: "sse"` and append `/sse` to the URL.
+
+### ENV-Driven Tool Filtering (`MCP_TOOLS`)
+
+The v1.3 requirement specifies `MCP_TOOLS` ENV as a whitelist. Pure application logic, no extra packages:
+
+```typescript
+const allMcpTools = await client.getTools();
+const allowed = (process.env.MCP_TOOLS ?? "").split(",").filter(Boolean);
+const tools = allowed.length > 0
+  ? allMcpTools.filter(t => allowed.includes(t.name))
+  : allMcpTools;
+
+// Register into LangGraph ToolNode alongside existing tools
+const toolNode = new ToolNode([...existingTools, ...tools]);
+```
+
+### `MultiServerMCPClient` Lifecycle Notes
+
+- **Stateless by default**: Each tool invocation creates a fresh MCP session, executes the tool, then closes. Good for the Brain's per-message execution model.
+- **Startup cost**: `getTools()` must be called before the graph runs — do it in `BrainRunner.init()` (or `IBrain.init()`), not on each message.
+- **Connection caching**: If MCP_URL is set, init the client once in startup; if unset, skip MCP tool registration entirely.
+
+---
+
+## Provider Compatibility for `.withStructuredOutput()`
+
+### Status
+
+Both `ChatOpenAI` and `ChatAnthropic` implement `.withStructuredOutput()` with Zod schemas. The call signature is identical across providers. The internal implementation differs but the behavior is equivalent for Zod schemas with the default method.
+
+### Method Options Comparison
+
+| Method | OpenAI | Anthropic | Recommendation |
+|--------|--------|-----------|----------------|
+| `"functionCalling"` (default, no option needed) | Tool-call with JSON output | Forces `tool_choice: {type: "tool", name: ...}` | **Use this** — most reliable cross-provider |
+| `"jsonSchema"` | Native Structured Outputs (`strict: true`) | Anthropic native structured output, no `strict` | Avoid for cross-provider code — subtle differences |
+| `"jsonMode"` | `response_format: {type: "json_object"}` | Not supported | Never use for Anthropic |
+
+**Use the default (no explicit `method` option).** Both providers fall through to `"functionCalling"` which works reliably with Zod schemas.
+
+### Zod Schema for `BrainOutput` with `responseMode`
+
+```typescript
+import { z } from "zod";
+
+// In packages/shared or packages/core — BrainOutputSchema
+const BrainOutputSchema = z.object({
+  fullResponse: z.string().describe("Complete response text to deliver to the user"),
+  responseMode: z.enum(["text", "audio", "image"]).describe(
+    "Output format chosen by the model: text for messages, audio for voice, image for visual content"
+  ),
+  // ...other existing BrainOutput fields
+});
+
+// Usage — identical for OpenAI and Anthropic:
+const structuredLlm = model.withStructuredOutput(BrainOutputSchema, {
+  name: "BrainOutput",  // REQUIRED for Anthropic — see gotchas below
+});
+```
+
+### Cross-Provider Gotchas
+
+**1. Always pass `name` option for Anthropic (HIGH priority)**
+Without `{ name: "SchemaName" }`, older Anthropic versions generate a generic tool name. In `@langchain/anthropic ^1.4.x` it should default cleanly, but passing `name` explicitly is required for reliability across both providers.
+
+**2. Make `responseMode` required, not optional**
+`z.enum(["text","audio","image"]).optional()` causes incomplete outputs on Anthropic — the model may omit the field when it's optional, producing a Zod validation error. The field must be required in the schema.
+
+**3. Do not combine `method: "jsonSchema"` with `strict: true`**
+In `@langchain/anthropic ^1.4.x`, passing `strict: true` together with `method: "jsonSchema"` throws. This is not a concern if using the default method (which is the recommendation).
+
+**4. Model must support tool calling**
+`.withStructuredOutput()` requires a model with tool-calling capability. Confirmed working: GPT-4o, GPT-4 Turbo, Claude 3+ (all variants including Haiku 3.5). Claude 2.x does NOT support tool calling — avoid if targeting older Claude.
+
+**5. No Bun-specific issues**
+LangChain providers use standard `fetch` API for all provider calls. Bun's native `fetch` is fully compatible. No shims or workarounds needed.
+
+### Version Alignment (already satisfied)
+
+```
+packages/ai/package.json — current state:
+  @langchain/anthropic:  ^1.4.0   ← current (1.4.1 latest June 2026)
+  @langchain/core:       ^1.1.48  ← satisfies peer dep ^1.0.0
+  @langchain/langgraph:  ^1.4.1   ← satisfies peer dep ^1.3.4
+  @langchain/openai:     ^1.4.7   ← current
+```
+
+No version bumps required for structured output functionality.
+
+---
+
+## Bun Runtime Risk: MCP SSE Transport Startup Latency
+
+**Severity: MEDIUM — mitigated by using Streamable HTTP transport.**
+
+Open Bun issue (#22396, reported September 2025, unresolved as of June 2026): `SSEClientTransport` startup takes ~15 seconds in Bun vs ~130ms in Node.js. Root cause is Bun's `EventSource` implementation behavior under the `@modelcontextprotocol/sdk`'s SSE client.
+
+**Mitigation:** Use `transport: "http"` (Streamable HTTP) in `MultiServerMCPClient`, never `transport: "sse"`. Streamable HTTP uses standard `fetch` (not `EventSource`), which Bun handles at full native speed. The `@modelcontextprotocol/sdk` v1.29.0 explicitly confirms Bun support for its Streamable HTTP transport.
+
+Since n8n v1.99+ exposes Streamable HTTP at `/mcp/{id}` by default, this risk is **neutralized** — the correct transport is also the performant one. Only a risk if connecting to an older n8n instance.
+
+---
+
+## What NOT to Add
+
+| Library | Why Avoid |
+|---------|-----------|
+| `@modelcontextprotocol/sdk` (direct dep) | Transitively installed by `@langchain/mcp-adapters`; adding directly risks version conflict |
+| `mcp` (older npm package) | Pre-standard, effectively unmaintained; replaced by `@modelcontextprotocol/sdk` |
+| `n8n-nodes-mcp` | Community node for n8n *consuming* MCP servers — wrong direction; we are the MCP client, not n8n |
+| `@h1deya/langchain-mcp-tools` | Third-party alternative; use the official `@langchain/mcp-adapters` |
+| `@langchain/community` | Not needed — MCP adapter is in `@langchain/mcp-adapters`, not community |
+| Direct `zod` version change | `@langchain/mcp-adapters` requires `zod "^3.25.76 || ^4"`; project uses `^4.4.3` — already satisfied |
+
+---
+
+## Confidence Assessment
+
+| Area | Confidence | Basis |
+|------|------------|-------|
+| `@langchain/mcp-adapters` version (1.1.3) | HIGH | npm package page confirmed; GitHub package.json confirmed |
+| n8n Streamable HTTP default (v1.99+) | MEDIUM | n8n community thread confirmed; official docs partially loaded |
+| Streamable HTTP transport config API | HIGH | GitHub source (client.ts) inspected; `transport: "http"` with `url` and `headers` confirmed |
+| `@langchain/anthropic` version (1.4.x) | HIGH | npm confirmed; `packages/ai/package.json` read directly |
+| `.withStructuredOutput()` cross-provider | MEDIUM | LangChain docs + GitHub issues reviewed; default `functionCalling` method confirmed working; some historical issues exist with `jsonSchema` method |
+| Bun SSE latency risk | HIGH | Bun issue #22396 confirmed; mitigation via Streamable HTTP confirmed |
+| `name` option requirement for Anthropic | MEDIUM | Referenced in multiple sources; best practice confirmed |
+
+---
+
+## Sources
+
+- `@langchain/mcp-adapters` npm (v1.1.3): https://www.npmjs.com/package/@langchain/mcp-adapters
+- `@langchain/mcp-adapters` source (client.ts transport types): https://github.com/langchain-ai/langchainjs/blob/main/libs/langchain-mcp-adapters/src/client.ts
+- LangChain MCP docs (JS): https://docs.langchain.com/oss/javascript/langchain/mcp
+- LangChain MCP streamable HTTP announcement: https://changelog.langchain.com/announcements/mcp-with-streamable-http-transport
+- `@langchain/anthropic` npm (v1.4.1, June 2026): https://www.npmjs.com/package/@langchain/anthropic
+- `@langchain/anthropic` withStructuredOutput reference: https://reference.langchain.com/javascript/langchain-anthropic/ChatAnthropic
+- `@modelcontextprotocol/sdk` GitHub (v1.29.0, Bun-compatible): https://github.com/modelcontextprotocol/typescript-sdk
+- Bun MCP SSE startup latency (open issue): https://github.com/oven-sh/bun/issues/22396
+- n8n MCP Server Trigger docs: https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-langchain.mcptrigger/
+- n8n community — /sse removed in v1.99: https://community.n8n.io/t/why-doesnt-the-mcp-trigger-node-url-include-sse-endpoint-v1-99-1-deployed-on-hostinger/145518
+- MCP spec: SSE deprecated, Streamable HTTP standard (March 2025): https://blog.fka.dev/blog/2025-06-06-why-mcp-deprecated-sse-and-went-with-streamable-http/
+- Anthropic structured output issue (langchain #30158): https://github.com/langchain-ai/langchain/issues/30158
+- `packages/ai/package.json` — read directly (confirmed installed versions)
+
+---
+
+*Stack research for: Brain Core v1.3 — MCP Integration + Dynamic responseMode (incremental)*
+*Researched: 2026-06-15*

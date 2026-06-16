@@ -1,246 +1,153 @@
-# Project Research Summary
+# Research Summary — v1.3 MCP Integration + Dynamic responseMode
 
-**Project:** Brain Core v1.1 — RabbitMQ Transport + Brain SDR + Lead Management
-**Domain:** Modular AI agent platform — async transport, lead identity, WhatsApp SDR conversations
-**Researched:** 2026-06-13
-**Confidence:** HIGH
+## Stack Additions
 
-## Executive Summary
+| Package | Version | Purpose | Status |
+|---------|---------|---------|--------|
+| `@langchain/mcp-adapters` | `^1.1.3` | `MultiServerMCPClient` — converte MCP tool schemas em `StructuredTool[]` para LangGraph | NOVO — instalar em `packages/core` |
+| `@langchain/anthropic` | `^1.4.0` | Anthropic Claude provider com `bindTools()` | JÁ INSTALADO — sem mudança |
 
-Brain Core v1.1 is an incremental build on top of a validated v1.0 foundation. The work centers on three interlocked concerns: (1) plugging a second transport into the existing `ITransport` interface (RabbitMQ via `rabbitmq-client`), (2) replacing the generic `users` table with a domain-specific `leads` table that drives conversation thread anchoring, and (3) shipping the first real Brain — Brain SDR — which qualifies leads over WhatsApp using LangGraph-orchestrated conversations. No new packages are needed beyond the RabbitMQ client, and no version bumps are required in the current lockfile.
-
-The critical architectural decision for v1.1 is that `leads.unique_id` (mapped from `IDLead` in incoming messages) becomes the `thread_id` for all LangGraph checkpoints. This single mapping — set once in `BrainRunner.run()` — gives every Brain persistent, lead-scoped conversation memory automatically. Everything downstream (context recovery, qualification state continuity) derives from getting this binding right. The stack also contains two existing gaps (GAP-1 in WebhookTransport runner injection, and the `amqplib-bun` vs `rabbitmq-client` package decision) that must be resolved before any new feature work begins.
-
-The highest risks in v1.1 are operational, not architectural: RabbitMQ consumer crashes from unhandled channel errors (INT-01), unacked messages freezing the queue on LangGraph exceptions (INT-02), and concurrent startup races in Drizzle migrations (INT-08). These are all preventable with established patterns. Brain SDR's qualification logic is the highest-effort work but follows proven patterns. The recommended approach is to ship a single-graph SDR in v1.1 and extract the qualification sub-agent to v1.2 once the conversation flow is validated.
+> Install: `cd packages/core && bun add @langchain/mcp-adapters`
+> `@modelcontextprotocol/sdk` é transitivo via mcp-adapters — NÃO adicionar diretamente.
 
 ---
 
-## Key Findings
+## Critical Architecture Decisions
 
-### Stack Additions
+**1. Schema-as-tool para responseMode — não `responseFormat`, não `withStructuredOutput` no LLM do agente**
 
-The v1.0 stack is unchanged and validated. The only new dependency is `rabbitmq-client@^5.0.8`, which supersedes the CLAUDE.md constraint naming `amqplib-bun`. The swap is warranted: `rabbitmq-client` is zero-production-dependencies, imports cleanly in Bun 1.3.2, provides built-in auto-reconnect, and avoids the `node:stream` compatibility issue (Bun #5627) that still affects `amqplib-bun`. No version bumps required — langgraph@1.4.1, checkpoint-postgres@1.0.3, drizzle-orm@0.45.2, postgres@3.4.9 are all current stable.
+`withStructuredOutput()` e `bindTools()` são mutuamente exclusivos na mesma instância LLM (langchainjs #7757, aberto, triage: high-impact). `createReactAgent`'s `responseFormat` dispara uma segunda chamada LLM que reescreve `fullResponse` (LangGraph #4756).
 
-**New dependencies:**
-- `rabbitmq-client@^5.0.8`: RabbitMQ async transport — zero deps, Bun-compatible, built-in auto-reconnect; replaces `amqplib-bun`
+Padrão correto (schema-as-tool):
+- Criar `createRespondTool()` em `packages/core/src/tools/respond.ts` — `tool()` cujo schema espelha `BrainOutputSchema`
+- Vincular via `bindTools()` apenas: `ctx.llm.bindTools([...realTools, respondTool])`
+- Adicionar nó `respond` que extrai `respondCall.args` e escreve `brainOutput` no state
+- Substituir `toolsCondition` por router customizado: se `tool_call.name === "respond"` → nó `respond`; senão → nó `tools`
+- Grafo passa de 2 para 3 nós: `llm → [router] → tools → llm` ou `→ respond → __end__`
 
-**New structural elements (code only, no packages):**
-- `IBrainRunnerLike` promoted to `packages/transport/src/runner-contract.ts` (shared by both transports)
-- `ILeadGate` in `packages/transport/src/lead-gate.ts` (allows transport to call lead lookup without importing from `core`)
+**2. MCP client lifecycle dentro de `BrainRunner._compileGraph()`**
 
-**What NOT to add:** `amqplib` vanilla, `amqp-connection-manager`, `@langchain/community`, `bullmq`, any stream-dependent AMQP library.
+`MultiServerMCPClient` inicializa uma vez por processo. `_compileGraph()` já é o único ponto onde `llm`, `checkpointer` e `tools` são conectados. Fluxo:
 
----
+```
+_compileGraph():
+  getTools(registry)
+  → SE MCP_URL: initMCPClient → getFilteredTools() [com defensive catch → []]
+  → allTools = [...brainTools, ...mcpTools]
+  → BrainBuildContext(allTools) → buildGraph() → compile()
+```
 
-### Feature Table Stakes
+Armazenar `this.mcpClient` no runner para `close()` no SIGTERM. Sem mudanças em `IBrain` ou `BrainBuildContext`.
 
-**RabbitMQ Consumer (non-negotiable):**
-- Manual ack (`autoAck: false`) — ack only after BrainRunner returns; `nack(requeue=false)` for permanent failures
-- `prefetch(1)` — one LLM call saturates a worker; `prefetch=0` causes unbounded heap growth
-- Graceful SIGTERM shutdown — cancel consumer tag, wait for in-flight, then close
-- Dead Letter Queue (DLQ) configured at queue assertion — never defer to v2
-- Queue assertion with `{ durable: true }` on startup — fail fast if RabbitMQ unreachable
+**3. `brain-sdr/src/brain.ts` deve espalhar `ctx.tools` em `ToolNode` e `bindTools()`**
 
-**Leads Schema (non-negotiable):**
-- Auto-registration on first message via `INSERT ... ON CONFLICT (numero) DO NOTHING` + re-fetch
-- `ia_ativada` checked as the FIRST gate after lead lookup — before any LangGraph invocation
-- UNIQUE constraint on `leads.numero` in the migration SQL (not only Drizzle schema)
-- `IDLead` → `unique_id` as stable cross-system identifier
+Atualmente `brain.ts` constrói tools inline e nunca usa `ctx.tools`. MCP tools não podem ser closure-bound. Fix:
 
-**Conversation History (non-negotiable):**
-- `thread_id = event.IDLead` — derived server-side, never from incoming payload
-- `trimMessages` context window management from day one — SDR conversations span 30-80 turns; cannot retrofit
-- No cross-lead thread_id leakage — always derive `thread_id` from `leads.unique_id` after DB lookup
+```typescript
+new ToolNode([boundQualifyTool, boundPauseSession, boundFinishConversation, ...ctx.tools])
+ctx.llm.bindTools([boundQualifyTool, boundPauseSession, boundFinishConversation, ...ctx.tools, respondTool])
+```
 
-**Brain SDR (non-negotiable):**
-- One message per response (WhatsApp UX) — enforce via system prompt
-- Qualification signals in LangGraph state fields, not only in message history
-- `handoff_requested` flag in state when lead requests human or sufficient signals captured
-- System prompt fetched from DB at runtime — qualification criteria must not be hardcoded
+**4. Transport: `"streamable_http"` (underscore), nunca `"streamable-http"` (hífen)**
 
-**Defer to v1.2:** qualification sub-agent as isolated subgraph; adaptive BANT/CHAMP routing; CRM write operations.
+O hífen lança `ValueError` no startup sem mensagem óbvia. Usar constante tipada: `const MCP_TRANSPORT = "streamable_http" as const`. Bug confirmado em mcp-adapters #322.
 
-**Estimated effort:** ~9-12 days: RabbitMQ (2d), leads schema + service (1d), conversation history (1-2d), Brain SDR simplified (4-5d), GAP-1 fix (0.5d).
+**5. Streamable HTTP sempre, SSE nunca**
+
+SSE está deprecated no spec MCP (março 2025). n8n v1.99+ usa Streamable HTTP em `/mcp/{id}`. SSE também aciona bug do Bun (`ReferenceError: EventSource is not defined`). Streamable HTTP usa `fetch` nativo — sem problemas no Bun.
 
 ---
 
-### Architecture Approach
+## Must-Have Features
 
-v1.1 adds components within existing packages — no new packages, no new dep edges. The dep graph `apps/* → core → ai, memory, transport, database, observability, shared` is preserved. The key structural element is `ILeadGate` living in `packages/transport`, which allows both transports to call lead lookup without importing `LeadService` from `packages/core` (which would create a cycle).
+### MCP Integration — Table Stakes
 
-**New components:**
-1. `packages/transport/src/rabbitmq/handler.ts` — `RabbitMQTransport implements ITransport`; constructor-injected runner + leadGate; manual ack/nack
-2. `packages/transport/src/runner-contract.ts` + `lead-gate.ts` — duck-type interfaces preventing circular deps
-3. `packages/database/src/schema/leads.ts` + migration — `leads` table; UNIQUE on `numero`; do NOT drop `users`
-4. `packages/core/src/leads/service.ts` — `LeadService` with `findOrCreate` via `ON CONFLICT`
-5. `apps/brain-sdr/` — new app parallel to `brain-echo`; LangGraph state with qualification fields
+| Feature | Notas |
+|---------|-------|
+| `MultiServerMCPClient` inicializado uma vez em `_compileGraph()` | Não por request — overhead não trivial |
+| `getTools()` filtrado por `MCP_TOOLS` CSV ENV | `MCP_TOOLS` vazio + `MCP_URL` presente → fail-fast |
+| Defensive catch em `getTools()` retornando `[]` | Nunca deixar falha MCP apagar tools nativas do Brain |
+| Descrições das MCP tools injetadas no system prompt | LLM precisa de contexto para saber quando chamá-las |
+| `client.close()` no SIGTERM | Previne hang do processo Bun durante deploy rolling |
+| `MCP_URL` ausente → pular MCP completamente, sem falha | MCP é puramente aditivo para Brains que não precisam |
+| `transport: "streamable_http"` via constante tipada | Nunca depender de auto-negociação em produção |
 
-**Modified components:**
-- `packages/transport/src/webhook/events.ts` — breaking schema change: `{Name, Message, Numero, IDLead}` replaces `{conversationId, stepIndex, userId, content}`; all test fixtures must update in the same PR
-- `packages/transport/src/webhook/handler.ts` — GAP-1 fix: runner + leadGate constructor injection
-- `packages/transport/src/factory.ts` — updated signature: `createTransport(runner, leadGate?, type?)`
-- `packages/core/src/runner/runner.ts` — field mapping: `event.IDLead → threadId`, `event.Numero → userId`
+### responseMode Dinâmico — Table Stakes
 
-**Build order (dependency-enforced):**
-- Step 1: BrainEvent schema + transport infrastructure (GAP-1, shared interfaces, factory)
-- Step 2: Leads schema + Drizzle migration (schema file + generated SQL committed together)
-- Step 3: LeadService in `packages/core`
-- Step 4: RabbitMQ transport (can run parallel to Step 3 once ILeadGate is defined)
-- Step 5: BrainRunner field mapping (can merge with Step 1)
-- Step 6: Brain SDR (depends on all prior steps)
-
----
-
-### Critical Pitfalls
-
-**v1.1-specific (highest severity):**
-
-1. **INT-01: Unhandled channel closure crashes Bun process (CRITICAL)** — Attach `connection.on('error')` and `channel.on('error')` listeners; reconnect in `close` handler. Without this, any RabbitMQ blip kills the container and corrupts in-flight LangGraph checkpoints.
-
-2. **INT-02: LangGraph throw leaves message unacked — queue freezes (CRITICAL)** — Wrap all consumer processing in `try/catch`; always call ack or nack. `nack(false, false)` for deterministic failures; `nack(false, true)` for transient only. DLX must be configured in the same phase as the consumer.
-
-3. **INT-05: Concurrent upsert creates duplicate lead rows (HIGH)** — Use `INSERT ... ON CONFLICT (numero) DO UPDATE` as a single statement then re-fetch. UNIQUE constraint on `numero` must be in migration SQL, not only Drizzle schema.
-
-4. **INT-04: `users` table migration breaks existing data (HIGH)** — Add `leads` additively; do NOT drop `users` in v1.1. Existing EchoBrain checkpoints used UUID-format thread_ids that won't resolve via the new IDLead-based lookup.
-
-5. **INT-08: Concurrent startup race in Drizzle migrations (MEDIUM)** — Add `pg_advisory_lock(7246842)` around `runMigrations()`. Safe with postgres.js directly (not PgBouncer).
-
-6. **INT-10: Context window overflow breaks long SDR conversations (MEDIUM)** — Implement `trimMessages` from day one in Brain SDR graph node. Once a thread overflows it becomes permanently unresponsive.
-
-7. **INT-11: GAP-1 WebhookTransport runner not injected (MEDIUM)** — Fix constructor injection before changing BrainEvent field names. Without this fix, webhook returns `{status: "accepted"}` with no LLM call.
-
-**v1.0 pitfalls still relevant for SDR:**
-- Pitfall 4 (LangGraph state schema evolution) — add `schema_version` field and default values for all Brain SDR state fields from day one
-- Pitfall 9 (recursion limit) — set `recursionLimit: 100` for SDR; default 25 is too low for qualification patterns
-- Pitfall 19 (subgraph checkpointer inheritance) — relevant when extracting qualification sub-agent in v1.2
+| Feature | Notas |
+|---------|-------|
+| `createRespondTool()` em `packages/core/src/tools/respond.ts` | Schema espelha `BrainOutputSchema` |
+| Vinculado via `bindTools()` apenas, não `withStructuredOutput()` | Evita incompatibilidade langchainjs #7757 |
+| Router customizado detectando chamada ao tool `respond` | Substitui `toolsCondition` |
+| Nó `respond` escrevendo `brainOutput` no state | Extração pura — sem chamada LLM |
+| `brainOutput: { responseMode: "text" }` estático removido do nó `llm` | v1.2 hardcodava isso — deve ser removido |
+| System prompt instrui LLM a chamar `respond` como ação final | Sem isso, modelo pode emitir texto plano (SO-03) |
+| `BrainOutputSchema.parse()` no nó `respond` | Valida campos ausentes/inválidos |
 
 ---
 
-## Implications for Roadmap
+## Critical Pitfalls
 
-### Phase 1: Transport Foundation + Schema Contract
+**PITFALL-1 (CRÍTICO): MCP-03 — Perda silenciosa de tools quando n8n falha**
 
-**Rationale:** Every downstream component depends on the canonical `BrainEvent` shape and the corrected `createTransport()` factory. GAP-1 must be fixed before new field names are introduced. Migration race condition (INT-08) and PostgresSaver setup race (INT-09) must also be addressed here — they block safe multi-instance deployment of everything that follows.
+`MultiServerMCPClient` descarta tools de TODOS os servidores quando qualquer servidor falha. Tools nativas do Brain podem ser apagadas silenciosamente. Confirmado GitHub issue #492.
 
-**Delivers:** Correct WebhookTransport constructor injection; standardized BrainEvent schema (`{Name, Message, Numero, IDLead}`); shared `IBrainRunnerLike` and `ILeadGate` interfaces; advisory lock in `runMigrations()`; updated `createTransport()` factory.
+Prevenção:
+```typescript
+const mcpTools = await client.getTools().catch(() => []);
+const allTools = [...brainTools, ...mcpTools]; // brainTools sempre presentes
+```
 
-**Addresses:** INT-11 (GAP-1), INT-03 (schema divergence between transports), INT-08 (migration race), INT-09 (PostgresSaver setup race)
+**PITFALL-2 (ALTO): SO-04 — Timeout de MCP tool corrompe thread permanentemente**
 
-**Constraint:** BrainEvent field rename and test fixture updates must be in the same PR — atomic change.
+Se uma MCP tool tiver timeout, ToolNode pode não escrever `ToolMessage` para o tool_call pendente. Checkpoint salvo com `AIMessage` sem par → `INVALID_CHAT_HISTORY` permanente para aquele lead.
 
----
+Prevenção: Wrapper seguro do ToolNode que garante `ToolMessage` para cada `tool_call_id`, mesmo em erro.
 
-### Phase 2: Leads Schema + Migration
+**PITFALL-3 (ALTO): withStructuredOutput + bindTools incompatibilidade (langchainjs #7757)**
 
-**Rationale:** LeadService depends on the leads schema. The migration file must be committed before any Brain starts up against a real DB. Cannot build the RabbitMQ consumer or Brain SDR without `leads` table.
+Aplicar ambos no mesmo LLM descarta silenciosamente os schemas das tools. Sem erro. Prevenção: nunca usar `withStructuredOutput()` no LLM do agente; usar exclusivamente schema-as-tool.
 
-**Delivers:** `packages/database/src/schema/leads.ts` with UNIQUE on `numero`; Drizzle-generated migration SQL committed alongside schema; schema exported from database barrel.
+**PITFALL-4 (ALTO): MCP-02 — Typo no transport name causa falha no startup**
 
-**Addresses:** INT-04 (additive migration strategy — no DROP users), INT-05 (UNIQUE constraint in migration SQL)
+`"streamable-http"` (hífen) é inválido. Usar `const MCP_TRANSPORT = "streamable_http" as const`.
 
-**Constraint:** Migration SQL file must be committed in the same PR as the schema file. Do not drop `users`.
+**PITFALL-5 (ALTO): BUN-02 — MCP client trava processo Bun no SIGTERM**
 
----
+Conexões HTTP abertas pelo `MultiServerMCPClient` bloqueiam SIGTERM por até 30s. Handler obrigatório:
+```typescript
+process.on("SIGTERM", async () => { await runner.close(); process.exit(0); });
+```
 
-### Phase 3: LeadService + RabbitMQ Consumer
+**PITFALL-6 (ALTO): SO-03 — Modelo pula chamada ao tool `respond`**
 
-**Rationale:** Both depend on Phase 2 (leads table) and Phase 1 (ILeadGate interface). Can develop in parallel — LeadService and RabbitMQ handler each implement/satisfy ILeadGate independently.
+LLM pode emitir texto plano em vez de chamar `respond` → `brainOutput` undefined → `BrainOutputValidationError`. Prevenção: instrução forte no system prompt + fallback `withStructuredOutput()` como recuperação.
 
-**Delivers:** `packages/core/src/leads/service.ts` with upsert via `ON CONFLICT`; `packages/transport/src/rabbitmq/handler.ts` using `rabbitmq-client`; manual ack/nack with DLX; graceful SIGTERM shutdown; integration test against real RabbitMQ.
+**PITFALL-7 (ALTO): SO-01 — `responseFormat` em `createReactAgent` reescreve `fullResponse`**
 
-**Addresses:** INT-01 (unhandled channel closure), INT-02 (unacked message), INT-05 (concurrent upsert via ON CONFLICT), FEATURES.md anti-features (requeue=true, autoAck, unlimited prefetch)
-
-**Stack note:** Use `rabbitmq-client` (zero deps, Bun-tested) not `amqplib-bun`.
-
----
-
-### Phase 4: BrainRunner Field Mapping + Conversation History
-
-**Rationale:** Mechanically simple but sequentially required. `BrainRunner.run()` must map `event.IDLead → threadId` before Brain SDR can use persistent memory. Context window trimming must be implemented here — cannot be retrofitted after Brain SDR ships.
-
-**Delivers:** `BrainRunner.run()` field mapping update; `thread_id = event.IDLead`; `trimMessages` context window management utility; updated integration tests.
-
-**Addresses:** INT-10 (context window overflow), INT-03 (consistent field mapping), FEATURES.md anti-feature (per-session thread_id)
+Segunda chamada LLM altera a mensagem. Usuário recebe texto diferente do original. Não usar `responseFormat`. Usar schema-as-tool.
 
 ---
 
-### Phase 5: Brain SDR Application
+## Suggested Build Order
 
-**Rationale:** Terminal feature — consumes all prior phases. Correct approach: green test suite for Phases 1-4 before writing brain-sdr code.
+**Phase 14 — TD-01 Fix** (0.5 dias)
+`qualifier.ts` + `prepare: false`. Isolado, blocker de produção, deploy imediato.
 
-**Delivers:** `apps/brain-sdr/` with Dockerfile; LangGraph state schema with qualification fields (`qualificado`, `budget_hint`, `need_hint`, `timeline_hint`, `handoff_requested`); structured LLM output for qualification signal extraction; personalized greeting via `nome`; prompts seed SQL for `brain_type="sdr"`; integration test for full message flow including `ia_ativada` skip path.
+**Phase 15 — MCP Integration** (1.5–2 dias)
+`@langchain/mcp-adapters` → `MCPClientManager` → `BrainRunner._compileGraph()` → SIGTERM handler → `brain.ts` espalha `ctx.tools`.
 
-**Addresses:** INT-10 (trimMessages in graph node), FEATURES.md anti-features (scripted BANT sequence, multiple messages per response, hardcoded criteria, CRM writes)
+**Phase 16 — Dynamic responseMode** (1–1.5 dias)
+`createRespondTool()` → nó `respond` → router customizado → remover `responseMode: "text"` hardcoded → atualizar system prompt seed.
 
-**Scope boundary:** Single-graph SDR. Qualification sub-agent extraction → v1.2. CRM integration → v2.
-
----
-
-### Phase Ordering Rationale
-
-- Phase 1 must be first: both transports share BrainEvent schema — a partial change creates a window where webhook and RabbitMQ diverge
-- Phase 2 can technically parallel Phase 1 (schema has no dep on events.ts) but is ordered second so migration SQL exists before Phase 3 integration tests run
-- Phase 3 can begin once ILeadGate is defined (end of Phase 1), even while LeadService is in progress
-- Phase 4 depends only on Phase 1 (BrainEvent shape) — could merge with Phase 1 to reduce PR count
-- Phase 5 depends on all previous phases — no shortcuts
-
-### Research Flags
-
-**Standard patterns — skip `/gsd-research-phase`:**
-- Phase 1 (transport refactor, schema standardization) — internal codebase changes; all patterns clear from ARCHITECTURE.md
-- Phase 2 (Drizzle schema + migration) — established pattern already in use; `drizzle-kit generate` is the only command needed
-- Phase 4 (field mapping in BrainRunner) — single-file change with known target values
-
-**May benefit from targeted research spike during planning:**
-- Phase 3 (`rabbitmq-client` Consumer API) — package is new to codebase; confirm `createConsumer` + ack/nack method signatures from v5.0.8 docs before writing handler
-- Phase 5 (Brain SDR graph design) — LangGraph state schema for qualification signals and `trimMessages` integration warrant a design spike before implementation to avoid Pitfall 4 (state schema evolution)
+**Total estimado: 3–4 dias.**
 
 ---
 
-## Confidence Assessment
+## Open Questions
 
-| Area | Confidence | Notes |
-|------|------------|-------|
-| Stack | HIGH | Packages verified in lockfile; `rabbitmq-client` import tested in Bun 1.3.2; no version bumps needed confirmed |
-| Features | HIGH | RabbitMQ behaviors from official docs; LangGraph thread_id from PostgresSaver internals; WhatsApp SDR from production guides |
-| Architecture | HIGH | Direct codebase analysis of all v1.0 source files; dep graph and component boundaries from actual code |
-| Pitfalls | HIGH | All critical pitfalls traced to GitHub issues, official docs, or verified production incidents |
-
-**Overall confidence:** HIGH
-
-### Gaps to Address
-
-- **`rabbitmq-client` Consumer API shape (Phase 3):** Package is installed but handler not written. Confirm exact `createConsumer` + ack/nack API from v5.0.8 before implementation — do not guess at method signatures.
-- **Brain SDR qualification state schema (Phase 5):** Field names are defined but LangGraph state annotation + reducer design needs a short design spike. Once committed, treat as a one-way door (Pitfall 4).
-- **`users` table deprecation timeline:** The additive migration strategy leaves `users` as dead weight. Capture deprecation decision as a task before v1.2 planning.
-- **TenantPoolManager activation:** Scoped for v1.1 in PROJECT.md but flagged as a distraction risk (ARCHITECTURE.md Risk 5). Treat as isolated task; do not block Phase 5 on it.
-- **DLQ monitoring:** v1.1 scoped to log-only; automated alerting deferred to v2. Document this boundary explicitly so ops is not surprised.
-
----
-
-## Sources
-
-### Primary (HIGH confidence)
-- Direct codebase analysis: `packages/transport/src/`, `packages/core/src/`, `packages/database/src/schema/`, `apps/brain-echo/src/`
-- `pnpm-lock.yaml` — all installed package versions confirmed
-- `rabbitmq-client` v5.0.8 — zero deps confirmed, Bun 1.3.2 import tested
-- RabbitMQ Consumer Acknowledgements official docs — https://www.rabbitmq.com/docs/confirms
-- RabbitMQ Dead Letter Exchanges official docs — https://www.rabbitmq.com/docs/dlx
-- `@langchain/langgraph-checkpoint-postgres` (v1.0.3) — PostgresSaver thread_id behavior
-- LangGraph PR #2494 — PostgresSaver race condition fix
-
-### Secondary (MEDIUM confidence)
-- LangGraph issue #2040 — cross-thread checkpoint contamination report
-- CloudAMQP RabbitMQ Best Practices — prefetch sizing for LLM workloads
-- Zylos Research 2026 — context window management for long-running agents
-- WhatsApp SDR qualification pattern research (trypeach.ai, monday.com, setsmart.io, trengo.com)
-- Drizzle ORM migrations in production (advisory lock pattern) — dev.to
-
-### Tertiary (LOW confidence — needs implementation validation)
-- `trimMessages` token counting accuracy with `bun test` — needs integration test verification
-- DLQ routing behavior with `rabbitmq-client` v5 — needs smoke test against real RabbitMQ
-
----
-
-*Research completed: 2026-06-13*
-*Ready for roadmap: yes*
+1. **`MCP_TOOLS` vazio mas `MCP_URL` presente** — fail-fast (recomendado) vs carregar tudo?
+2. **Colisão de nomes MCP vs Brain-native** — prefixar `mcp_` ou validar no startup?
+3. **Degradação graciosa vs. fail-fast em startup MCP** — recomendação: warn e continuar com zero MCP tools.
+4. **Enum `responseMode`** — `["text","audio","image"]` ou adicionar `"video"`/`"document"` no v1.3?
+5. **Atualização do system prompt** — migration de DB (igual v1.1) ou ENV override?

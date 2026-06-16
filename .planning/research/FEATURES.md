@@ -1,252 +1,232 @@
-# Feature Landscape: Brain Core v1.1
+# Features Research: Brain Core v1.3
 
-**Domain:** Modular AI agent infrastructure platform — RabbitMQ transport, lead management, conversation history, Brain SDR
-**Researched:** 2026-06-13
-**Scope:** v1.1 new features only. v1.0 infrastructure is already built and validated.
-**Overall confidence:** HIGH (verified across official RabbitMQ docs, LangGraph checkpoint internals, production guides, WhatsApp SDR pattern research)
+**Domain:** MCP tool integration + dynamic responseMode for existing AI agent platform (Bun + LangGraph)
+**Researched:** 2026-06-15
+**Scope:** v1.3 new features only. v1.0–v1.2 infrastructure (BrainRunner, ToolsRegistry, BrainOutput, existing tools) is already built.
+**Overall confidence:** HIGH (verified via official LangChain.js docs, Anthropic API docs, @langchain/mcp-adapters GitHub, multiple cross-checked sources)
 
 ---
 
-## Feature Area 1: RabbitMQ Transport Consumer
+## MCP Integration
 
-### Table Stakes
+### Table Stakes (must-have)
 
 | Feature | Why Expected | Complexity | Notes |
 |---------|--------------|------------|-------|
-| **Manual acknowledgement (autoAck: false)** | At-least-once delivery guarantee requires manual ack. RabbitMQ official docs state autoAck mode "should be considered unsafe" for production. Without manual ack, a crash mid-processing loses the message silently. | Low | Must ack only after LangGraph BrainRunner returns. Must nack with requeue=false (not requeue=true, which creates infinite redelivery loops) on permanent processing failures. |
-| **Bounded prefetch count** | RabbitMQ docs recommend 100-300 for throughput; prefetch=1 is too conservative, prefetch=0 (unlimited) causes unbounded heap growth. For an AI agent consumer where each message may call an LLM (500ms–10s), prefetch=1 or prefetch=5 is appropriate — one LLM call saturates a worker. | Low | Set via `channel.prefetch(N)` before consuming. Start with prefetch=1 for LLM workloads, increase only when profiling shows headroom. |
-| **Graceful shutdown on SIGTERM** | Kubernetes sends SIGTERM before SIGKILL with a grace period. The consumer must: (1) stop accepting new messages (cancel consumer tag), (2) wait for in-flight messages to finish, (3) ack/nack pending messages, (4) close channel then connection. | Medium | Store consumer tag from `channel.consume()` response. Use process signal handlers. Budget 30s grace period — LLM calls must complete or be nacked. |
-| **Connection/channel error recovery** | amqplib's built-in reconnect is single-attempt only. After that, the consumer stops processing silently. Production requires a retry loop with exponential backoff on connection failures. | Medium | amqplib-bun inherits this limitation. Implement try/reconnect loop at startup. Emit structured log on each reconnect attempt. Circuit breaker optional for v1.1. |
-| **Queue and exchange assertion on startup** | Consumer must `assertQueue()` before consuming to ensure the queue exists with correct durability settings. Crash if queue doesn't exist is a deployment footgun. | Low | `{ durable: true }` on queue assertion. Fail fast if RabbitMQ is unreachable at startup — do not silently skip. |
-| **Structured logging per message** | Each message processed needs: queue name, correlation ID (if present), lead numero/IDLead, processing duration, success/failure outcome. Without this, debugging production failures is impossible. | Low | Reuse Pino logger already in stack. Include `message_id` from AMQP properties for tracing. |
+| **`@langchain/mcp-adapters` as integration layer** | Official LangChain.js MCP adapter converts MCP tool schemas into `StructuredTool` objects compatible with `ToolNode` and `createReactAgent`. Direct MCP SDK usage would require manual schema translation and tool wrapping — the adapter eliminates that. | Low | Install: `npm install @langchain/mcp-adapters @modelcontextprotocol/sdk`. Peer deps: `@langchain/core`, `@langchain/langgraph`. |
+| **`MultiServerMCPClient` for HTTP/SSE transport** | The Brain connects to n8n's MCP server over HTTP. `MultiServerMCPClient` is the correct class — supports Streamable HTTP (preferred, protocol v2025-03-26+) with automatic SSE fallback for legacy servers. n8n exposes MCP via `/webhook/mcp/:workflowId` (SSE) or Streamable HTTP endpoint. | Low | Config shape: `{ url: MCP_URL, headers?: { Authorization: "Bearer ..." }, automaticSSEFallback: true, reconnect: { enabled: true, maxAttempts: 5, delayMs: 2000 } }`. |
+| **`getTools()` at Brain startup, tools injected into graph** | Tools must be loaded once during `IBrain.init()` — not per-request. `getTools()` returns `Promise<StructuredTool[]>`. These tools are then passed to the existing `ToolNode` in `buildGraph()` alongside the existing LangGraph tools (qualify_lead, pause_session, finish_conversation). | Low | Pattern: `const mcpTools = await mcpClient.getTools(); const allTools = [...existingTools, ...mcpTools];`. The `ToolNode` receives the merged array. |
+| **Tool name filtering via `MCP_TOOLS` ENV** | An MCP server exposes all its tools. The Brain should only load the specific tools configured by the client (`MCP_TOOLS=getAvailableDate,schedule_meeting`). This is safety scoping — prevents the LLM from accidentally calling unintended tools exposed by the same n8n server. | Low | Filter after `getTools()`: `const filtered = mcpTools.filter(t => allowedNames.includes(t.name));`. The `MCP_TOOLS` CSV is parsed at startup. Empty/absent `MCP_TOOLS` = load all tools from server (acceptable default for single-tool servers). |
+| **MCP tools described in system prompt** | MCP tools are foreign to the Brain's knowledge — the LLM needs natural-language descriptions to know when and how to invoke them. The system prompt must include the tool's name, purpose, required inputs, and expected output format. | Low | Each `StructuredTool` from `getTools()` has `.name`, `.description`, `.schema` (Zod). Render these into the prompt template at `init()` time. Pattern already exists in Brain SDR for internal tools. |
+| **`close()` on Brain shutdown** | `MultiServerMCPClient.close()` disconnects from all MCP servers. Must be called on SIGTERM/SIGINT to avoid dangling connections. Without it, the n8n server may hold the connection open and throttle or error on reconnection. | Low | Call in `BrainRunner` shutdown hook or in `IBrain` teardown if added. |
+| **Connection error handling on startup** | If the MCP server is unreachable at startup, the Brain should fail fast with a clear error. Silent degradation (proceeding without MCP tools) is worse than a startup crash — the LLM would try to call tools that don't exist in the `ToolNode`. | Low | Use `onConnectionError: "throw"` (default). Wrap `mcpClient.getTools()` in `init()` in a try/catch that produces a `BrainConfigurationError`. Log the MCP_URL and error. |
 
-### Differentiators
-
-| Feature | Value Proposition | Complexity | Notes |
-|---------|-------------------|------------|-------|
-| **Dead Letter Queue (DLQ) setup** | Messages that fail processing after N retries should land in a DLQ for manual inspection, not silently disappear. Production systems using "topology-as-retry" (TTL-based delay queues) avoid retry logic in application code entirely. | Medium | Configure `x-dead-letter-exchange` on queue assertion. Define a `brain.sdr.dlq` queue. For v1.1, log DLQ events — manual inspection only. Automated retry flows are v2. |
-| **Message idempotency via numero/IDLead** | RabbitMQ guarantees at-least-once, meaning duplicate messages will arrive on restart or nack-requeue. Consumer must be idempotent. Looking up lead by numero before processing achieves this naturally — processing the same message twice just hits the same lead record. | Low | This comes "for free" if lead lookup is the first step. No separate dedup table needed in v1.1. |
-| **ENV-driven transport selection** | The same Brain image works with webhook or RabbitMQ by changing TRANSPORT env. Avoids separate Docker images per transport. | Low | Already planned. Transport selection logic lives in ITransport implementation layer. |
-
-### Anti-Features
-
-| Anti-Feature | Why Avoid | What to Do Instead |
-|--------------|-----------|-------------------|
-| **requeue=true on nack for processing errors** | Creates an infinite redelivery loop — the LLM will keep failing the same malformed message. RabbitMQ doesn't have built-in redelivery limits unless DLQ is configured. | Use requeue=false + DLQ. Log the failed message body. Alert on DLQ accumulation. |
-| **Unlimited prefetch (prefetch=0)** | Unbounded message buffering in consumer memory. For LLM workloads (potentially 10s per message), this queues thousands of messages in RAM before the consumer can process them. | Start with prefetch=1. Increase after load testing. |
-| **Automatic ack (autoAck: true)** | Message is acked as soon as delivered, before processing. If Brain crashes during LangGraph run, message is lost permanently. | Always manual ack. Ack only after BrainRunner.run() returns successfully. |
-| **Reconnection inside message handler** | Reconnecting to RabbitMQ from inside the message processing callback creates race conditions and blocks the event loop. | Connection management is a separate concern from message processing. Reconnect at the connection layer, not per-message. |
-
-### Complexity Notes
-
-Consumer lifecycle (connect → assert → consume → graceful shutdown) is medium complexity. The hard part is the reconnect loop — amqplib-bun doesn't handle this automatically. Budget extra implementation time for: (1) exponential backoff reconnect, (2) SIGTERM handler that waits for in-flight messages, (3) DLQ topology assertion. Total: ~2 days implementation + testing.
-
-### Dependencies
-
-- Requires: `amqplib-bun` package (not vanilla amqplib — Bun incompatibility bugs)
-- Requires: RabbitMQ 4.1.0+ → amqplib-bun >= 0.10.7
-- Requires: BrainRunner interface stable (already validated in v1.0)
-- Requires: Leads lookup (Feature Area 2) — consumer calls lead lookup before passing to BrainRunner
-- Blocks: Brain SDR cannot receive messages without this transport
-
----
-
-## Feature Area 2: Leads Schema and Auto-Registration
-
-### Table Stakes
-
-| Feature | Why Expected | Complexity | Notes |
-|---------|--------------|------------|-------|
-| **Lead lookup by numero on every message** | Every AI chat system with user tracking does this. Without lookup, the Brain has no context about who it's talking to. `numero` is the natural key for WhatsApp-sourced messages. | Low | SQL: `SELECT * FROM leads WHERE numero = $1 LIMIT 1`. Index on `numero` is mandatory — this runs on every message. |
-| **Auto-registration on first message** | Industry standard for chat-based lead capture. Requiring pre-registration is friction that kills conversion. First message = implicit opt-in to conversation. | Low | If lookup returns null, INSERT lead with nome, numero, unique_id. Set ia_ativada=true by default. Return the newly created lead record. |
-| **ia_ativada gate before any processing** | Silently dropping messages when ia_ativada=false is expected behavior for AI chatbots with human override. Operations team needs the ability to take over a conversation by disabling the AI without touching code. | Low | Check immediately after lead lookup. If false, ack the message (do not requeue) and return without calling BrainRunner. Log the skip at INFO level with lead ID. |
-| **IDLead as external reference** | The sending system (WhatsApp gateway, CRM) may have its own lead ID. IDLead allows lookups without relying solely on phone number, which can change. | Low | Lookup strategy: if IDLead present, try `WHERE unique_id = $IDLead` first, fall back to `WHERE numero = $numero`. On creation, store IDLead as unique_id. |
-| **Lead data available in BrainRunner context** | The Brain needs to know who it's talking to (nome, numero, history link). Lead data must be injected into the LangGraph invocation context. | Low | Pass lead record as part of the initial state when invoking the graph. Brain SDR uses nome for personalization. |
-| **Unique index on numero** | Without a unique constraint, concurrent messages from the same number (duplicate delivery) create two lead records. This corrupts conversation history. | Low | `UNIQUE INDEX ON leads(numero)`. On INSERT, use `ON CONFLICT (numero) DO NOTHING` and re-fetch — avoids race condition. |
-
-### Differentiators
+### Nice-to-Have
 
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
-| **unique_id as stable cross-system identifier** | If the CRM assigns IDs, using those as unique_id creates a single namespace across systems. Avoids N-way ID mapping tables. | Low | App-generated (UUID or CRM-provided). Stored as TEXT to be format-agnostic. |
-| **fullpp flag as reserved field** | Having the column now costs nothing but enables future features (full product purchase, premium profile, etc.) without a migration. | Low | Store as boolean, default false. No business logic in v1.1. Document intent in schema comments. |
-| **Lead record as LangGraph thread anchor** | The thread_id passed to PostgresSaver should be derived from lead.id (e.g., `lead-${lead.id}`) — not from the message itself. This ensures all messages from the same lead resume the same conversation thread automatically. | Low | Critical for conversation continuity. See Feature Area 3. |
+| **Tool call result logging via `afterToolCall` hook** | `MultiServerMCPClient` supports `afterToolCall: (tool, result) => void`. Logging MCP tool calls and their results separately from LangGraph node traces makes debugging n8n failures trivial. | Low | Hook receives tool name, input args, and result. Pass to Pino logger with `level: "debug"`. Langfuse/LangSmith already captures the trace, but explicit log is useful for production ops. |
+| **Reconnect config for production resilience** | `reconnect: { enabled: true, maxAttempts: 5, delayMs: 2000 }` in the HTTP config handles transient n8n restarts without requiring a Brain restart. | Low | Already supported by `@langchain/mcp-adapters` HTTP transport. Add to default config. |
+| **`MCP_URL` absent = no MCP tools, no failure** | If `MCP_URL` is not set, the Brain should proceed without MCP tools (useful for Brains that don't need external tools). Makes the feature purely additive — v1.2 Brains not setting `MCP_URL` continue to work unchanged. | Low | Guard in `init()`: `if (!process.env.MCP_URL) return;`. No client created, `mcpTools = []`. |
+| **`prefixToolNameWithServerName: false`** | Default is false. Keep it false — tool names in the system prompt and in the LLM's function calls must match exactly. Prefixing would require the prompt to use `n8n__getAvailableDate` instead of `getAvailableDate`. | Low | Default is already correct. Document the decision explicitly in Brain SDR's init config. |
 
-### Anti-Features
-
-| Anti-Feature | Why Avoid | What to Do Instead |
-|--------------|-----------|-------------------|
-| **Hard-fail on duplicate numero at INSERT** | Concurrent message delivery (RabbitMQ at-least-once) will cause two messages from the same lead to race on INSERT. A hard constraint error crashes the consumer. | Use `INSERT ... ON CONFLICT (numero) DO NOTHING` + re-fetch. Idempotent by design. |
-| **Soft-delete / deactivation cascade to history** | Deleting or deactivating a lead should not cascade-delete conversation history. Audit trail is valuable even for churned leads. | ia_ativada=false is the "off" switch. No DELETE in v1.1. Hard deletes are an ops tool, not an application path. |
-| **Storing raw message content in leads table** | The leads table is identity data (who they are). Message content belongs in conversation history (what was said). Mixing them creates a bloated table that's hard to query. | Leads table: identity. Conversation history: LangGraph checkpoints + optional messages table. |
-| **Eager lead enrichment at registration** | Calling external APIs (CNPJ lookup, LinkedIn enrichment) at registration time adds latency to message processing and a failure mode that blocks the conversation. | Register with data provided. Enrich asynchronously in v2+ if needed. |
-
-### Complexity Notes
-
-Schema migration + CRUD is low complexity. The tricky parts are: (1) race condition on concurrent INSERT for the same numero (solved by ON CONFLICT), (2) ensuring the ia_ativada check is the first gate in every message handler (both webhook and RabbitMQ consumer), (3) propagating lead context into BrainRunner invocation without coupling the transport layer to domain logic. Total: ~1 day.
-
-### Dependencies
-
-- Requires: PostgreSQL schema migration (Drizzle, auto-run on Brain startup per v1.1 plan)
-- Requires: Both transports (Webhook and RabbitMQ) must share the same lead lookup logic — extract into a shared `LeadService` class to avoid duplication
-- Blocks: Feature Areas 3 and 4 — conversation history and Brain SDR both require the lead record
-
----
-
-## Feature Area 3: Conversation History Linked to Lead
-
-### Table Stakes
-
-| Feature | Why Expected | Complexity | Notes |
-|---------|--------------|------------|-------|
-| **Thread ID derived from lead ID** | LangGraph's PostgresSaver stores state keyed by `thread_id`. To resume a conversation, the same thread_id must be used across messages. The stable mapping is `thread_id = "lead-${lead.id}"`. | Low | This is the architectural glue between the leads table and LangGraph checkpoints. If thread_id is message-scoped (random per message), each invocation starts a fresh graph with no history. |
-| **Automatic context recovery on invocation** | When BrainRunner invokes the graph with an existing thread_id, PostgresSaver automatically loads the latest checkpoint and resumes from it. No manual history fetch is needed. | Low | This is already how PostgresSaver works — it is "free" if thread_id is consistent. The implementation work is ensuring thread_id is always `lead-{id}`, not random. |
-| **Conversation continuity across restarts** | PostgresSaver persists state to PostgreSQL. If the Brain container restarts, the next message from the same lead resumes the conversation. This is the v1.0 SC-3 validated capability. | Low | Already validated in v1.0 (MARKER_BRAINCORE_42 survived docker restart). Extend this guarantee to leads. |
-| **Context window management** | LangGraph's message list grows unbounded in checkpoints. Long conversations will eventually exceed the LLM's context window. Production systems need a trim strategy. | Medium | Standard approaches: (1) keep last N messages, (2) summarize older messages and store summary, (3) use sliding window. For v1.1 MVP, keep last N messages (e.g., last 20 turns). Mark as tech debt for proper summarization in v2. |
-| **No cross-lead context leakage** | Thread IDs must be lead-scoped. A bug that passes the wrong thread_id gives one lead access to another's conversation. | Low | Enforcement is trivial if thread_id is always derived from `lead.id` from the leads table lookup. Never accept thread_id from the incoming message payload. |
-
-### Differentiators
-
-| Feature | Value Proposition | Complexity | Notes |
-|---------|-------------------|------------|-------|
-| **Separate thread_views index table** | For operational visibility (ops team wants to see all conversations for a lead), a lightweight index table (lead_id, thread_id, last_message_at, message_count) enables fast queries without scanning LangGraph's binary checkpoint blobs. | Medium | Not required for v1.1 functionality but greatly simplifies debugging. Add if time allows; otherwise defer to v2. |
-| **Conversation handoff metadata in checkpoint state** | Storing structured flags in LangGraph state (e.g., `qualificado: boolean`, `hot_lead: boolean`, `handoff_requested: boolean`) enables downstream systems (CRM, human agent queue) to read conversation outcome without re-parsing the message history. | Medium | Required for Brain SDR's qualification output to be useful downstream. Design state schema to include these flags from the start. |
-
-### Anti-Features
+### Anti-Features (what NOT to build)
 
 | Anti-Feature | Why Avoid | What to Do Instead |
 |--------------|-----------|-------------------|
-| **Accepting thread_id from message payload** | Allows any sender to hijack any lead's conversation by providing an arbitrary thread_id. | Always derive thread_id server-side from `lead.id` after lookup. Ignore any thread_id in the incoming payload. |
-| **Storing full conversation in a messages table separate from checkpoints** | Duplicates state. LangGraph checkpoints already contain the full message history. Maintaining a parallel messages table creates consistency issues when checkpoints rollback or are corrupted. | Use LangGraph checkpoints as the source of truth. Add a lightweight index table for query purposes only, not as the conversation store. |
-| **Unbounded message history without trim** | OpenAI GPT-4o has a 128K token context window. A 200-turn WhatsApp conversation can exceed this. Passing unbounded history to the LLM will cause token limit errors in production. | Implement last-N-messages trim in the graph's state reducer from day one. Hard to retrofit. |
-| **Per-session thread_id (new thread per message)** | Common mistake when adapting examples that use `uuid()` as thread_id. Results in a Brain with no memory — every message starts from scratch. | Use lead-scoped thread_id. Session ≠ thread. A thread spans the entire relationship with a lead. |
+| **Per-request MCP connection (`connect` + `getTools` per message)** | Each `getTools()` creates a new HTTP session. For a Brain handling 100 messages/minute, this creates 100 connections to n8n per minute — unnecessary overhead and rate-limiting risk. | Connect once at startup (`init()`), reuse `StructuredTool[]` across all `run()` calls. Tools are registered in the graph at compile time, not per-invocation. |
+| **Proxying MCP calls through Brain HTTP API** | Building a custom endpoint (`POST /mcp/call`) that the LangGraph tools hit — instead of calling the MCP server directly — adds an extra network hop, custom auth, and a new failure mode with no benefit. | Use `@langchain/mcp-adapters` directly. The adapter handles the MCP protocol; the Brain's HTTP layer (Hono) is unrelated. |
+| **Runtime tool re-discovery (polling MCP server for new tools)** | Dynamic tool list changes at runtime (without rebuilding the graph) would require rebuilding `ToolNode` and re-compiling the graph mid-execution. LangGraph graphs are compiled once. | Rebuild the Brain (restart container) to pick up new MCP tools. Tools are startup configuration, not runtime-mutable state. |
+| **Implementing MCP server in the Brain** | The Brain is an MCP client (consumer), not an MCP server. Building an MCP server in the Brain would expose Brain functionality as MCP tools — a completely different feature with no use case in v1.3. | The Brain calls n8n's MCP server. n8n is the MCP server. |
+| **Manual `@modelcontextprotocol/sdk` client management** | Writing raw MCP protocol handling (JsonRpc, session management, tool schema parsing) when `@langchain/mcp-adapters` already does this. | Use `MultiServerMCPClient`. The adapter is official, maintained by LangChain, and handles edge cases (SSE fallback, reconnect, auth). |
+| **Storing MCP tool results in leads table or separate DB table** | MCP tool results are intermediate agent state — already captured in the LangGraph checkpoint via `ToolMessage` entries in the messages array. A separate DB write duplicates data and adds a write failure mode. | MCP tool call results live in the LangGraph checkpoint (PostgresSaver). Queryable via checkpoint inspection if needed. |
 
-### Complexity Notes
-
-The actual implementation is low complexity if the thread_id convention is established correctly from the start. Medium complexity comes from: (1) context window trimming (requires a state reducer that truncates messages), (2) the thread_views index table (optional for v1.1). The most dangerous pitfall is subtle — a random or message-scoped thread_id gives a system that appears to work in single-message testing but has no memory in production. This must be verified in integration tests. Total: ~1 day for core wiring, +1 day if adding context trim.
-
-### Dependencies
-
-- Requires: leads table with stable `lead.id` (Feature Area 2)
-- Requires: PostgresSaver already working (validated in v1.0, SC-3)
-- Requires: BrainRunner.run() accepts thread_id as part of config (already part of LangGraph invocation config)
-- Blocks: Brain SDR (cannot qualify a lead without remembering previous turns)
-
----
-
-## Feature Area 4: Brain SDR — First Real Brain
-
-### Table Stakes
-
-| Feature | Why Expected | Complexity | Notes |
-|---------|--------------|------------|-------|
-| **Personalized greeting using lead nome** | Every AI SDR tool personalizes the first message. "Oi João, vi que você entrou em contato..." converts significantly better than "Olá, como posso ajudar?". Lead nome is available from the leads table. | Low | Pass nome into the initial prompt context. Fallback to "você" if nome is empty. |
-| **Context-aware qualification (not scripted forms)** | 2026 market research confirms: rigid scripted flows ("press 1 for budget") fail on WhatsApp because users give non-scripted answers. AI SDRs must extract qualification signals from natural conversation. | High | LangGraph graph routes based on what the lead said, not button presses. Qualification signals (budget, need, timeline) are extracted by the LLM, not form fields. |
-| **ia_ativada respect throughout conversation** | If ia_ativada is set to false mid-conversation (ops team takes over), the Brain must stop responding immediately on the next message. | Low | The ia_ativada check is the first gate in the message handler — already covered in Feature Area 2. Brain SDR gets this for free. |
-| **Conversation memory (no re-asking known facts)** | The SDR must remember what the lead said in previous messages. Re-asking "qual seu orçamento?" after the lead already answered it destroys trust. | Low | Covered by Feature Area 3 (thread_id-anchored checkpoints). Brain SDR gets this for free from the infrastructure. |
-| **Graceful handling of out-of-scope messages** | Leads will ask questions the SDR cannot answer (technical specs, pricing tables, competitor comparisons). The Brain must handle these gracefully without hallucinating or crashing. | Medium | Design the system prompt to acknowledge limits and redirect. "Ótima pergunta sobre pricing, deixa eu conectar você com alguém que pode detalhar isso melhor." |
-| **Qualification signal capture into state** | When the lead reveals budget, need, authority, or timeline, these signals must be captured into the LangGraph state, not left only in the message history. | Medium | Design LangGraph state schema with explicit qualification fields. Use a node that extracts signals from the latest message and updates state. |
-| **Human handoff trigger** | When qualification is complete or when the lead explicitly asks for a human, the Brain should flag for handoff. v1.1 scope: set state flag + log. Actual routing to human agent queue is v2. | Low | `handoff_requested: true` in LangGraph state. Log at WARN level. Downstream system reads this flag. |
-
-### Differentiators
-
-| Feature | Value Proposition | Complexity | Notes |
-|---------|-------------------|------------|-------|
-| **Sub-agent for qualification** | PROJECT.md specifies: "o Brain SDR tem uma arquitetura com sub-agente de qualificação: o Brain principal conversa com leads e aciona o sub-agente quando chega o momento de qualificar." This maps to LangGraph subgraph composition — the qualification logic is isolated in its own graph node cluster, not mixed into the main conversation flow. | High | High value: keeps main conversation graph clean. The qualification sub-agent runs as a LangGraph subgraph — it receives the conversation state, runs qualification extraction, returns structured result. Main graph continues with result. |
-| **Adaptive questioning order** | BANT/CHAMP frameworks should not be applied as a rigid script. Leading with Budget first (BANT) vs Challenges first (CHAMP) depends on the lead's first message. An SDR that adapts question order based on what the lead volunteered performs better. | High | Requires LLM to route conversation based on context, not fixed sequence. Design graph with routing nodes that select the next qualification question based on current state. Defer to v2 if too complex for v1.1. |
-| **Conversation tone adaptation** | WhatsApp conversations are informal. An AI that sounds like a corporate script gets ignored. The prompt must instruct informal Brazilian Portuguese with appropriate casualness. | Low | Prompt engineering concern, not infrastructure. Include in system prompt design. High value, low cost. |
-
-### Anti-Features
-
-| Anti-Feature | Why Avoid | What to Do Instead |
-|--------------|-----------|-------------------|
-| **SPIN or full BANT scripted as fixed node sequence** | Fixed qualification sequences ("first ask budget, then ask need, then ask authority") break when the lead volunteers information out of order, which is the default on WhatsApp. | Extract qualification signals dynamically from message content using LLM function calling or structured output. Update qualification state fields when signals appear, regardless of sequence. |
-| **Sending multiple messages per response** | WhatsApp UX: multiple rapid messages from a bot feel like spam and trigger block. One thoughtful message beats three short ones. | System prompt constraint: one message per response. One question per response. |
-| **Asking qualification questions consecutively** | Research confirms "form fatigue" — asking 4 BANT questions in sequence feels like an interrogation. Leads disengage. | Weave qualification questions into natural conversation. One question per exchange. Mix with empathic statements. |
-| **Hard-coding qualification criteria in code** | If SDR qualification criteria change (new product, new market), a code change + redeploy is required. This kills the "update without deploy" value proposition. | Store qualification criteria in the prompts table (DB). The system prompt and qualification instructions are fetched at runtime. Only the graph structure is in code. |
-| **CRM write operations in v1.1** | Writing to external CRM (HubSpot, Pipedrive, Salesforce) adds external API dependency, auth complexity, error handling surface area, and potential for data inconsistency. | Capture all qualification data in LangGraph state + leads table. CRM integration is v2 (separate sync service). |
-| **Full SPIN/BANT completion before handoff** | Requiring 100% qualification before any human contact loses warm leads who want to talk now. | Handoff trigger on: (1) explicit request from lead, (2) sufficient qualification signals captured (3 of 4 criteria), (3) emotional escalation. Don't gate on completeness. |
-
-### Complexity Notes
-
-Brain SDR is the highest-complexity feature area. The qualification sub-agent is a non-trivial LangGraph composition pattern. For v1.1, consider a simplified initial implementation: one graph with explicit qualification state fields, extraction via structured LLM output, without a fully separate subgraph. The full sub-agent architecture (described in PROJECT.md) is the right long-term design but adds implementation time. Risk: over-engineering the graph in v1.1 at the expense of shipping a working Brain. Recommendation: start with a single graph, extract sub-agent in v1.2 once the conversation flow is validated. Total: ~4-5 days for working SDR Brain, +2-3 days for proper sub-agent extraction.
-
-### Dependencies
-
-- Requires: Leads schema (Feature Area 2) — nome, numero available for personalization
-- Requires: Conversation history (Feature Area 3) — thread_id anchoring for memory
-- Requires: Both transports (webhook for testing, RabbitMQ for production)
-- Requires: Prompts table in DB (already planned in PROJECT.md) — SDR system prompt stored there
-- Requires: Auto-migrate on startup (ensures prompts and leads tables exist)
-- Blocks: Nothing in v1.1 (this is the terminal feature, built on everything else)
-
----
-
-## Cross-Feature Dependencies
+### MCP Tool Lifecycle (definitive)
 
 ```
-PostgreSQL schema (auto-migrate on startup)
-  └── leads table (Feature Area 2)
-        └── Lead lookup by numero/IDLead
-        └── ia_ativada gate (shared by both transports)
-        └── thread_id derivation: "lead-${lead.id}"
-              └── PostgresSaver conversation history (Feature Area 3)
-                    └── Brain SDR context recovery (Feature Area 4)
+Brain startup (IBrain.init()):
+  1. Parse MCP_URL from ENV — skip if absent
+  2. Parse MCP_TOOLS CSV → allowedNames[]
+  3. new MultiServerMCPClient({ n8n: { url: MCP_URL, automaticSSEFallback: true } })
+  4. mcpTools = await client.getTools()        ← throws MCPClientError if unreachable
+  5. filtered = mcpTools.filter(t => allowedNames.includes(t.name))
+  6. Store filtered tools on Brain instance
+  7. Merge into allTools = [...existingTools, ...filtered] in buildGraph()
+  8. Compile graph with ToolNode(allTools)
 
-RabbitMQ consumer (Feature Area 1)
-  └── Calls LeadService.findOrCreate(numero, IDLead, nome) (Feature Area 2)
-  └── Checks ia_ativada — returns if false
-  └── Derives thread_id from lead.id
-  └── Calls BrainRunner.run(message, { thread_id }) → Brain SDR (Feature Area 4)
+Per message (IBrain.run()):
+  → No MCP connection work. Tool calls happen inside ToolNode as usual.
+  → When LLM calls getAvailableDate, ToolNode invokes the MCP adapter's tool.run()
+  → Adapter opens a tool-call session to n8n MCP server, executes, returns result
+  → Result lands in ToolMessage in graph state → LLM continues
 
-Webhook transport (existing, fix GAP-1)
-  └── Same LeadService call (shared logic, not duplicated)
-  └── Same ia_ativada gate
-  └── Same thread_id derivation
+Brain shutdown:
+  → await client.close()
+```
 
-LeadService (shared service)
-  └── Used by both transports
-  └── findOrCreate: lookup by IDLead → fallback to numero → INSERT ON CONFLICT
-  └── Returns: lead record + derived thread_id
+### Complexity Assessment
 
-Brain SDR LangGraph graph
-  └── Receives: { message, lead, thread_id }
-  └── State: { messages[], nome, numero, ia_ativada, qualificado, budget_hint, need_hint, timeline_hint, handoff_requested }
-  └── Nodes: greeting | main_conversation | qualification_extractor | handoff_check
-  └── Sub-agent (v1.2): qualification as isolated subgraph
+Overall complexity: **Low-Medium**. The `@langchain/mcp-adapters` package handles all MCP protocol details. The integration work is: (1) adding `MultiServerMCPClient` init in `IBrain.init()`, (2) merging MCP tools into the `ToolNode`, (3) rendering tool descriptions in the system prompt. The main risk is n8n's MCP transport format — verify whether n8n uses SSE or Streamable HTTP to confirm the correct `automaticSSEFallback` setting. Estimated effort: 1.5–2 days.
+
+### Dependencies
+
+- Requires: `@langchain/mcp-adapters` package (new dependency)
+- Requires: `@modelcontextprotocol/sdk` (peer dep, likely already transitive)
+- Requires: n8n MCP server running and accessible from Brain container (network, auth)
+- Integrates with: existing `ToolNode` in Brain SDR graph — MCP tools are appended, not replacing
+- Integrates with: existing `BRAIN_TOOLS` whitelist (TD-03 note: whitelist doesn't cover tools bound directly in buildGraph — same limitation applies here; MCP tools bypass whitelist by design since they're declared via `MCP_TOOLS` ENV)
+- No schema migration required
+
+---
+
+## Dynamic responseMode
+
+### Table Stakes
+
+| Feature | Why Expected | Complexity | Notes |
+|---------|--------------|------------|-------|
+| **`responseMode` in `BrainOutput` decided by LLM, not hardcoded** | v1.2 hardcodes `responseMode: "text"` in the brain node. The entire point of `BrainOutput` structured output was to allow the LLM to control the response format. Hardcoding removes this capability and defeats the schema contract. | Medium | The LLM must output a `BrainOutput`-shaped object as its final response. `responseMode` must be one of `"text" | "audio" | "image"`. |
+| **`createReactAgent` `responseFormat` parameter** | LangGraph's prebuilt `createReactAgent` accepts a `responseFormat` parameter (Zod schema or JSON schema). When provided, the agent makes a **separate final LLM call** after the tool-calling loop completes to produce a structured response. The result lands in `state.structuredResponse`. | Medium | This is the correct mechanism for Brain SDR — tool calling (qualify_lead, MCP tools) happens normally; the final structured response is enforced afterward. No conflict between tool calling and structured output. |
+| **Zod schema for `BrainOutput` passed as `responseFormat`** | `BrainOutputSchema` (already exists in `packages/core`) should be passed as `responseFormat`. The agent enforces the schema on the final response. | Low | `BrainOutputSchema` already defined with Zod in v1.2. Pass it directly: `createReactAgent({ ..., responseFormat: BrainOutputSchema })`. Access result via `state.structuredResponse` not `state.messages[-1]`. |
+| **Multi-provider support: OpenAI and Anthropic** | Brain SDR must work with both providers. `responseFormat` uses `.withStructuredOutput()` internally. LangChain.js abstracts provider differences — the same Zod schema works for both. | Medium | See multi-provider section below for the one actual difference. |
+| **Conditional `mediaUrl` enforcement** | When `responseMode` is `"audio"` or `"image"`, `mediaUrl` is required in `BrainOutput`. This is already enforced by `BrainOutputSchema` Zod conditional validation (`.superRefine()`). No changes needed to the schema — only to how the LLM is prompted to produce it. | Low | System prompt must instruct: "When responseMode is audio or image, you MUST provide mediaUrl." This is a prompt concern, not a schema concern. |
+
+### Schema Design
+
+The `BrainOutput` Zod schema (already defined in v1.2) is the source of truth. No schema changes are needed. Key structure:
+
+```typescript
+// Already exists in packages/core — do not change
+const BrainOutputSchema = z.object({
+  fullResponse: z.string().describe("The full text of the response to send to the user"),
+  responseMode: z.enum(["text", "audio", "image"]).describe(
+    "How the response should be delivered: text for plain text, audio for voice message, image for image attachment"
+  ),
+  mediaType: z.string().optional().describe("MIME type when responseMode is audio or image"),
+  mediaUrl: z.string().url().optional().describe("URL of the media file when responseMode is audio or image"),
+}).superRefine((data, ctx) => {
+  if ((data.responseMode === "audio" || data.responseMode === "image") && !data.mediaUrl) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "mediaUrl required when responseMode is audio or image" });
+  }
+});
+```
+
+**Design recommendation:** Add richer `.describe()` strings to guide the LLM:
+- `responseMode`: "Choose 'audio' only when the user explicitly asks for a voice message. Choose 'image' only when you are providing a visual (chart, image, diagram). Default to 'text'."
+- `fullResponse`: "Always fill this with the complete text response, even when responseMode is audio or image — this is the fallback for clients that cannot render media."
+
+**What `responseFormat` does internally in LangGraph:**
+The `responseFormat` schema becomes a tool (internally named based on schema `$title`). After the main agent loop finishes, a second LLM call is made with only this tool available — forcing the model to output the schema shape. The result goes into `state.structuredResponse`, not `state.messages`. The existing `BrainRunner.run()` must read from `state.structuredResponse` instead of parsing `state.messages[-1]`.
+
+**Impact on `BrainRunner.run()`:**
+```typescript
+// Before (v1.2): reading from last message
+const lastMsg = result.messages[result.messages.length - 1];
+
+// After (v1.3): reading from structuredResponse
+const output = result.structuredResponse as BrainOutput;
+// BrainOutputSchema validation still applies via BrainOutputValidationError
+```
+
+### Multi-Provider Considerations
+
+**The core insight:** LangChain.js's `createReactAgent` with `responseFormat` uses `.withStructuredOutput()` on the model for the final response call. Both OpenAI and Anthropic support this, but their internal mechanism differs.
+
+| Aspect | OpenAI | Anthropic |
+|--------|--------|-----------|
+| Default `withStructuredOutput` method | `json_schema` (native structured output, JSON Schema constrained decoding) | `functionCalling` (tool-based, structured output via forced tool call) |
+| Tool calling + structured output same call | Supported natively | Also supported — they are separate mechanisms: tool calls control what Claude does, output_config controls the final response format |
+| LangChain abstraction | `ChatOpenAI.withStructuredOutput(schema)` | `ChatAnthropic.withStructuredOutput(schema)` |
+| Difference in practice | OpenAI uses JSON Schema constrained decoding directly on the response | Anthropic implements structured output via a forced tool call internally (the `functionCalling` method) — same external behavior |
+| `method` parameter relevance | `json_schema` is default and recommended | Default `functionCalling` is fine; `json_schema` (Anthropic native structured outputs, Nov 2025 GA) is also available but requires `output_config.format` — not exposed via LangChain's `withStructuredOutput` yet |
+| `strict` mode | Supported via `{ strict: true }` in `withStructuredOutput` options | `strict: true` only applies to `functionCalling` method; incompatible with `json_schema` method |
+| Schema support gaps | Full JSON Schema support | Recursive schemas not supported; `additionalProperties` complex cases limited; same limits as Anthropic structured outputs API |
+
+**What this means for Brain SDR implementation:**
+
+1. Use the same `BrainOutputSchema` (Zod) for both providers — no branching needed.
+2. `createReactAgent({ ..., responseFormat: BrainOutputSchema })` works identically for both `ChatOpenAI` and `ChatAnthropic`.
+3. The only code change needed when switching providers is the LLM instantiation — the graph, schema, and `responseFormat` configuration are provider-agnostic.
+4. If using Anthropic and hitting structured output issues: use `withStructuredOutput(schema, { method: "functionCalling" })` explicitly (it is the default, but being explicit avoids ambiguity).
+
+**Known provider-specific pitfall:**
+
+Anthropic's `withStructuredOutput` with `functionCalling` method: the model may occasionally output reasoning/thinking blocks before the tool call. This can cause `withStructuredOutput` to fail parsing. This is a known LangChain.js issue (#10437 — affects extended thinking/Sonnet 3.7 and newer). Mitigation: disable extended thinking when using structured output, or use `ChatAnthropic` without extended thinking enabled.
+
+**The `responseFormat` + tool calling compatibility question (fully resolved):**
+
+LangGraph's `createReactAgent` with `responseFormat`:
+- During the agent loop: normal tool calling runs (qualify_lead, MCP tools). No structured output constraint applied to intermediate steps.
+- After the loop: a final separate LLM call enforces `BrainOutputSchema`. No tool calls in this final call.
+- These are two separate LLM calls — no API-level conflict between tool use and structured output.
+- Anthropic API: `output_config.format` (structured output) and `tools` (tool use) can co-exist in the same request if needed, but LangGraph handles them in separate calls anyway.
+
+### Anti-Features for responseMode
+
+| Anti-Feature | Why Avoid | What to Do Instead |
+|--------------|-----------|-------------------|
+| **`withStructuredOutput()` on the agent's main LLM (not via `responseFormat`)** | Calling `llm.withStructuredOutput(BrainOutputSchema)` on the model used in the agent node prevents tool calling — when structured output is active on the main model, it cannot emit tool calls in the same response. This is the "conflict" people hit. | Use `responseFormat` parameter in `createReactAgent`. LangGraph handles the two-phase approach internally: tools in phase 1, structured output in phase 2. |
+| **Parsing `responseMode` from `state.messages[-1]` with regex/JSON.parse** | Brittle. The LLM may wrap the JSON in markdown backticks, add text before/after, or omit fields. This was the pre-v1.2 approach. | Use `state.structuredResponse` from `createReactAgent` with `responseFormat`. The adapter guarantees the schema. |
+| **Adding `responseMode` as a separate LangGraph tool** | "Call the set_response_mode tool with value='audio'" — this is unnecessary complexity. The `responseFormat` mechanism already forces the LLM to output the complete `BrainOutput` struct including `responseMode`. A separate tool adds a redundant step. | Include `responseMode` as a field in `BrainOutputSchema` — already done in v1.2. |
+| **Making `responseMode` a global Brain config (ENV variable)** | Setting `RESPONSE_MODE=audio` at the ENV level means the Brain can never adapt per-conversation. The point of dynamic responseMode is that the LLM decides per-response. | Let the LLM decide based on context. Guide it with the `responseMode` field description in the schema and system prompt instructions. |
+| **Separate graph node for "response formatting"** | Building a custom node at the end of the graph that calls `llm.withStructuredOutput(BrainOutputSchema)` is a manual reimplementation of what `responseFormat` in `createReactAgent` already provides. | Use the built-in `responseFormat` parameter. |
+
+---
+
+## Cross-Feature Dependencies for v1.3
+
+```
+MCP Integration:
+  @langchain/mcp-adapters installed
+    └── MultiServerMCPClient.init() in IBrain.init()
+          └── getTools() → filtered by MCP_TOOLS ENV
+                └── allTools = [...existingTools, ...mcpTools]
+                      └── ToolNode(allTools) in buildGraph()
+                            └── LLM can now call getAvailableDate, schedule_meeting
+
+Dynamic responseMode:
+  BrainOutputSchema (already in packages/core)
+    └── createReactAgent({ ..., responseFormat: BrainOutputSchema })
+          └── agent loop: normal tool calling (qualify_lead, MCP tools, etc.)
+          └── final call: enforces BrainOutputSchema → state.structuredResponse
+                └── BrainRunner.run() reads state.structuredResponse (not messages[-1])
+                      └── BrainOutputValidationError still thrown if null
+
+Both features coexist cleanly:
+  → MCP tools are in ToolNode (phase 1 of agent loop)
+  → BrainOutput structure is enforced after loop (phase 2)
+  → No conflict
 ```
 
 ---
 
 ## Feature Complexity Summary
 
-| Feature Area | Core Complexity | High-Risk Sub-Feature | Estimated Effort |
-|-------------|----------------|----------------------|-----------------|
-| RabbitMQ Consumer | Medium | Reconnect loop + graceful shutdown | 2 days |
-| Leads Schema + Auto-registration | Low | Race condition on concurrent INSERT | 1 day |
-| Conversation History Wiring | Low | Context window trim + correct thread_id | 1-2 days |
-| Brain SDR (simplified, no sub-agent) | High | Qualification signal extraction from natural language | 4-5 days |
-| Brain SDR sub-agent extraction | High | LangGraph subgraph composition | +2-3 days (v1.2) |
-| Webhook GAP-1 fix | Low | Runner injection in WebhookTransport.start() | 0.5 days |
-
-Total v1.1 estimate: ~9-12 days depending on sub-agent scope decision.
+| Feature | Core Complexity | High-Risk Sub-Feature | Estimated Effort |
+|---------|----------------|----------------------|-----------------|
+| MCP Integration (MultiServerMCPClient + tool injection) | Low-Medium | n8n transport format (SSE vs Streamable HTTP) — verify before assuming | 1.5–2 days |
+| MCP system prompt integration | Low | Rendering tool descriptions from StructuredTool schema | 0.5 days |
+| Dynamic responseMode via `responseFormat` | Medium | Changing BrainRunner.run() to read `structuredResponse` — breaks existing SDR if not done carefully | 1–1.5 days |
+| Multi-provider validation (OpenAI + Anthropic) | Low | Anthropic extended thinking + withStructuredOutput conflict (avoid extended thinking) | 0.5 days |
+| TD-01 fix (`qualifier.ts` `prepare: false`) | Low | Carry-over tech debt, targeted fix | 0.5 days |
+| **Total v1.3 estimate** | | | **4–5 days** |
 
 ---
 
 ## Sources
 
-- [RabbitMQ Consumer Acknowledgements (official docs)](https://www.rabbitmq.com/docs/confirms)
-- [RabbitMQ Dead Letter Exchanges (official docs)](https://www.rabbitmq.com/docs/dlx)
-- [RabbitMQ in Production: DLQ, Retry with TTL, and a Generic Consumer Framework (Medium, Jan 2026)](https://medium.com/@thyagodoliveiraperez/rabbitmq-in-production-dlq-retry-with-ttl-and-a-generic-consumer-framework-3482f9cf2337)
-- [Graceful Shutdown of containerised RabbitMQ consumers with Kubernetes (Medium)](https://medium.com/@Monu_Kumar/graceful-shutdown-of-containerised-rabbitmq-consumers-with-kubernetes-6f183368db57)
-- [amqplib-bun package (socket.dev)](https://socket.dev/npm/package/amqplib-bun)
-- [Managing LangGraph State Across Multiple Servers Using PostgreSQL (Medium, Jun 2026)](https://medium.com/@venkatanaveen.avvaru/managing-langgraph-state-across-multiple-servers-using-postgresql-e3c87e62c058)
-- [Managing Threads and Conversation History in LangChain with Checkpoints (Medium)](https://medium.com/@m.naufalrizqullah17/managing-threads-and-conversation-history-in-langchain-with-checkpoints-df7b02beb321)
-- [Internals of LangGraph Postgres Checkpointer (blog.lordpatil.com)](https://blog.lordpatil.com/posts/langgraph-postgres-checkpointer/)
-- [Stop Using Flow-Builders for Sales: Build a WhatsApp Lead Qualification Agent (trypeach.ai)](https://trypeach.ai/blog/whatsapp-lead-qualification-agent-vs-flow-builder)
-- [AI SDR Agents: the complete guide for sales teams in 2026 (monday.com)](https://monday.com/blog/crm-and-sales/ai-sdr-agent/)
-- [BANT Lead Qualification: AI-Adapted 2026 (setsmart.io)](https://setsmart.io/blog/bant-lead-qualification)
-- [WhatsApp Lead Qualification: Why It's Urgent & How to Automate (trengo.com)](https://trengo.com/blog/whatsapp-lead-qualification)
-- [Idempotent Consumer Pattern (microservices.io)](https://microservices.io/post/microservices/patterns/2020/10/16/idempotent-consumer.html)
-- [Reliable RabbitMQ: Preventing Message Loss, Duplicates, and Ordering Issues (backend-engineering-chronicles.github.io)](https://backend-engineering-chronicles.github.io/2025/10/31/reliable-rabbitmq-preventing-message-loss-duplicates-and-ordering-issues.html)
-- [n8n workflow: AI-powered lead qualification chatbot with Claude, PostgreSQL memory (GitHub)](https://github.com/cameronobriendev/ai-chat-agent)
+- [@langchain/mcp-adapters GitHub (langchainjs)](https://github.com/langchain-ai/langchainjs/tree/main/libs/langchain-mcp-adapters)
+- [LangChain MCP Adapters announcement](https://changelog.langchain.com/announcements/mcp-adapters-for-langchain-and-langgraph)
+- [LangChain.js MCP documentation (official)](https://docs.langchain.com/oss/javascript/langchain/mcp)
+- [MCP Adapters JS reference](https://reference.langchain.com/javascript/langchain-mcp-adapters)
+- [Anthropic Structured Outputs API (official, GA)](https://platform.claude.com/docs/en/build-with-claude/structured-outputs)
+- [Anthropic Tool Use Overview (official)](https://platform.claude.com/docs/en/agents-and-tools/tool-use/overview)
+- [LangChain Structured Output (JS official)](https://docs.langchain.com/oss/javascript/langchain/structured-output)
+- [createReactAgent responseFormat parameter type](https://reference.langchain.com/javascript/types/_langchain_langgraph.prebuilt.CreateReactAgentParams.html)
+- [LangGraph issue #5872 — responseFormat as tool internally](https://github.com/langchain-ai/langgraph/issues/5872)
+- [LangGraph JS issue #1277 — strict mode for responseFormat JSON Schema](https://github.com/langchain-ai/langgraphjs/issues/1277)
+- [Get Structured Output from LangGraph (Agentuity)](https://agentuity.com/blog/langgraph-structured-output)
+- [LangChain.js withStructuredOutput thinking block conflict issue #10437](https://github.com/langchain-ai/langchainjs/issues/10437)
+- [n8n MCP Server endpoint format](https://docs.n8n.io/integrations/builtin/cluster-nodes/sub-nodes/n8n-nodes-langchain.toolmcp/)
+- [LangGraph MCP Client Setup (generect.com, 2026)](https://generect.com/blog/langgraph-mcp/)
+- [Connecting to MCP Server with LangChain.js (Marc Nuri)](https://blog.marcnuri.com/connecting-to-mcp-server-with-langchainjs)

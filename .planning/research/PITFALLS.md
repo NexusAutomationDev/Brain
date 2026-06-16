@@ -1,8 +1,555 @@
 # Domain Pitfalls
 
 **Domain:** TypeScript AI Agent Platform (LangGraph + PostgreSQL/PGVector + Bun + Drizzle ORM, multi-tenant)
-**Researched:** 2026-06-11 (v1.0) · Updated 2026-06-13 (v1.1 addendum)
+**Researched:** 2026-06-11 (v1.0) · Updated 2026-06-13 (v1.1 addendum) · Updated 2026-06-15 (v1.3 addendum)
 **Overall confidence:** HIGH — all pitfalls verified against official docs, GitHub issues, or multiple production reports
+
+---
+
+## v1.3 Addendum: MCP Integration + Dynamic responseMode Pitfalls
+
+> These pitfalls are specific to adding MCP tool integration and dynamic responseMode (withStructuredOutput) to the existing Brain Core v1.2 system (Bun + LangGraph 1.3.7 + postgres.js + PostgresSaver). Generic pitfalls from v1.0/v1.1 are preserved below. Do not repeat already-documented risks — reference them inline only.
+
+---
+
+## MCP Integration Pitfalls
+
+### MCP-01: SSE Transport is Deprecated — Use Streamable HTTP from Day One
+
+**Severity:** HIGH
+
+**What goes wrong:** n8n's MCP Server Trigger and the MCP spec both supported SSE transport historically. SSE is now deprecated in the MCP specification (deprecated in the March 2025 spec revision) and multiple platforms (Atlassian, Keboola) have drop-dead dates in mid-2026. If Brain Core is built against the SSE transport, it will need to be migrated to Streamable HTTP under deadline pressure.
+
+The SSE transport also has structural problems: it requires two endpoints (one for SSE stream, one for POST), creates long-lived connections that die under load balancers and serverless infrastructure, and has no clean recovery path when the connection drops mid-tool-call.
+
+**Why it happens:** Much of the online tutorial content still shows SSE (`/sse` endpoint), and `@langchain/mcp-adapters` will auto-fallback to SSE if the server supports it, masking the deprecation.
+
+**Consequences:** Forced migration mid-production, broken connections under infrastructure scaling, vendor deadline-driven breakages.
+
+**Prevention:**
+- Set `transport: "streamable_http"` (underscore, not hyphen — see MCP-02) explicitly in every server config
+- n8n's MCP Server Trigger supports both SSE and Streamable HTTP (HTTP Streamable is now the recommended method for all new implementations per n8n docs)
+- When using `MultiServerMCPClient` in `@langchain/mcp-adapters`, always specify transport explicitly — never rely on auto-negotiation in production:
+```typescript
+const client = new MultiServerMCPClient({
+  servers: {
+    n8n: {
+      transport: "streamable_http",  // NOT "streamable-http" — see MCP-02
+      url: process.env.MCP_URL!,
+      headers: { Authorization: `Bearer ${process.env.MCP_API_KEY}` },
+    },
+  },
+});
+```
+
+**Phase to address:** Phase 14 (MCP integration), during the initial client setup. Do not defer.
+
+---
+
+### MCP-02: Transport Name Typo Causes Silent ValueError — `streamable_http` Not `streamable-http`
+
+**Severity:** HIGH
+
+**What goes wrong:** `@langchain/mcp-adapters` accepts `"streamable_http"` (underscore) as the transport name. Developers writing `"streamable-http"` (hyphen, which looks more natural and matches other conventions) get a `ValueError: Unsupported transport: streamable-http. Must be one of: 'stdio', 'sse', 'websocket', 'streamable_http'`. This error fires at startup during client initialization, before any tool is loaded, and the error message mentions the correct spelling — but only if you read it carefully.
+
+**Why it happens:** The library uses Python-style underscore naming for an option developers expect to follow URL/HTTP kebab-case convention. Confirmed bug/UX issue in the langchain-mcp-adapters repository (issue #322).
+
+**Consequences:** Brain startup fails with a cryptic error. MCP tools are never registered. The Brain starts without external tools, but the error is only caught if startup failure is handled properly (see MCP-04).
+
+**Prevention:**
+- Use a constant for the transport name, not an inline string literal:
+```typescript
+const MCP_TRANSPORT = "streamable_http" as const; // verified spelling
+```
+- Add a startup test that explicitly validates the transport config string before attempting connection
+
+**Phase to address:** Phase 14. Add a config validation step before `client.initialize()`.
+
+---
+
+### MCP-03: MultiServerMCPClient Silent Tool Loss When Any Server Fails
+
+**Severity:** CRITICAL
+
+**What goes wrong:** When `MultiServerMCPClient` connects to multiple MCP servers and any one server fails to connect, all tools from all servers are silently lost — including tools from healthy servers. Confirmed bug in langchain-mcp-adapters (Python issue #492). The root cause is `asyncio.gather()` without `return_exceptions=True`, causing one failed task to cancel all remaining tasks. The JS implementation uses a similar pattern.
+
+In the Brain Core context: if Brain SDR configures `MCP_TOOLS=search_crm,schedule_meeting` and the n8n server is unreachable at startup, the Brain's `allTools` array will be empty — including the existing LangGraph-native tools (`pause_session`, `finish_conversation`, `qualify_lead`). The graph compiles with zero tools, and the LLM will output plain text without ever calling tools.
+
+**Why it happens:** The concurrent connection initialization pattern does not isolate per-server failures. One broken server poisons the entire tool registry.
+
+**Consequences:** Brain starts without any tools. LLM outputs plain text. No error is surfaced to the user. Conversations appear to work but no tools execute.
+
+**Prevention:**
+- Set `onConnectionError: "ignore"` in the MultiServerMCPClient config to skip failed servers:
+```typescript
+const client = new MultiServerMCPClient({
+  servers: { n8n: { ... } },
+  // If n8n is down, continue with zero MCP tools rather than crashing
+  onConnectionError: "ignore",
+});
+```
+- Always concatenate MCP tools with existing Brain tools AFTER the MCP client initializes — the local tools are registered unconditionally:
+```typescript
+const mcpTools = await client.getTools().catch(() => []); // defensive fallback
+const allTools = [...brainTools, ...mcpTools]; // brainTools always present
+```
+- Log how many MCP tools were loaded at startup: `logger.info({ count: mcpTools.length, tools: mcpTools.map(t => t.name) }, 'MCP tools loaded')`
+- Monitor: if `mcpTools.length === 0` in production and `MCP_URL` is set, alert — this is unexpected
+
+**Phase to address:** Phase 14. The defensive fallback pattern must be in the initial MCP integration implementation, not added later.
+
+---
+
+### MCP-04: Brain Does Not Start if MCP Server is Unreachable at Startup
+
+**Severity:** HIGH
+
+**What goes wrong:** The default behavior of `MultiServerMCPClient.initialize()` (or `loadMcpTools()`) is to throw if any configured server is unreachable. If `BrainRunner.init()` awaits MCP tool loading without a fallback, and the n8n server is down (planned maintenance, network issue, cold start), the Brain fails to start entirely. All incoming messages are dropped. RabbitMQ messages pile up in the queue.
+
+This is especially dangerous because MCP server unavailability at startup is not a bug — it's an expected operational condition (n8n restarts, network blips, cold starts in serverless deployments).
+
+**Why it happens:** Treating external tool registration as a hard dependency of Brain startup couples the Brain's availability to the n8n server's availability.
+
+**Consequences:** Brain fails to start, Docker restarts the container, creating a restart loop. If n8n is down for 30 minutes, Brain is down for 30 minutes — this violates the requirement that Brain SDR must be available to receive messages even when optional integrations are unavailable.
+
+**Prevention:**
+- Make MCP tool loading non-blocking and non-fatal at startup:
+```typescript
+async function loadMcpToolsSafely(): Promise<StructuredTool[]> {
+  try {
+    const client = new MultiServerMCPClient({ ... });
+    await client.initialize();
+    return await client.getTools();
+  } catch (err) {
+    logger.warn({ err }, 'MCP server unreachable at startup — running without MCP tools');
+    return [];
+  }
+}
+```
+- Implement lazy re-registration: schedule a retry to load MCP tools after 30s, 60s, 120s — and rebuild the graph if tools become available. This is complex; defer to v1.4 if not needed at launch
+- For v1.3: accept "MCP tools unavailable at startup → Brain starts without them" as the degraded mode. The LLM will simply not have access to n8n tools until the server reconnects
+
+**Phase to address:** Phase 14. The startup sequence must be designed with this failure mode explicitly.
+
+---
+
+### MCP-05: Bun `Bun.serve` Closes SSE/Streaming Connections After 10 Seconds Idle
+
+**Severity:** MEDIUM
+
+**What goes wrong:** `Bun.serve` has a default `idleTimeout` of 10 seconds. Any SSE or HTTP streaming connection that is silent for more than 10 seconds is forcibly closed by Bun. This affects:
+1. If Brain Core is itself acting as an MCP server (not the primary use case, but possible in the future)
+2. If the `@langchain/mcp-adapters` client receives a Streamable HTTP response that takes >10 seconds to stream (long-running tool calls)
+
+For the current use case (Brain Core as MCP CLIENT connecting to n8n): this pitfall applies to Bun's outbound HTTP client behavior, which is different from `Bun.serve`. Bun's `fetch()` does not have the same 10-second idle timeout — it uses the OS TCP keepalive. However, if n8n sends partial streaming responses with >10s gaps, Bun's fetch may still time out depending on the OS configuration.
+
+**Confirmed Bun issue:** GitHub issue #27479 documents that Bun.serve disconnects quiet SSE streams around 10 seconds without documentation of this behavior.
+
+**Prevention:**
+- If Brain Core ever acts as an MCP server: call `server.timeout(req, 0)` to disable the idle timeout for SSE/streaming connections, or send heartbeat comments (`\n`) every 5 seconds
+- For the client side (connecting to n8n): set explicit fetch timeouts in the MCP client config that are longer than the expected tool execution time:
+```typescript
+{
+  transport: "streamable_http",
+  url: process.env.MCP_URL,
+  timeout: 120_000, // 2 minutes — LangChain MCP adapters respect this via RunnableConfig
+}
+```
+- The MCP spec recommends servers send periodic pings every ≤30 seconds; verify n8n's MCP server does this
+
+**Phase to address:** Phase 14. Set the timeout in the initial client config and document the rationale.
+
+---
+
+### MCP-06: MCP Tool Call Leaves Pending AIMessage If Tool Execution Is Cancelled
+
+**Severity:** HIGH
+
+**What goes wrong:** If a MCP tool call is in-flight (LLM returned `AIMessage` with `tool_calls`) and the tool execution is cancelled (timeout, process shutdown, asyncio cancellation), LangGraph's ToolNode does NOT create an error ToolMessage when using `handle_tool_errors=True`. This is because `asyncio.CancelledError` inherits from `BaseException`, not `Exception`, and the current ToolNode error handler only catches `Exception`.
+
+Result: the message history ends up with an `AIMessage` that has `tool_calls` but no corresponding `ToolMessage`. On the next invocation, LangGraph raises `INVALID_CHAT_HISTORY` and the entire thread becomes permanently broken — every subsequent message for that lead will fail.
+
+**Why this matters for MCP:** MCP tool calls to remote servers (n8n) are inherently slower and more likely to hit timeouts than local tool calls. A 30-second timeout on a CRM search is normal; a 30-second timeout in a web request handler is a death sentence.
+
+**Prevention:**
+- Wrap every MCP tool execution in a try/catch that catches `BaseException` (or the equivalent JS-side Error), not just `Error`:
+```typescript
+// In ToolNode or custom tool wrapper:
+try {
+  const result = await mcpTool.invoke(args);
+  return result;
+} catch (err) {
+  // Catches both Error and timeout/cancellation errors
+  return `Tool execution failed: ${err instanceof Error ? err.message : String(err)}`;
+}
+```
+- Use `handle_tool_errors: true` on the ToolNode as a first line of defense, but do NOT rely on it for timeout/cancellation cases — add the wrapper above
+- Set a per-MCP-tool timeout that is shorter than the overall message processing timeout, ensuring the tool fails gracefully before the surrounding handler times out
+
+**Phase to address:** Phase 14. The timeout and error handling strategy for MCP tools must be defined at integration time.
+
+---
+
+### MCP-07: MCP Tool Names Collide With Existing Brain Tools
+
+**Severity:** MEDIUM
+
+**What goes wrong:** The `ENV MCP_TOOLS=search_crm,schedule_meeting` whitelist specifies which MCP tools to register. If an MCP tool from n8n happens to have the same name as an existing Brain tool (`pause_session`, `finish_conversation`, `qualify_lead`), the second registration silently overwrites the first in the tools array. The LLM receives the n8n tool's schema for what it believes is the `pause_session` tool, and calling it sends a request to n8n instead of executing the local database operation.
+
+**Why it happens:** ToolNode matches tool calls by name (`tool.name`). When two tools share a name, the last one registered wins.
+
+**Prevention:**
+- Namespace MCP tools with a prefix when registering them: `mcp_${toolName}`. This requires a thin wrapper:
+```typescript
+const namespacedMcpTools = mcpTools.map(tool => ({
+  ...tool,
+  name: `mcp_${tool.name}`, // prevents collisions with local tools
+}));
+```
+- Alternatively, validate at startup that `mcpTools.map(t => t.name)` has no intersection with `brainTools.map(t => t.name)` and throw a descriptive error if there is one
+- Document the naming convention in the Brain SDK so future Brain implementors know MCP tools will be prefixed
+
+**Phase to address:** Phase 14. Add the namespace wrapper before concatenating tools arrays.
+
+---
+
+## Structured Output + Tool Calling Pitfalls
+
+### SO-01: responseFormat Creates a Second LLM Call — Hidden Cost and Information Loss
+
+**Severity:** HIGH
+
+**What goes wrong:** Using `responseFormat` in `createReactAgent` (or the equivalent in a custom graph) does NOT make the final agent response structured in-line. Instead, LangGraph adds a second LLM call after the agent loop completes to "reformat" the last message into the schema. This second call:
+1. Doubles the output token cost for every conversation turn
+2. Often loses information — the reformatting call summarizes or reinterprets the original response rather than preserving it. Confirmed LangGraph issue #4756: the `structured_response` field "omitted or significantly altered" the original LLM output.
+3. Does not have access to the conversation history unless explicitly passed — it only sees the last message
+
+**Why it happens:** LangGraph's `generate_structured_response` node (the separate node handling structured output formatting) is not the same as the main `call_model` node. The architecture separates "do the work" from "format the output."
+
+**The issue:** For `BrainOutput` (`fullResponse` + `responseMode`), the `fullResponse` field is the actual message to send to the user. If the reformatting call rewrites `fullResponse`, the user receives a different message than what the LLM originally intended.
+
+**Prevention:**
+- For the `responseMode` use case specifically: use a **custom graph node** (not `createReactAgent`'s `responseFormat`) that handles structured output inline. The final agent node should call `.withStructuredOutput(BrainOutputSchema)` directly for the final response generation:
+```typescript
+// In the final output node — NOT a separate reformatting node:
+const structuredModel = llm.withStructuredOutput(BrainOutputSchema, { method: "json_schema" });
+const result = await structuredModel.invoke([
+  new SystemMessage(SYSTEM_PROMPT),
+  ...state.messages,
+  new HumanMessage("Format your last response as BrainOutput JSON")
+]);
+return { structuredResponse: result };
+```
+- Alternatively, use the `toolStrategy` approach from LangGraph issue #5872: convert `BrainOutputSchema` into a tool definition, bind it alongside the regular tools, and route to a respond node when the LLM calls the schema tool. This avoids the second call entirely by making structured output part of the main agent loop.
+- Log both `state.messages[last]` and `state.structuredResponse.fullResponse` in Langfuse — if they diverge significantly, the reformatting is corrupting the response.
+
+**Phase to address:** Phase 14 (responseMode implementation). Decide the strategy (custom node vs. schema-as-tool) before implementing — retrofitting is costly.
+
+---
+
+### SO-02: `structuredResponse` Not Available in `.getState()` — Breaks Checkpoint Recovery
+
+**Severity:** HIGH
+
+**What goes wrong:** When using `createReactAgent` with `responseFormat`, the `structuredResponse` field is NOT written into the graph state that is persisted by PostgresSaver. Instead, the parsed result is stored only as a `ToolMessage` in the messages array. Confirmed forum issue (January 2026): `.getState()` returns `values.structuredResponse` as `undefined` even after the agent successfully generated a structured response.
+
+**Why this matters for Brain Core:** BrainRunner currently reads the graph output from the invocation result directly, not from `.getState()`. However, any future attempt to recover mid-conversation state, implement human-in-the-loop, or resume an interrupted conversation will fail to find `structuredResponse` — it must be re-derived from the messages array.
+
+**Prevention:**
+- Build a custom StateGraph that explicitly writes structured output into state:
+```typescript
+const BrainState = Annotation.Root({
+  messages: Annotation<BaseMessage[]>({ reducer: messagesStateReducer }),
+  structuredResponse: Annotation<BrainOutput | undefined>({ default: () => undefined }),
+});
+// In the output node:
+return { structuredResponse: parsedBrainOutput }; // written to state, persisted
+```
+- This is a strong argument for NOT using `createReactAgent` for the Brain's main graph — use a custom StateGraph where `structuredResponse` is a first-class state field
+- The existing Brain SDR architecture already uses a custom graph (not `createReactAgent`); extend it rather than switching to the prebuilt agent
+
+**Phase to address:** Phase 14. If using custom graph (recommended), this pitfall is avoided by design.
+
+---
+
+### SO-03: Model Silently Returns Text Without Making the Schema Tool Call
+
+**Severity:** HIGH
+
+**What goes wrong:** When using the `toolStrategy` for structured output (where the schema is presented to the LLM as a callable tool), the model occasionally decides to respond with plain text instead of calling the schema tool. This happens more frequently with weaker models and when the conversation reaches an unusual state (apologies, refusals, clarification requests). The result: `structuredResponse` is `undefined`, the agent returns successfully, and BrainRunner receives a `null` output — triggering `BrainOutputValidationError`.
+
+Confirmed in langchain issue #36349: "the problem arises only when models fail to make an output tool call altogether." The code only validates structured outputs when tool calls exist — the "no tool call" scenario returns silently without `structuredResponse`.
+
+**Prevention:**
+- After the agent completes, validate that `structuredResponse` is present before returning:
+```typescript
+const result = await graph.invoke(input, config);
+if (!result.structuredResponse) {
+  // Retry with a stronger prompt or use `.withStructuredOutput()` directly
+  const fallback = await llm.withStructuredOutput(BrainOutputSchema).invoke([
+    ...result.messages,
+    new HumanMessage("You must respond as BrainOutput JSON. Provide fullResponse and responseMode.")
+  ]);
+  return { ...result, structuredResponse: fallback };
+}
+```
+- Use `method: "json_schema"` (provider-native) over `toolStrategy` when the provider supports it — native structured output is a hard guarantee, not a "please call this tool" request
+- In Langfuse traces, add a counter for "structured output fallback invocations" — if it exceeds 1% of turns, the primary strategy is unreliable
+
+**Phase to address:** Phase 14. Add the validation + fallback before the first production deployment.
+
+---
+
+### SO-04: INVALID_CHAT_HISTORY After MCP Tool Timeout Corrupts Thread
+
+**Severity:** HIGH
+
+**What goes wrong:** When an MCP tool call times out or is cancelled mid-execution, the ToolNode may fail to write the `ToolMessage` response (see MCP-06). Combined with the PostgresSaver checkpoint, this means the corrupt state is persisted. On the next invocation for the same lead, LangGraph loads the checkpoint, finds an `AIMessage` with `tool_calls` and no matching `ToolMessage`, and throws `INVALID_CHAT_HISTORY`.
+
+The error message is: "Found AIMessage with tool_calls that do not have a corresponding ToolMessage." This happens in the `call_model` node, before the agent even starts processing the new message.
+
+**Why this is especially dangerous:** The thread remains broken permanently — every subsequent message for that lead fails. There is no self-healing. The only recovery is manual checkpoint surgery or clearing the thread.
+
+**Prevention:**
+- In the ToolNode error handler, always write an error ToolMessage for every tool_call_id in the AIMessage, even on timeout/cancellation:
+```typescript
+// Custom ToolNode wrapper that guarantees ToolMessage parity:
+const safeToolNode = async (state: BrainState) => {
+  const lastMessage = state.messages[state.messages.length - 1] as AIMessage;
+  const toolCallIds = lastMessage.tool_calls?.map(tc => tc.id) ?? [];
+  
+  try {
+    return await toolNode.invoke(state);
+  } catch (err) {
+    // Guarantee a ToolMessage for every pending tool call
+    return {
+      messages: toolCallIds.map(id => new ToolMessage({
+        tool_call_id: id,
+        content: `Tool execution failed: ${err instanceof Error ? err.message : String(err)}`,
+      }))
+    };
+  }
+};
+```
+- Add a startup integrity check: query PostgresSaver for threads where the last message is an AIMessage with tool_calls but no subsequent ToolMessage — these are broken and should be flagged for manual review
+- Implement a "repair" utility that appends a synthetic error ToolMessage to broken threads
+
+**Phase to address:** Phase 14. The safe ToolNode wrapper must be in place before any MCP tool is registered.
+
+---
+
+## Multi-Provider Structured Output Pitfalls
+
+### MP-01: Anthropic's `withStructuredOutput` Uses Tool Emulation by Default, Not Native JSON Schema
+
+**Severity:** HIGH
+
+**What goes wrong:** When calling `chatAnthropic.withStructuredOutput(schema)` without specifying `method`, LangChain defaults to `"function_calling"` (tool_use emulation) for Anthropic, NOT the native `json_schema` structured output. The two methods behave very differently:
+
+- **Tool emulation** wraps the schema as a tool definition and forces Claude to call it. This works for simple schemas but has important limitations: it is NOT available when `thinking` mode is enabled (extended thinking), and it uses a tool call in the API that consumes tokens differently.
+- **Native json_schema** (`output_config` parameter in the Claude API) uses grammar-constrained decoding — a hard guarantee, not a "please call this tool" request. This requires the `"structured-outputs-2025-11-13"` beta header (now GA for Claude Sonnet 4.5+, Haiku 4.5+, Opus 4.5+).
+
+**Provider support gap:** Anthropic's native structured outputs do not support recursive schemas, `minLength`/`maxLength` string constraints, `minimum`/`maximum` number constraints, `additionalProperties` as anything other than `false`, and complex regex patterns. If `BrainOutputSchema` uses any of these features, the native method silently falls back to tool emulation or throws a 400 error with "Schema is too complex for compilation."
+
+**Prevention:**
+- Explicitly specify the method — never rely on the default:
+```typescript
+// For OpenAI (native JSON Schema — hard guarantee, strict mode):
+const openAIStructured = chatOpenAI.withStructuredOutput(BrainOutputSchema, {
+  method: "json_schema",
+  strict: true,
+});
+
+// For Anthropic (native JSON Schema — grammar-constrained, GA for Sonnet 4.5+):
+const anthropicStructured = chatAnthropic.withStructuredOutput(BrainOutputSchema, {
+  method: "json_schema",
+});
+
+// Fallback to tool emulation for older Claude models:
+const anthropicFallback = chatAnthropic.withStructuredOutput(BrainOutputSchema, {
+  method: "function_calling", // explicit, not default
+});
+```
+- Keep `BrainOutputSchema` simple: no recursive refs, no string length constraints, `additionalProperties: false` on all objects. Current BrainOutput (`fullResponse: string`, `responseMode: enum`) is safe for both methods.
+- Test the chosen method against both providers in CI with the actual schema before any production deployment
+
+**Phase to address:** Phase 14. The method must be explicit in the provider-specific model initialization, not discovered at runtime.
+
+---
+
+### MP-02: OpenAI JSON Schema Strict Mode Rejects Zod Schemas With Internal `$ref`
+
+**Severity:** HIGH
+
+**What goes wrong:** OpenAI's `json_schema` structured output with `strict: true` does not support relative `$ref` references in the JSON Schema, but LangChain's standard `zod-to-json-schema` conversion generates `$ref` when the same sub-schema is reused in multiple places. This causes a 400 API error when the schema is sent to OpenAI.
+
+Confirmed LangChain.js issue #6479: "LangChain triggers an OpenAI 400 error, and the OpenAI client doesn't." OpenAI uses a forked, specialized version of `zod-to-json-schema` that avoids relative references; LangChain uses the standard version.
+
+The symptom: `BrainOutputSchema` works fine locally (without `strict: true`) and fails in production with a cryptic 400 error after enabling strict mode.
+
+**Prevention:**
+- Keep `BrainOutputSchema` flat — avoid reusing sub-schemas in multiple places. The current schema (`fullResponse: z.string(), responseMode: z.enum([...])`) is flat and safe.
+- If the schema must be complex, use OpenAI's own conversion helpers instead of relying on LangChain's conversion:
+```typescript
+import { zodResponseFormat } from "openai/helpers/zod"; // OpenAI's own converter
+const format = zodResponseFormat(BrainOutputSchema, "brain_output");
+// Pass to ChatOpenAI as responseFormat rather than using .withStructuredOutput()
+```
+- Add a CI test that sends the exact schema to OpenAI with `strict: true` and validates the response — not just that the LLM returns valid JSON, but that the API call doesn't 400
+
+**Phase to address:** Phase 14. Test with `strict: true` in CI from day one.
+
+---
+
+### MP-03: Anthropic Native Structured Output Schema Restrictions Can Block Deployment
+
+**Severity:** MEDIUM
+
+**What goes wrong:** Anthropic's native structured output (`method: "json_schema"`) has hard schema restrictions that differ from OpenAI's. Specifically:
+- **No `minItems > 1`** on arrays (only `minItems: 0` or `minItems: 1`)
+- **No numerical constraints** (`minimum`, `maximum`, `multipleOf`)
+- **No string length constraints** (`minLength`, `maxLength`)
+- **No recursive schemas** (even indirect recursion via `$ref`)
+- **`additionalProperties` must be `false`** on all objects (not omitted, not `true`)
+- **Maximum 20 strict tools + 24 optional parameters + 16 union type parameters** per request
+- **First-request latency** for grammar compilation — can add 1-5 seconds to first use of a new schema
+
+If `BrainOutputSchema` evolves to include any of these features, Anthropic will return a 400 "Schema is too complex for compilation" error. The error surfaces only at runtime, not at schema definition time.
+
+**Prevention:**
+- Treat Anthropic's schema restrictions as the common denominator for schema design. If it works within Anthropic's restrictions, it works everywhere.
+- Add `additionalProperties: false` explicitly to every object in the schema (Zod schemas converted with `z.object({...}).strict()` handle this automatically)
+- Test schema compilation by calling the Anthropic API once at startup (as a warmup that also validates the schema) — cache the compiled grammar for 24 hours via prompt cache headers
+- Never use schema features beyond: primitive types, enum, arrays of primitives, nested objects, optional fields with defaults
+
+**Phase to address:** Phase 14. Apply the schema design constraints from the first draft.
+
+---
+
+### MP-04: Provider Auto-Detection Logic Can Switch Silently Between Methods
+
+**Severity:** MEDIUM
+
+**What goes wrong:** LangGraph's `AutoStrategy` for structured output detects whether the provider supports native structured output and automatically uses it if available. If Anthropic adds native support for a feature that wasn't previously supported (or removes beta header requirements), the strategy may silently switch from `toolStrategy` to `providerStrategy` after a LangChain version update. The two strategies produce different message structures: `toolStrategy` adds a synthetic `ToolMessage` to the history; `providerStrategy` adds an `AIMessage` with a different content type.
+
+This silent switch can corrupt the message history interpretation in BrainRunner if the code assumes a specific message structure.
+
+**Prevention:**
+- Never use `AutoStrategy` in production — always specify `toolStrategy()` or `providerStrategy()` explicitly
+- Pin `@langchain/core` and `@langchain-anthropic` versions and audit changelogs before upgrading
+- Add an integration test that asserts the exact type of the last message after structured output generation (ToolMessage vs AIMessage) — this test will catch strategy switches during dependency updates
+
+**Phase to address:** Phase 14. Document the chosen strategy in the architecture decision for responseMode.
+
+---
+
+### MP-05: Anthropic Structured Output Is Incompatible With Extended Thinking
+
+**Severity:** LOW (current) / HIGH (future)
+
+**What goes wrong:** Anthropic's extended thinking mode (`thinking: { type: "enabled", budget_tokens: N }`) is incompatible with forced tool calling (tool_use emulation for structured output). If future Brain versions add thinking mode for complex reasoning tasks, using `method: "function_calling"` for structured output will throw an API error.
+
+Additionally, the native `json_schema` structured output via `output_config` and extended thinking cannot be used simultaneously in the same API request — the response will be a mix of `thinking` blocks and JSON text, which the structured output parser cannot handle.
+
+**Prevention:**
+- For any model configuration that enables thinking: use a post-processing extraction step rather than structured output for the response format
+- Document this constraint in the BrainOutputSchema module: "structured output methods are incompatible with Claude thinking mode — do not enable both"
+- If thinking mode is added in a future Brain, remove `withStructuredOutput` from that Brain's graph and use a manual JSON extraction + Zod parse step instead
+
+**Phase to address:** Flag for Phase 14 documentation. Not an active risk for v1.3 scope.
+
+---
+
+## Bun-Specific Pitfalls
+
+### BUN-01: Bun `fetch()` EventSource Polyfill Gap for SSE MCP Client
+
+**Severity:** MEDIUM
+
+**What goes wrong:** The `@modelcontextprotocol/sdk` (used internally by `@langchain/mcp-adapters`) uses `EventSource` for SSE transport connections. Bun's built-in `fetch()` supports SSE as a readable stream, but does NOT natively implement the `EventSource` Web API class. Libraries that do `new EventSource(url)` will throw `ReferenceError: EventSource is not defined` in Bun.
+
+This is only relevant if using SSE transport (which should be avoided per MCP-01). For Streamable HTTP transport, `EventSource` is not used — the transport uses standard `fetch()` with streaming response bodies, which Bun handles correctly.
+
+**Prevention:**
+- Use Streamable HTTP transport (which avoids this entirely) — see MCP-01
+- If SSE transport is required for legacy n8n compatibility: install `eventsource` polyfill and inject it:
+```typescript
+import EventSource from "eventsource";
+if (typeof globalThis.EventSource === "undefined") {
+  (globalThis as any).EventSource = EventSource;
+}
+```
+- Add a startup test that imports `@langchain/mcp-adapters` and creates a client with SSE transport to verify the polyfill works
+
+**Phase to address:** Phase 14. Relevant only if forced to use SSE transport.
+
+---
+
+### BUN-02: MCP Client Connection Not Properly Closed on Process Shutdown — Bun Process Hangs
+
+**Severity:** MEDIUM
+
+**What goes wrong:** `MultiServerMCPClient` holds open HTTP connections (for Streamable HTTP) or SSE streams. On `SIGTERM` or `SIGINT`, Bun exits the process, but if the MCP client's connections are not explicitly closed, the event loop remains active (waiting for the HTTP connections to drain). Bun may hang for up to 30 seconds before Docker kills the container.
+
+**Why it happens:** The `@langchain/mcp-adapters` JS client requires an explicit `client.close()` call to terminate connections. Unlike stdio MCP servers, HTTP/SSE connections do not close automatically when the parent process signals shutdown.
+
+**Consequences:** Rolling deployments where the old container does not exit cleanly delay the deploy. Docker health checks fail to detect the hung process. RabbitMQ messages may be delivered to the hung instance.
+
+**Prevention:**
+- Register a SIGTERM handler that closes the MCP client before exiting:
+```typescript
+const mcpClient = new MultiServerMCPClient({ ... });
+await mcpClient.initialize();
+
+process.on("SIGTERM", async () => {
+  logger.info("SIGTERM received — closing MCP client connections");
+  await mcpClient.close().catch(() => {}); // best-effort
+  process.exit(0);
+});
+```
+- Set a max shutdown timeout in Docker: `stop_grace_period: 10s` with the process forced-killed after 10s
+- Validate shutdown behavior in integration tests by simulating SIGTERM and asserting exit within 5 seconds
+
+**Phase to address:** Phase 14. Add the shutdown handler alongside the MCP client initialization.
+
+---
+
+### BUN-03: `@langchain/mcp-adapters` Version Compatibility With Bun
+
+**Severity:** LOW
+
+**What goes wrong:** `@langchain/mcp-adapters` is a JavaScript package that uses the `@modelcontextprotocol/sdk` under the hood. The SDK uses standard Node.js APIs (`http`, `https`, `EventSource`) which Bun implements but with known gaps. Reported issues include connection timeouts with certain MCP server configurations and inconsistent behavior with large MCP tool response payloads.
+
+The stack already has a documented precedent for this class of issue: `amqplib` vs `amqplib-bun` — vanilla Node.js packages sometimes have subtle Bun incompatibilities that only surface under load.
+
+**Prevention:**
+- Pin `@langchain/mcp-adapters` to a tested version and do not auto-update
+- Add an integration test that actually calls an MCP tool (not just checks connectivity) — this catches payload serialization issues that pure connection tests miss
+- Monitor the `langchain-ai/langchainjs` GitHub for Bun-specific issues in the `mcp-adapters` package before each version upgrade
+
+**Phase to address:** Phase 14. Document the pinned version in a comment explaining why.
+
+---
+
+## Phase-Specific Warnings (v1.3)
+
+| Phase | Topic | Pitfall | Mitigation |
+|-------|-------|---------|------------|
+| Phase 14 | MCP Integration | MCP-01: SSE transport deprecated | Use `streamable_http` transport from day one |
+| Phase 14 | MCP Integration | MCP-02: Transport name typo `streamable-http` vs `streamable_http` | Use a named constant, not inline string |
+| Phase 14 | MCP Integration | MCP-03: Silent tool loss when any server fails | `onConnectionError: "ignore"` + defensive fallback |
+| Phase 14 | MCP Integration | MCP-04: Brain fails to start if n8n unreachable | Non-fatal startup; graceful degradation without MCP tools |
+| Phase 14 | MCP Integration | MCP-06: Cancelled tool call corrupts thread permanently | Safe ToolNode wrapper guaranteeing ToolMessage parity |
+| Phase 14 | MCP Integration | MCP-07: Name collision between MCP and local tools | Namespace MCP tools with `mcp_` prefix |
+| Phase 14 | responseMode | SO-01: Second LLM call loses information and doubles cost | Use custom graph node or schema-as-tool strategy |
+| Phase 14 | responseMode | SO-02: `structuredResponse` not persisted to checkpoint | Custom StateGraph with `structuredResponse` as explicit state field |
+| Phase 14 | responseMode | SO-03: Model skips schema tool call, returns plain text | Validate presence + fallback `.withStructuredOutput()` call |
+| Phase 14 | responseMode | SO-04: INVALID_CHAT_HISTORY after MCP tool timeout | Safe ToolNode wrapper + startup thread integrity check |
+| Phase 14 | Multi-provider | MP-01: Anthropic defaults to tool emulation, not native JSON Schema | Explicit `method: "json_schema"` in all providers |
+| Phase 14 | Multi-provider | MP-02: OpenAI strict mode rejects `$ref` in complex Zod schemas | Keep BrainOutputSchema flat; test with `strict: true` in CI |
+| Phase 14 | Multi-provider | MP-03: Anthropic schema restrictions block complex schemas | Design schema within Anthropic's constraints as the common denominator |
+| Phase 14 | Bun compatibility | BUN-01: `EventSource` not available in Bun for SSE MCP client | Avoid SSE; use Streamable HTTP |
+| Phase 14 | Bun compatibility | BUN-02: MCP client holds connections open on SIGTERM | SIGTERM handler that calls `client.close()` before exit |
 
 ---
 
@@ -692,6 +1239,35 @@ Mistakes that cause rewrites, data loss, or production outages.
 ---
 
 ## Sources
+
+### v1.3 Sources
+- MCP SSE deprecation notice (Atlassian, June 2026): https://community.atlassian.com/forums/Atlassian-Remote-MCP-Server/HTTP-SSE-Deprecation-Notice/ba-p/3205484
+- MCP Streamable HTTP vs SSE migration guide (Apigene 2026): https://apigene.ai/blog/mcp-streamable-http
+- MCP SSE vs Stdio transport explained (Apigene 2026): https://apigene.ai/blog/mcp-sse-vs-stdio
+- langchain-mcp-adapters transport naming issue (#322 — streamable_http vs streamable-http): https://github.com/langchain-ai/langchain-mcp-adapters/issues/322
+- MultiServerMCPClient silent tool loss when any server fails (#492): https://github.com/langchain-ai/langchain-mcp-adapters/issues/492
+- @langchain/mcp-adapters npm — onConnectionError config: https://www.npmjs.com/package/@langchain/mcp-adapters
+- n8n MCP Server Trigger documentation: https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-langchain.mcptrigger/
+- LangGraph INVALID_CHAT_HISTORY error documentation: https://docs.langchain.com/oss/python/langgraph/errors/INVALID_CHAT_HISTORY
+- LangGraph ToolNode handle_tool_errors does not catch asyncio.CancelledError (#6726): https://github.com/langchain-ai/langgraph/issues/6726
+- LangGraph create_react_agent structured_response omits last agent message (issue #4756): https://github.com/langchain-ai/langgraph/issues/4756
+- LangGraph create_react_agent ignores last agent message (discussion #4318): https://github.com/langchain-ai/langgraph/discussions/4318
+- LangGraph refactor structured output into agent node (issue #5872): https://github.com/langchain-ai/langgraph/issues/5872
+- Agents silently fail when models skip structured output tool call (langchain issue #36349): https://github.com/langchain-ai/langchain/issues/36349
+- Missing structuredResponse in getState() (LangChain Forum, January 2026): https://forum.langchain.com/t/missing-structuredresponse-when-retrieving-agent-state-via-getstate-other-questions/2843
+- LangGraph structured output strategies (DeepWiki): https://deepwiki.com/langchain-ai/langchainjs/3.4-response-format-and-structured-output
+- Anthropic Claude structured outputs documentation (GA): https://platform.claude.com/docs/en/build-with-claude/structured-outputs
+- Anthropic structured output beta header (structured-outputs-2025-11-13): https://towardsdatascience.com/hands-on-with-anthropics-new-structured-output-capabilities/
+- LangChain withStructuredOutput Anthropic — method=json_schema vs function_calling: https://reference.langchain.com/python/langchain-anthropic/chat_models/ChatAnthropic/with_structured_output
+- LangChain.js Zod-to-JSONSchema uses wrong converter for OpenAI strict mode (issue #6479): https://github.com/langchain-ai/langchainjs/issues/6479
+- JSON schema not passed to OpenAI when using ReAct agent (issue #6623): https://github.com/langchain-ai/langchainjs/issues/6623
+- OpenAI structured outputs provider differences (TokenMix 2026): https://tokenmix.ai/blog/structured-output-json-guide
+- Bun.serve idle timeout for SSE — default 10 seconds (issue #27479): https://github.com/oven-sh/bun/issues/27479
+- Bun SSE implementation guide: https://bun.com/docs/guides/http/sse
+- Bun SSE MCP transport package (glama.ai): https://glama.ai/mcp/servers/@tigranbs/bun-mcp-sse-transport
+- LangGraph MCP integration guide (generect.com 2026): https://generect.com/blog/langgraph-mcp/
+- MCP circuit breaker pattern for production: https://dev.to/neurolink/mcp-circuit-breaker-preventing-cascading-failures-in-ai-tool-calls-4bi4
+- Resilient AI agents with MCP — timeout and retry strategies: https://octopus.com/blog/mcp-timeout-retry
 
 ### v1.1 Sources
 - amqplib unhandled rejection on channel close: [amqplib issue #250 — Channel ended, no reply will be forthcoming](https://github.com/amqp-node/amqplib/issues/250)

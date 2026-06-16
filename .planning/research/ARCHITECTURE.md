@@ -1,627 +1,337 @@
-# Architecture: Brain Core v1.1 Integration
+# Architecture Research: v1.3 MCP Integration + Dynamic responseMode
 
-**Domain:** AI agent platform monorepo — adding RabbitMQ transport, leads schema, Brain SDR
-**Researched:** 2026-06-13
-**Overall confidence:** HIGH — based on direct codebase analysis of all v1.0 source files
-
----
-
-## Existing Architecture (v1.0 Baseline)
-
-```
-apps/
-  brain-echo/
-    src/
-      index.ts       ← startup: migrations → runner.init() → Bun.serve()
-      brain.ts       ← IBrain impl (echoBrain, brainType="echo")
-      server.ts      ← composes 3 Hono sub-apps via app.route('/')
-
-packages/
-  shared/            ← BrainError, ConfigurationError (no dep on anything)
-  database/          ← schema (users, memories, agent_state, embeddings, prompts)
-                        TenantPoolManager, runMigrations()
-  observability/     ← createLogger (Pino), createHealthApp, createTracingCallbacks
-  ai/                ← BrainStateAnnotation, createCheckpointer, createLLM, createEmbeddings
-  memory/            ← MemoryManager (long-term + short-term + semantic layers)
-  transport/         ← ITransport, BrainEvent/BrainEventSchema, WebhookTransport,
-                        createWebhookApp(), createTransport() factory
-  core/              ← IBrain, BrainRunner, BrainRegistry, ToolsRegistry,
-                        createCoreApp() (/reload-prompts)
-```
-
-**Dep graph (direction = "imports"):**
-```
-apps/* → core → ai, memory, transport, database, observability, shared
-transport → shared
-database → (drizzle, postgres.js only — no Brain packages)
-shared → (nothing)
-observability → shared
-```
-
-**Critical gap (GAP-1):** `WebhookTransport.start()` calls `createWebhookApp()` with no runner — the class is currently unused in production. `brain-echo/server.ts` bypasses it by calling `createWebhookApp(runner)` directly.
-
-**Current BrainEvent schema (events.ts):**
-```typescript
-{ conversationId, stepIndex, userId, content, metadata? }
-```
-Must become `{ Name, Message, Numero, IDLead }` for v1.1 to match the standardized external contract.
+**Milestone:** v1.3 MCP Integration + Dynamic responseMode
+**Researched:** 2026-06-15
+**Confidence:** HIGH (existing codebase read directly; MCP API verified via official docs and GitHub; structured output constraints verified via GitHub issue #7757 + LangGraph issue #5872 + official LangChain docs)
 
 ---
 
-## New Components
+## MCP Integration Architecture
 
-### 1. `packages/transport/src/rabbitmq/` — RabbitMQ Transport
+### Question 1 — Where in the lifecycle should MCP client be initialized?
 
-New directory parallel to `webhook/` inside the existing `transport` package. Does NOT need a new package.
+**Answer: inside `BrainRunner._compileGraph()`, stored as a long-lived instance on the runner.**
 
-**Files to create:**
-- `transport/src/rabbitmq/handler.ts` — `RabbitMQTransport` class implementing `ITransport`
+Rationale from research:
 
-**Interface contract:**
-```typescript
-// Runner is constructor-injected, not start()-injected.
-// The runner is always known at startup; start() is just about opening the channel.
-class RabbitMQTransport implements ITransport {
-  constructor(
-    private runner: IBrainRunnerLike,
-    private leadGate: ILeadGate
-  ) {}
+- `MultiServerMCPClient` (from `@langchain/mcp-adapters` v1.1.3) must be initialized once per process, not per request. Official docs and Python lifecycle documentation confirm: "In production, hold the client open for the lifetime of the process." The TypeScript API follows the same architectural principle. (MEDIUM confidence — derived from Python lifecycle guidance; TypeScript API is stateless by default per official docs, but persistent connection is still preferable for SSE transport startup overhead.)
+- `_compileGraph()` is already the single point where all graph dependencies (`llm`, `checkpointer`, `tools`) are wired. Adding MCP client initialization here keeps all graph wiring in one place and avoids scattering async startup across `init()` and `buildGraph()`.
+- The tools returned by `client.getTools()` must be available before `brain.buildGraph(ctx)` is called, since `buildGraph` receives `ctx.tools` and passes them to `ToolNode`. MCP initialization must happen inside `_compileGraph()`, before `BrainBuildContext` is assembled.
+- Storing the client reference on the runner (`this.mcpClient`) enables `close()` on shutdown and proper reuse across `refreshPrompts()` calls (which also call `_compileGraph()`).
 
-  async start(): Promise<void> {
-    // 1. amqplib-bun connect via RABBITMQ_URL env
-    // 2. channel.assertQueue(RABBITMQ_QUEUE, { durable: true })
-    // 3. channel.prefetch(1)  ← one message at a time per consumer
-    // 4. channel.consume(queue, this._onMessage.bind(this))
-  }
+**Not recommended:**
+- `BrainRunner.init()` directly: too early; the actual initialization happens in `_compileGraph()` called from `init()`, so placing MCP init there means it runs before `_compileGraph()` is called — wrong sequencing.
+- `brain.init()`: there is no `init()` on `IBrain`. Adding one would change the interface contract unnecessarily.
+- `BrainBuildContext`: the context is a plain data bag passed to `buildGraph()`. Putting a client lifecycle object here would make Brain implementations responsible for managing connection state — wrong layer.
+- Per-request (inside `run()`): explicitly ruled out; SSE connection startup overhead is non-trivial per-request.
 
-  async stop(): Promise<void> {
-    // channel.close() then connection.close()
-  }
+### New components
 
-  private async _onMessage(msg): Promise<void> {
-    // parse JSON → validate with BrainEventSchema
-    // → leadGate.resolveAndCheck() → ia_ativada gate
-    // → runner.run(event)
-    // → ack on success, nack on failure (see Data Flow section)
-  }
-}
+| Component | Location | Responsibility |
+|-----------|----------|----------------|
+| `MCPClientManager` (optional thin helper) | `packages/core/src/mcp/manager.ts` | Reads ENV (`MCP_URL`, `MCP_TOOLS`), initializes `MultiServerMCPClient`, exposes `getFilteredTools()` and `close()`. Keeps `_compileGraph()` readable. |
+| `@langchain/mcp-adapters` (npm dep) | `packages/core/package.json` | Provides `MultiServerMCPClient` and `getTools()`. |
+
+The `MCPClientManager` can be a plain module-level factory function `initMCPClient(config): Promise<{ tools: StructuredTool[], close: () => Promise<void> }>`. A class is also fine for consistency with other managers in the codebase.
+
+### Modified components
+
+**`BrainRunner._compileGraph()` (packages/core/src/runner/runner.ts)**
+
+Current flow:
+```
+createCheckpointer → drizzle → MemoryManager → getTools(registry) → createLLM → BrainBuildContext → buildGraph() → compile()
 ```
 
-**Required ENV:** `RABBITMQ_URL`, `RABBITMQ_QUEUE`
-
-### 2. `packages/transport/src/runner-contract.ts` — Shared Duck-Type Interface
-
-Promotes `IBrainRunnerLike` (currently local to `webhook/handler.ts`) to a shared location so both webhook and rabbitmq handlers can import it without duplication — and without creating a dep on `core`.
-
-```typescript
-// transport/src/runner-contract.ts
-export interface IBrainRunnerLike {
-  run(event: BrainEvent): Promise<{ reply: string }>;
-}
+New flow:
+```
+createCheckpointer → drizzle → MemoryManager → getTools(registry)
+  → [if MCP_URL: initMCPClient → getFilteredTools()]
+  → merge tools
+  → createLLM → BrainBuildContext(merged tools) → buildGraph() → compile()
 ```
 
-### 3. `packages/transport/src/lead-gate.ts` — Lead Gate Interface
+Concrete changes to `runner.ts`:
+- Add `private mcpClient: { close: () => Promise<void> } | null = null` field.
+- Before building `BrainBuildContext`, check `process.env.MCP_URL`; if present, initialize `MultiServerMCPClient`, call `await client.getTools()`, filter by `MCP_TOOLS` CSV, merge with `filteredTools`.
+- Store the `close()` reference for shutdown.
+- Add `async close(): Promise<void>` method on `BrainRunner` (calls `await this.mcpClient?.close()`).
+- Pass merged tools to `ctx.tools` — no change to `BrainBuildContext` type needed.
 
-Defines the interface that `transport` handlers use to check leads, without importing from `core`. This preserves the dep direction (`core → transport`, never `transport → core`).
+**`BrainBuildContext` (packages/core/src/brain/interface.ts)**
 
-```typescript
-// transport/src/lead-gate.ts
-export interface ILeadGate {
-  /**
-   * Upsert lead on first contact. Returns { skip: true } if ia_ativada=false.
-   */
-  resolveAndCheck(input: {
-    uniqueId: string;
-    numero: string;
-    nome?: string;
-  }): Promise<{ skip: boolean }>;
-}
+No structural change required. The merged tools (local + MCP) arrive through `ctx.tools` exactly as before. `IBrain.buildGraph()` passes `ctx.tools` to `ToolNode` — no interface change needed.
+
+**`IBrain` interface**
+
+No change required for MCP integration.
+
+### Data flow
+
+```
+ENV: MCP_URL=https://n8n.example.com/mcp, MCP_TOOLS=getAvailableDate,schedule_meeting
+
+BrainRunner._compileGraph()
+  ├── filteredTools = toolsRegistry.getTools(brainType, brain.tools)
+  │
+  ├── IF process.env.MCP_URL:
+  │     client = new MultiServerMCPClient({
+  │       mcpServers: { external: { transport: "sse", url: process.env.MCP_URL } }
+  │     })
+  │     allMcpTools = await client.getTools()
+  │     allowList = process.env.MCP_TOOLS?.split(",").map(s => s.trim()) ?? []
+  │     filteredMcpTools = allMcpTools.filter(t => allowList.includes(t.name))
+  │     this.mcpClient = { close: () => client.close() }
+  │     allTools = [...filteredTools, ...filteredMcpTools]
+  │   ELSE:
+  │     allTools = filteredTools
+  │
+  ├── ctx = { llm, prompts, tools: allTools, sql }
+  └── brain.buildGraph(ctx)  ← receives merged tools, ToolNode uses them as usual
+
+BrainRunner.close()  [new — called on SIGTERM]
+  └── await this.mcpClient?.close()
 ```
 
-`LeadService` in `core` satisfies this interface structurally (duck typing) — no explicit `implements ILeadGate` declaration needed.
+### Question 5 — Config placement: ENV read in BrainRunner (not in Brain's init)
 
-### 4. `packages/database/src/schema/leads.ts` — Leads Table
+`MCP_URL` and `MCP_TOOLS` are read by `BrainRunner._compileGraph()`. This follows the established pattern: the runner already reads `DATABASE_URL`, `MIGRATIONS_FOLDER`, `LLM_PROVIDER`, etc. Brains are ignorant of infrastructure concerns. `IBrain` remains a pure definition of prompts, tools, and graph structure.
 
-New file in the existing `database` package schema directory. The existing `users` table is NOT modified or deleted — `memories.userId` is a plain `text` column (not an FK), so there is no dependency to break.
+### Question 2 — How should MCP tools be added to ToolNode without changing IBrain dramatically?
 
-```typescript
-// database/src/schema/leads.ts
-import { pgTable, text, uuid, boolean, timestamp, uniqueIndex, index } from 'drizzle-orm/pg-core';
+By merging them into `ctx.tools` inside `_compileGraph()`, the Brain's `buildGraph(ctx)` receives a combined list with no knowledge of which tools are local vs MCP. The Brain implementation passes `ctx.tools` to `ToolNode` as it already does (or as it should — see brain-sdr note below). No interface change required.
 
-export const leads = pgTable('leads', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  unique_id: text('unique_id').notNull(),       // app-generated, stable external ID
-  nome: text('nome'),
-  numero: text('numero').notNull(),
-  ia_ativada: boolean('ia_ativada').notNull().default(true),
-  fullpp: boolean('fullpp').notNull().default(false),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
-}, (table) => ({
-  uniqueIdIdx: uniqueIndex('leads_unique_id_idx').on(table.unique_id),
-  numeroIdx: index('leads_numero_idx').on(table.numero),
-}));
-```
-
-**`unique_id` semantics:** Application-generated on first contact (e.g., `IDLead` value from the transport message). The DB receives it as a plain string — no `defaultRandom()`. This is the stable external identifier used to link thread_id in LangGraph checkpoints.
-
-**`ia_ativada` semantics:** `true` = Brain processes messages for this lead. `false` = human has taken over; Brain skips without calling the LLM. This check happens in the transport handler before `runner.run()`, not inside the LangGraph graph.
-
-### 5. `packages/core/src/leads/service.ts` — LeadService
-
-New module in the existing `core` package. Encapsulates all lead DB operations so neither the transport handlers nor the Brain graph reach raw SQL directly.
+**Note on brain-sdr's current pattern:** `brain.ts` currently does NOT use `ctx.tools` for `ToolNode` — it constructs `boundQualifyTool`, `boundPauseSessionTool`, `boundFinishConversationTool` inline in `buildGraph()`. MCP tools cannot be "bound" with closures the same way. For MCP tools, they should be passed through `ctx.tools` and added directly to `ToolNode`. The `buildGraph()` implementation needs to merge its inline-bound tools with `ctx.tools` for the `ToolNode` call:
 
 ```typescript
-// core/src/leads/service.ts
-export class LeadService {
-  constructor(private db: PostgresJsDatabase) {}
-
-  async findByUniqueId(uniqueId: string): Promise<Lead | null> { ... }
-
-  /**
-   * Upsert on first contact. Idempotent via onConflictDoUpdate.
-   * Satisfies ILeadGate.resolveAndCheck() structurally.
-   */
-  async resolveAndCheck(input: {
-    uniqueId: string; numero: string; nome?: string;
-  }): Promise<{ skip: boolean }> {
-    const lead = await this._upsert(input);
-    return { skip: !lead.ia_ativada };
-  }
-
-  private async _upsert(input): Promise<Lead> { ... }
-}
+// In buildGraph(), ToolNode receives local bound tools + ctx.tools (MCP tools)
+new ToolNode([boundQualifyTool, boundPauseSessionTool, boundFinishConversationTool, ...ctx.tools])
+// And llmWithTools binds all of them too:
+ctx.llm.bindTools([boundQualifyTool, boundPauseSessionTool, boundFinishConversationTool, ...ctx.tools, respondTool])
 ```
 
-**Dep direction:** `core` → `database` (already exists). No new dep edges introduced.
-
-### 6. `apps/brain-sdr/` — Brain SDR Application
-
-New app parallel to `brain-echo`. Same structure:
-
-```
-apps/brain-sdr/
-  src/
-    index.ts      ← startup sequence (see Build Order section)
-    brain.ts      ← IBrain impl (sdrBrain, brainType="sdr")
-    server.ts     ← Hono sub-apps composer (health + webhook + core)
-  Dockerfile
-  package.json
-```
-
-**`brain.ts` key differences from `brain-echo`:**
-- `brainType: "sdr"`
-- `promptKeys: ["system", "qualification_prompt"]` (minimum; extend as needed)
-- `tools: [...]` — SDR-specific tools (e.g., lead lookup, calendar, CRM integration)
-- `buildGraph()` — graph with context injection from leads layer and conditional routing
-
-**`index.ts` key differences:**
-- Creates `LeadService(db)`
-- Calls `createTransport(runner, leadService)` (updated factory signature)
-- Uses `transport.start()` instead of calling `createWebhookApp` directly
+This is the minimal change to `brain-sdr/src/brain.ts` for MCP integration.
 
 ---
 
-## Modified Components
+## Dynamic responseMode Architecture
 
-### 1. `packages/transport/src/webhook/events.ts` — BrainEvent Schema
+### Question 3 — Does `.withStructuredOutput()` break the ReAct pattern?
 
-**Change:** Replace field names with v1.1 standardized contract.
+**Answer: YES — `withStructuredOutput` and `bindTools` are mutually exclusive on the same LLM instance.** (HIGH confidence — confirmed by GitHub issue langchain-ai/langchainjs #7757 which is open with "triage: high-impact" label, LangGraph issue #5872 which explicitly calls this out, and LangChain community forum discussion.)
 
-**Current:**
+When both are applied to the same LLM instance, tool schemas are silently dropped or the structured output schema conflicts with tool schemas. The framework does NOT throw an error — it silently breaks. This eliminates `withStructuredOutput()` as a solution for the main `llmWithTools` instance.
+
+### The correct pattern: Schema-as-Tool (response schema bound as a tool alongside regular tools)
+
+This is the established LangGraph pattern documented in `how-tos/respond-in-format` and explicitly proposed in LangGraph issue #5872 as the fix for `create_react_agent`. The pattern:
+
+1. Define the response schema as a Zod object matching `BrainOutputSchema` shape.
+2. Convert it into a `tool()` using `@langchain/core/tools` — this is the `respond` tool.
+3. Bind `[...realTools, respondTool]` together to the LLM via `bindTools()` only — no `withStructuredOutput()` on the main LLM.
+4. In the conditional router, detect when the `respond` tool was called and route to a `respond` node (not `tools`).
+5. The `respond` node extracts the tool call arguments, validates them with `BrainOutputSchema`, and writes to `state.brainOutput`.
+
+This eliminates the need for a second LLM instance or a second LLM invocation. The LLM calls `respond` as its final action, providing the structured `BrainOutput` as tool arguments.
+
+### llm node changes
+
+**Current state (brain-sdr/src/brain.ts):**
 ```typescript
-{ conversationId, stepIndex, userId, content, metadata? }
+const llmWithTools = ctx.llm.bindTools([boundQualifyTool, boundPauseSessionTool, boundFinishConversationTool]);
+
+// llm node sets brainOutput inline:
+const fullResponse = typeof response.content === "string" ? response.content : "";
+return { messages: [response], brainOutput: { fullResponse, responseMode: "text" as const } };
 ```
 
-**New:**
+**New approach (schema-as-tool):**
 ```typescript
-export const BrainEventSchema = z.object({
-  Name:    z.string().min(1),    // lead's display name
-  Message: z.string().min(1),   // message content
-  Numero:  z.string().min(1),   // phone number (secondary lookup key)
-  IDLead:  z.string().min(1),   // unique_id — primary lead identifier
-});
-export type BrainEvent = z.infer<typeof BrainEventSchema>;
-```
+// 1. respond tool defined in packages/core/src/tools/respond.ts
+const respondTool = createRespondTool(); // returns tool() with BrainOutputSchema shape
 
-**Downstream mapping in `BrainRunner.run()`:**
-```
-event.IDLead  → threadId (LangGraph thread_id + PostgresSaver checkpoint key)
-event.Numero  → userId (MemoryManager long-term profile isolation)
-event.Message → graph input content
-event.Name    → available in state for personalization
-```
+// 2. All tools bound together — respond is just another tool
+const llmWithTools = ctx.llm.bindTools([
+  boundQualifyTool,
+  boundPauseSessionTool,
+  boundFinishConversationTool,
+  ...ctx.tools,    // MCP tools
+  respondTool,     // final response schema
+]);
 
-This is the only place the external field names are mapped to internal concepts. Everything downstream uses `threadId` / `userId`.
+// 3. llm node becomes simpler — no inline brainOutput
+// Returns only messages; brainOutput set by respond node
+return { messages: [response] };
 
-### 2. `packages/transport/src/webhook/handler.ts` — WebhookTransport Fix (GAP-1)
+// 4. respond node extracts brainOutput from tool call args
+"respond" node: (state) => {
+  const lastMsg = state.messages[state.messages.length - 1];
+  const respondCall = lastMsg.tool_calls?.find(tc => tc.name === "respond");
+  const brainOutput = BrainOutputSchema.parse(respondCall.args);
+  return { brainOutput };
+}
 
-**Change:** Runner and lead gate injected at construction, not at `start()`.
-
-**Current (broken — runner never injected via class):**
-```typescript
-export class WebhookTransport implements ITransport {
-  async start(port = 3000): Promise<void> {
-    const app = createWebhookApp();  // no runner → fallback path only
-    ...
-  }
+// 5. Custom router replaces toolsCondition
+(state) => {
+  const lastMsg = state.messages[state.messages.length - 1];
+  if (!lastMsg.tool_calls?.length) return "__end__";
+  const hasRespondCall = lastMsg.tool_calls.some(tc => tc.name === "respond");
+  if (hasRespondCall) return "respond";
+  return "tools";
 }
 ```
 
-**Fixed:**
-```typescript
-export class WebhookTransport implements ITransport {
-  constructor(
-    private runner: IBrainRunnerLike,
-    private leadGate?: ILeadGate   // optional for brain-echo backward compat
-  ) {}
+### Graph structure changes
 
-  async start(port = 3000): Promise<void> {
-    const app = createWebhookApp(this.runner, this.leadGate);
-    this.server = Bun.serve({ port, fetch: app.fetch });
-  }
+Current graph (2 nodes, toolsCondition):
+```
+__start__ → llm → [toolsCondition] → tools → llm → [toolsCondition] → __end__
+                                    ↘ __end__
+```
+
+New graph (3 nodes, custom router):
+```
+__start__ → llm → [customRouter] → tools → llm → [customRouter] → __end__
+                                  ↘ respond → __end__
+```
+
+The `respond` node is a pure extraction node — no LLM call, no DB access, just parse tool call args and return `{ brainOutput }`. The `llm` node becomes simpler: returns `{ messages: [response] }` only, never sets `brainOutput` directly.
+
+The old pattern (`brainOutput: { fullResponse, responseMode: "text" as const }` in the llm node) is removed. This was a v1.2 approximation that hardcoded `responseMode: "text"`. The schema-as-tool pattern is the correct long-term architecture.
+
+### Impact on BrainStateAnnotation
+
+No change to `BrainStateAnnotation` in `packages/ai/src/graph/state.ts`. The `brainOutput` field already exists with the correct type and last-write-wins reducer. The `respond` node writes to it exactly as the `llm` node did before.
+
+### Impact on BrainRunner.run() validation
+
+No change. `BrainRunner.run()` already validates `result.brainOutput !== null` and calls `BrainOutputSchema.parse(rawOutput)`. The `respond` node sets `state.brainOutput` before `__end__`, so the invariant holds. The existing validation catches any case where the LLM fails to call `respond`.
+
+### Question 4 — Multi-provider configuration
+
+`packages/ai/src/llm/factory.ts` already implements multi-provider via `LLM_PROVIDER` ENV (`openai | anthropic | gemini | openrouter`). **No change required.**
+
+The `schema-as-tool` pattern works identically across all providers that support `bindTools()`, which includes both target providers:
+- OpenAI (`ChatOpenAI`): native function calling — tool schemas sent as `functions` parameter.
+- Anthropic (`ChatAnthropic`): native tool use — tool schemas sent via `tool_use` protocol.
+
+Both providers surface tool call results as `tool_calls` on the `AIMessage`, which is what the custom router inspects. No provider-specific branching needed.
+
+`withStructuredOutput()` — which we are NOT using for the main LLM — has provider-specific behavior (some use JSON mode, some use tool calling internally). Since we use `schema-as-tool` instead, those differences are irrelevant.
+
+The existing `if (!ctx.llm.bindTools)` guard in `brain.ts` remains valid and sufficient.
+
+### `createRespondTool` placement
+
+New file: `packages/core/src/tools/respond.ts`
+
+This belongs in `packages/core` alongside `pause-session.ts` and `finish-conversation.ts`. It is a SDK-provided tool, not a Brain-specific tool. All Brains that want dynamic responseMode import and use it.
+
+```typescript
+// packages/core/src/tools/respond.ts
+export function createRespondTool() {
+  return tool(
+    async (args) => args, // args ARE the brainOutput — passthrough
+    {
+      name: "respond",
+      description: "Call this tool to send your final response to the user. Always use this as your last action.",
+      schema: z.object({
+        fullResponse: z.string().describe("Full text of your response"),
+        responseMode: z.enum(["text","audio","image","video","document"])
+          .describe("Format: text for messages, audio for voice, image/video/document for media"),
+        mediaType: z.string().optional().describe("MIME type, required for image/video/document"),
+        mediaUrl: z.string().optional().describe("URL to media file, required for image/video/document"),
+      }),
+    }
+  );
 }
 ```
 
-**Lead gate in `createWebhookApp()`** — add gate between parse and `runner.run()`:
-```typescript
-// After BrainEventSchema.safeParse(body) succeeds:
-if (leadGate) {
-  const { skip } = await leadGate.resolveAndCheck({
-    uniqueId: event.IDLead,
-    numero: event.Numero,
-    nome: event.Name,
-  });
-  if (skip) {
-    return c.json({ status: "skipped", reason: "ia_ativada=false" }, 200);
-  }
-}
-
-const result = await runner.run(event);
-```
-
-`leadGate` is optional so `brain-echo` tests pass without a LeadService.
-
-### 3. `packages/transport/src/factory.ts` — createTransport()
-
-**Change:** Accept runner and optional leadGate as parameters.
-
-**Current:**
-```typescript
-export function createTransport(transport?: string): ITransport {
-  switch (type) {
-    case "webhook": return new WebhookTransport();  // broken — no runner
-    ...
-  }
-}
-```
-
-**New:**
-```typescript
-export function createTransport(
-  runner: IBrainRunnerLike,
-  leadGate?: ILeadGate,
-  transport?: string
-): ITransport {
-  const type = transport ?? process.env.TRANSPORT ?? "webhook";
-  switch (type) {
-    case "webhook":  return new WebhookTransport(runner, leadGate);
-    case "rabbitmq": return new RabbitMQTransport(runner, leadGate);
-    default: throw new ConfigurationError(`Unknown TRANSPORT: ${type}`, { transport: type });
-  }
-}
-```
-
-### 4. `packages/transport/src/index.ts` — Barrel Exports
-
-Add exports for:
-- `RabbitMQTransport`
-- `IBrainRunnerLike` (from runner-contract.ts)
-- `ILeadGate` (from lead-gate.ts)
-
-### 5. `packages/database/src/schema/tables.ts` — Add leads import
-
-Import `leads` from the new `leads.ts` file and re-export it so the existing barrel picks it up. Alternatively, update `database/src/index.ts` directly to export from `schema/leads.ts`.
-
-### 6. `packages/core/src/index.ts` — Export LeadService
-
-Add `export { LeadService } from "./leads/service.js"`.
-
-### 7. `packages/core/src/runner/runner.ts` — BrainEvent field mapping
-
-`BrainRunner.run()` currently reads `event.conversationId` and `event.userId`. After the schema change:
-
-```typescript
-// Current
-const threadId = event.conversationId;
-// ...pass event.userId to memory layer
-
-// New
-const threadId = event.IDLead;
-const userId = event.Numero;
-```
-
-This is the only change to `runner.ts` for v1.1 — no structural change to the lifecycle.
+The schema mirrors `BrainOutputSchema` but is defined inline (avoids importing Zod schema from core into the tool definition, which would create an awkward dep on the output schema module).
 
 ---
 
-## Data Flow Diagrams (Text)
+## Suggested Build Order
 
-### Webhook Path (v1.1)
+### Phase A: TD-01 Fix (prerequisite)
 
-```
-HTTP POST /api/v1/webhook  {Name, Message, Numero, IDLead}
-  │
-  ├── X-Request-Id missing → 400
-  ├── Duplicate X-Request-Id → 409
-  ├── Invalid JSON → 400
-  ├── BrainEventSchema.safeParse() fails → 400
-  │
-  ▼ valid event
-[ILeadGate].resolveAndCheck({ IDLead, Numero, Name })
-  │  INSERT INTO leads ... ON CONFLICT (unique_id) DO UPDATE
-  │
-  ├── ia_ativada = false → 200 { status: "skipped" }
-  │
-  ▼ ia_ativada = true
-[BrainRunner].run(event)
-  │  threadId = IDLead
-  │  userId   = Numero
-  │
-  ├── MemoryManager.getContext(threadId, userId, [])
-  │     ├── readProfile(db, userId, "context")        → memories table
-  │     ├── getCheckpoint(checkpointer, threadId)     → PostgresSaver (PG)
-  │     └── semantic search skipped (queryVector=[])
-  │
-  ├── compiledGraph.invoke(
-  │     { messages: [human: Message], userId: Numero, sessionId: IDLead },
-  │     { configurable: { thread_id: IDLead } }
-  │   )
-  │     └── Brain graph nodes run (LLM, tools, etc.)
-  │         PostgresSaver auto-saves checkpoint after invoke
-  │
-  └── MemoryManager.saveContext({ userId: Numero, ... })
-        └── writeProfile(db, Numero, "context", { lastReply, conversationId: IDLead })
-  │
-  ▼
-HTTP 200 { status: "ok", reply: "<llm response>" }
-```
+**Scope:** `apps/brain-sdr/src/qualifier.ts` — add `prepare: false` to the postgres connection used by the qualifier sub-agent.
 
-### RabbitMQ Path (v1.1)
+**Why first:** Production blocker (PgBouncer incompatibility). Zero architecture impact; isolated to one file. Should be deployed before any other v1.3 work to reduce production risk.
 
-```
-RabbitMQ queue (RABBITMQ_QUEUE)
-  │
-  ▼ msg received
-JSON.parse(msg.content.toString())
-  │
-  ├── parse error or BrainEventSchema fails
-  │     → channel.nack(msg, false, false)  ← dead-letter, no requeue
-  │
-  ▼ valid event
-[ILeadGate].resolveAndCheck({ IDLead, Numero, Name })
-  │
-  ├── ia_ativada = false
-  │     → channel.ack(msg)  ← consumed silently, no runner call
-  │
-  ▼ ia_ativada = true
-[BrainRunner].run(event)
-  │
-  ├── success
-  │     → channel.ack(msg)
-  │     (no HTTP response — fire-and-process; reply goes nowhere in v1.1)
-  │
-  └── transient error (DB down, LLM timeout, etc.)
-        → channel.nack(msg, false, true)  ← requeue once for retry
-```
+### Phase B: MCP Integration
 
-**Note:** In v1.1, RabbitMQ is consume-only. The Brain does not publish a reply back to any queue. This avoids the large-message publishing issue (amqplib-bun Bun #5627). If reply publishing is added later, message size must be bounded.
+Build order within this phase:
 
-### Brain SDR Startup Sequence
+1. Install `@langchain/mcp-adapters` in `packages/core/package.json`.
+2. Create `packages/core/src/mcp/manager.ts` — `initMCPClient(url, toolsAllowList)` function.
+3. Modify `BrainRunner._compileGraph()` — add MCP conditional block, tool merge, client storage.
+4. Add `BrainRunner.close()` method.
+5. Register `runner.close()` on `process.on("SIGTERM")` in `apps/brain-sdr/src/index.ts`.
+6. Modify `apps/brain-sdr/src/brain.ts` — spread `ctx.tools` into `ToolNode` and `bindTools()` call.
+7. Unit tests: mock `MultiServerMCPClient`, verify tool merge and filtering.
 
-```
-main() — apps/brain-sdr/src/index.ts
+**Why before responseMode:** MCP tools arrive in `ctx.tools`. The responseMode phase also modifies `bindTools()` (adds `respondTool`). Separating them makes each change reviewable in isolation and avoids touching `brain.ts` twice with entangled concerns.
 
-1. Validate DATABASE_URL env → exit(1) if missing
+### Phase C: Dynamic responseMode
 
-2. postgres(DATABASE_URL) → sql
+Build order within this phase:
 
-3. runMigrations(sql, MIGRATIONS_DIR)
-     ├── CREATE EXTENSION IF NOT EXISTS vector
-     ├── Drizzle migrations (includes leads table from v1.1 migration)
-     └── exit(1) on failure
-
-4. new ToolsRegistry()
-   toolsRegistry.registerBrainType("sdr")
-   toolsRegistry.enableTool("sdr", "<tool-name>")  // per SDR tool list
-
-5. new BrainRunner({ brain: sdrBrain, sql, toolsRegistry })
-   await runner.init()
-     ├── loadPrompts(sql, "sdr", ["system", "qualification_prompt"])
-     ├── exit(1) if any promptKey missing from DB
-     └── _compileGraph() → PostgresSaver + LLM + filtered tools
-
-6. const db = drizzle(sql)
-   const leadService = new LeadService(db)
-
-7. const transport = createTransport(runner, leadService, process.env.TRANSPORT)
-     → new WebhookTransport(runner, leadService)   if TRANSPORT=webhook
-     → new RabbitMQTransport(runner, leadService)  if TRANSPORT=rabbitmq
-
-8. await transport.start(PORT)
-     → Bun.serve() or channel.consume()
-
-9. logger.info("brain-sdr ready")
-```
-
-### Lead-to-Thread Binding (Conversation History)
-
-```
-Incoming message: IDLead = "lead-abc-123"
-
-LangGraph thread_id = "lead-abc-123"
-  └── PostgresSaver checkpoint key = "lead-abc-123"
-      → All turns for this lead share one checkpoint
-      → Full message history restored automatically on next invoke
-      → No extra query or storage code needed
-
-Memory userId = Numero (e.g., "+5511999999999")
-  └── memories table: WHERE user_id = '+5511999999999' AND key = 'context'
-      → Stores structured profile data across all sessions
-      → Independent of LangGraph checkpoint
-
-Result: Conversation history across sessions is automatic.
-The only "new code" is passing event.IDLead as thread_id.
-```
+1. Create `packages/core/src/tools/respond.ts` — `createRespondTool()` factory.
+2. Export from `packages/core/src/index.ts`.
+3. Modify `apps/brain-sdr/src/brain.ts`:
+   - Import `createRespondTool` from `@brain-pkg/core`.
+   - Add `respondTool = createRespondTool()` to `bindTools()`.
+   - Remove static `brainOutput` assignment from `llm` node (return only `{ messages: [response] }`).
+   - Add `respond` node.
+   - Replace `toolsCondition` with custom router function.
+   - Add `"respond" → "__end__"` edge.
+4. Update system prompt seed: instruct LLM to call `respond` as final action.
+5. Unit tests: mock LLM returning a `respond` tool call with `responseMode: "audio"`, verify `brainOutput` is correctly parsed.
+6. Verify across providers: run with `LLM_PROVIDER=anthropic` and `LLM_PROVIDER=openai`.
 
 ---
 
-## Build Order
+## Component Summary
 
-Dependencies run in this order. Each step is a dependency gate for the next.
-
-### Step 1 — BrainEvent Schema + Transport Infrastructure (no external deps)
-
-**Scope (all within `packages/transport`):**
-- Rewrite `webhook/events.ts` (new field names: Name, Message, Numero, IDLead)
-- Create `runner-contract.ts` (promote `IBrainRunnerLike`)
-- Create `lead-gate.ts` (new `ILeadGate` interface)
-- Fix `WebhookTransport` constructor injection (GAP-1)
-- Update `createWebhookApp()` to accept optional `ILeadGate`
-- Update `createTransport()` signature (runner + leadGate + type)
-- Update `index.ts` barrel exports
-
-**Why first:** Every downstream component (BrainRunner field mapping, LeadService interface, RabbitMQ handler) depends on the canonical BrainEvent shape. Fixing GAP-1 is zero-risk (internal to transport) and unblocks everything else.
-
-**Tests to update in the same PR:** `webhook.test.ts` in brain-echo (field names changed), `factory.test.ts`, `handler.test.ts`
-
-### Step 2 — Leads Schema + Drizzle Migration (depends on Step 1: none; but logically before Step 3)
-
-**Scope (within `packages/database`):**
-- Create `schema/leads.ts`
-- Update `schema/tables.ts` or `index.ts` to export leads
-- Run `drizzle-kit generate` to create the migration SQL file
-- Commit migration file alongside schema
-
-**Why second:** LeadService (Step 3) imports from the leads schema. The migration file must be committed before any Brain starts up against a real DB.
-
-**Important:** Do NOT delete `users` table. The `memories` table uses `userId: text('user_id')` (plain text, not FK), so removing `users` is harmless but unnecessary churn. Leave it for a deliberate deprecation later.
-
-### Step 3 — LeadService (depends on Step 2)
-
-**Scope (within `packages/core`):**
-- Create `leads/service.ts`
-- Update `core/src/index.ts` to export `LeadService`
-- Unit tests with mocked Drizzle db
-
-**Why third:** LeadService depends on the `leads` schema (Step 2). The transport handler will import `ILeadGate` (Step 1) and receive a `LeadService` instance via constructor. `BrainRunner` does NOT import LeadService — that dep stays in the transport handlers.
-
-### Step 4 — RabbitMQ Transport (depends on Steps 1 and 3)
-
-**Scope (within `packages/transport`):**
-- Create `rabbitmq/handler.ts` (RabbitMQTransport class)
-- Add `amqplib-bun` to transport package.json dependencies
-- Update `factory.ts` (add rabbitmq case)
-- Update `index.ts` (export RabbitMQTransport)
-- Integration test against real RabbitMQ (via Docker Compose)
-
-**Why fourth:** Depends on BrainEvent schema (Step 1) and ILeadGate (Step 1). Can be developed in parallel with Step 3 if LeadService interface is agreed first (it is — defined as ILeadGate in Step 1).
-
-### Step 5 — BrainRunner Field Mapping Update (depends on Step 1)
-
-**Scope (within `packages/core/src/runner/runner.ts`):**
-- Replace `event.conversationId` with `event.IDLead` as threadId
-- Replace `event.userId` with `event.Numero` as userId
-- Update integration tests in `brain-runner.integration.test.ts`
-
-**Why fifth (could be Step 2):** Strictly depends only on Step 1 (BrainEvent shape). Grouped here to minimize PR scope per step. Could be merged with Step 1 as one PR.
-
-### Step 6 — Brain SDR App (depends on all previous steps)
-
-**Scope (new `apps/brain-sdr/`):**
-- Create package structure, Dockerfile, package.json
-- `brain.ts` — IBrain with brainType="sdr", SDR-specific graph
-- `server.ts` — Hono sub-apps composer
-- `index.ts` — startup sequence using createTransport()
-- SDR prompts seed (INSERT into prompts for brain_type="sdr")
-- Integration tests for full message flow with a real lead
-
-**Why last:** Brain SDR consumes everything. Any earlier step with a bug causes rework in SDR. The correct approach is to have a green test suite for Steps 1-5 before writing brain-sdr code.
+| Component | Action | File | Notes |
+|-----------|--------|------|-------|
+| `BrainRunner._compileGraph()` | MODIFY | `packages/core/src/runner/runner.ts` | Add MCP conditional block + tool merge |
+| `BrainRunner.close()` | ADD | `packages/core/src/runner/runner.ts` | Calls `mcpClient?.close()` |
+| `MCPClientManager` / `initMCPClient` | ADD | `packages/core/src/mcp/manager.ts` | ENV → MultiServerMCPClient |
+| `createRespondTool` | ADD | `packages/core/src/tools/respond.ts` | Schema-as-tool for responseMode |
+| `IBrain` interface | NO CHANGE | `packages/core/src/brain/interface.ts` | `ctx.tools` field unchanged |
+| `BrainBuildContext` | NO CHANGE | `packages/core/src/brain/interface.ts` | MCP tools arrive via existing `tools` field |
+| `BrainStateAnnotation` | NO CHANGE | `packages/ai/src/graph/state.ts` | `brainOutput` field already exists |
+| `createLLM` factory | NO CHANGE | `packages/ai/src/llm/factory.ts` | Multi-provider already handled via ENV |
+| `qualifier.ts` | FIX | `apps/brain-sdr/src/qualifier.ts` | Add `prepare: false` (TD-01) |
+| `brain-sdr buildGraph()` | MODIFY | `apps/brain-sdr/src/brain.ts` | Add MCP tools to ToolNode+bindTools; add respond tool + respond node + custom router; remove inline brainOutput |
+| SIGTERM handler | ADD | `apps/brain-sdr/src/index.ts` | Calls `runner.close()` |
 
 ---
 
-## Architectural Risks
+## Open Questions
 
-### Risk 1: BrainEvent Schema Break is a Hard Cut (HIGH)
+1. **System prompt update for `respond` tool.** The LLM must know to call `respond` as its final action. The `system` prompt needs explicit instruction. Example addition: "After reasoning and any tool use, you MUST call the `respond` tool with your final answer and the appropriate responseMode (text, audio, image, video, or document)." This is a prompt engineering concern, planned for the same phase as responseMode.
 
-Renaming `{ conversationId, stepIndex, userId, content }` to `{ Name, Message, Numero, IDLead }` is a breaking change. Any test, integration, or client that sends the old shape will get 400 errors after the change. The brain-echo integration tests in `__tests__/integration/webhook.test.ts` use the old field names.
+2. **MCP tool name prefixing.** `MultiServerMCPClient` supports `prefixToolNameWithServerName: true` to namespace tools. The `MCP_TOOLS` whitelist must match whatever naming convention is used. Recommendation: default to no prefix (bare tool names), since `MCP_TOOLS=getAvailableDate,schedule_meeting` is simpler for operators.
 
-**Mitigation:** Update all test fixtures in the same PR that changes `events.ts`. The monorepo makes this atomic. Do not accept a PR where the schema changes but tests still use old field names.
+3. **`MCP_TOOLS` when empty or `*`.** If `MCP_TOOLS` is unset or `"*"`, all tools from the MCP server are loaded. If set to a CSV, only matching tools are passed to `ctx.tools`. Need to decide and document the default behavior. Recommendation: `MCP_TOOLS` required when `MCP_URL` is set; fail-fast if empty.
 
-### Risk 2: Circular Dep Risk if LeadService Moves to Transport (HIGH)
+4. **Graceful degradation if MCP server unreachable.** If `MCP_URL` is set but the server is down at startup, `client.getTools()` will throw. Decision: fail-fast (same pattern as missing `DATABASE_URL`) or warn and continue without MCP tools? Recommendation: fail-fast at startup; MCP tools being absent would silently break the Brain's advertised capabilities.
 
-If `transport/src/webhook/handler.ts` imports `LeadService` from `@brain-pkg/core`, it creates a cycle: `core → transport → core`. The existing `IBrainRunnerLike` duck-type was invented precisely to break this cycle.
-
-**Mitigation:** `ILeadGate` interface lives in `packages/transport` (like `IBrainRunnerLike`). `LeadService` in `core` satisfies it structurally. Transport handlers never import from `core`. This is the correct pattern — do not break it.
-
-### Risk 3: RabbitMQ Large Message Risk (MEDIUM, pre-existing)
-
-`amqplib-bun` fixes connection issues but the "invalid frame" bug (Bun issue #5627) may surface for large messages. SDR messages are short (WhatsApp text), but if a future version publishes LLM responses back to RabbitMQ, payload sizes could trigger this.
-
-**Mitigation:** For v1.1, RabbitMQ is consume-only. Brain does not publish replies back to any queue. This avoids the bug entirely. If publish is added later, cap message size in the publisher or move to a PG LISTEN/NOTIFY channel for reply routing.
-
-### Risk 4: `unique_id` Concurrent Upsert Race (LOW)
-
-If two messages from the same lead arrive simultaneously before the first upsert commits, the second insert hits the unique constraint on `unique_id`. Without conflict handling this is a 500.
-
-**Mitigation:** Use `onConflictDoUpdate` (same pattern as `memories` table upsert in `long-term.ts`). Both concurrent paths converge to the same row with no error. This is the existing Drizzle upsert pattern — follow it exactly.
-
-### Risk 5: TenantPoolManager Still Inactive (MEDIUM)
-
-Per `PROJECT.md`, TenantPoolManager is in scope for v1.1 activation. But brain-sdr's `index.ts` will likely start with `postgres(DATABASE_URL)` directly (same as brain-echo). Activating TenantPoolManager mid-build is a distraction that risks delaying SDR delivery.
-
-**Mitigation:** Build brain-sdr with direct `postgres(DATABASE_URL)` first. Activate TenantPoolManager as a targeted sub-task isolated from SDR work. The interface is `Sql` either way — the swap is a one-line change in `index.ts`. Flag this as a separate task in the roadmap, not blocked by SDR.
-
-### Risk 6: Migration File for `leads` Must Be Committed (MEDIUM)
-
-Drizzle uses a `migrations/` folder of SQL files generated by `drizzle-kit generate`. If the schema file is committed without running the generator, the runtime `runMigrations()` call will not create the `leads` table (the migration file is missing), and LeadService will fail with a "relation does not exist" error at runtime.
-
-**Mitigation:** The PR that adds `schema/leads.ts` must also include the generated migration file (`packages/database/src/migrations/000X_leads.sql`). Add this to the PR checklist. Consider a CI check that validates the migration files are in sync with the schema.
-
----
-
-## Component Boundary Summary
-
-| Component | Package | Status | Imports From |
-|-----------|---------|--------|--------------|
-| `BrainEvent` (Name/Message/Numero/IDLead) | transport | MODIFIED | zod |
-| `IBrainRunnerLike` (runner-contract.ts) | transport | NEW | transport/events |
-| `ILeadGate` (lead-gate.ts) | transport | NEW | — |
-| `WebhookTransport` (constructor injection) | transport | MODIFIED | transport |
-| `createWebhookApp()` (+ leadGate param) | transport | MODIFIED | transport |
-| `createTransport(runner, leadGate?, type?)` | transport | MODIFIED | transport |
-| `RabbitMQTransport` | transport | NEW | transport, amqplib-bun |
-| `leads` Drizzle table | database | NEW | drizzle-orm |
-| `LeadService` | core | NEW | database, shared |
-| `BrainRunner.run()` field mapping | core | MODIFIED | transport |
-| `sdrBrain` IBrain implementation | apps/brain-sdr | NEW | ai, core |
-| `apps/brain-sdr` startup + Dockerfile | apps/brain-sdr | NEW | all packages |
-
-**Dep graph after v1.1 (no new dep edges):**
-```
-apps/* → core → ai, memory, transport, database, observability, shared
-transport → shared              (unchanged)
-database → (drizzle only)      (unchanged)
-```
-`ILeadGate` and `IBrainRunnerLike` live in `transport`, so `core → transport` remains the only cross-direction. No new cycles.
+5. **`respond` tool and context window.** Adding `respond` as a tool call adds overhead to messages (AIMessage with `tool_calls` + a ToolMessage with the args). At `CONTEXT_WINDOW_MESSAGES=40`, this is acceptable but worth monitoring in production.
 
 ---
 
 ## Sources
 
-- Direct codebase analysis: all files in `packages/transport/src/`, `packages/core/src/`, `packages/database/src/schema/`, `packages/memory/src/`, `apps/brain-echo/src/`
-- `.planning/PROJECT.md`: v1.1 requirements, GAP-1 description, TenantPoolManager status
-- `CLAUDE.md`: Stack constraints (Bun, Hono, Drizzle, LangGraph, amqplib-bun)
-- Existing pattern reference: `IBrainRunnerLike` duck-type in `transport/src/webhook/handler.ts` (anti-circular technique)
-- Existing pattern reference: Drizzle upsert with `onConflictDoUpdate` in `packages/memory/src/long-term.ts`
-- Known risk reference: amqplib-bun Bun issue #5627 (documented in STACK.md and PROJECT.md)
+- `@langchain/mcp-adapters` npm: https://www.npmjs.com/package/@langchain/mcp-adapters (v1.1.3)
+- LangChain MCP adapters JS GitHub: https://github.com/langchain-ai/langchainjs/tree/main/libs/langchain-mcp-adapters
+- LangChain MCP official docs (JS): https://docs.langchain.com/oss/javascript/langchain/mcp
+- LangChain MCP adapters announcement: https://changelog.langchain.com/announcements/mcp-adapters-for-langchain-and-langgraph
+- LangChain.js issue #7757 — bindTools + withStructuredOutput conflict (OPEN, triage: high-impact): https://github.com/langchain-ai/langchainjs/issues/7757
+- LangGraph issue #5872 — schema-as-tool pattern for structured output in ReAct agents: https://github.com/langchain-ai/langgraph/issues/5872
+- LangGraph how-to: respond in format: https://www.baihezi.com/mirrors/langgraph/how-tos/respond-in-format/index.html
+- DeepWiki: LangChain.js response format and structured output: https://deepwiki.com/langchain-ai/langchainjs/3.4-response-format-and-structured-output
+- LangChain forum: withStructuredOutput + bindTools conflict: https://forum.langchain.com/t/make-a-llm-with-structured-output-call-a-tool/622
