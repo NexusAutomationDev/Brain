@@ -44,7 +44,7 @@
 
 **Milestone Goal:** Conectar Brains a ferramentas externas via MCP e deixar o LLM controlar o formato de resposta dinamicamente.
 
-- [ ] **Phase 14: TD-01 Fix** — qualifier.ts com prepare: false, elimina blocker de produção com PgBouncer
+- [x] **Phase 14: TD-01 Fix** — qualifier.ts com prepare: false, elimina blocker de produção com PgBouncer (completed 2026-06-16)
 - [ ] **Phase 15: MCP Integration** — Brain conecta a servidor MCP externo, registra tools no startup, SIGTERM limpo
 - [ ] **Phase 16: Dynamic responseMode** — LLM escolhe responseMode via schema-as-tool, sem hardcode, multi-provider
 
@@ -61,7 +61,7 @@
 **Plans**: 1 plan
 
 Plans:
-- [ ] 14-01-PLAN.md — Adicionar prepare:false em qualifier.ts + static analysis test PGB-TD01
+- [x] 14-01-PLAN.md — Adicionar prepare:false em qualifier.ts + static analysis test PGB-TD01
 
 ### Phase 15: MCP Integration
 **Goal**: Brain SDR conecta a servidor MCP externo via ENV, usa MCP tools como LangGraph tools nativas, e encerra conexão de forma limpa no SIGTERM
@@ -110,7 +110,7 @@ Plans:
 | 11. Tool Contracts SDK | v1.2 | 2/2 | Complete | 2026-06-15 |
 | 12. Brain SDR Integration | v1.2 | 2/2 | Complete | 2026-06-15 |
 | 13. Suporte a PgBouncer | v1.2 | 2/2 | Complete | 2026-06-15 |
-| 14. TD-01 Fix | v1.3 | 0/1 | Not started | - |
+| 14. TD-01 Fix | v1.3 | 1/1 | Complete   | 2026-06-16 |
 | 15. MCP Integration | v1.3 | 0/? | Not started | - |
 | 16. Dynamic responseMode | v1.3 | 0/? | Not started | - |
 
@@ -123,7 +123,7 @@ Plans:
 **Context:** Hoje o brain-sdr sempre retorna `responseMode: "text"`. O system prompt contém o bloco `<response_format>` como referência comportamental (o LLM conhece os modos), mas sem um mecanismo de saída estruturada o LLM não consegue sinalizar `"audio"` quando o usuário pede. A solução correta é usar `response_format` (OpenAI) ou `generationConfig.responseMimeType` (Google) no nível da API — não instrução de prompt.
 
 **Requirements:** TBD
-**Plans:** 0 plans
+**Plans:** 1/1 plans complete
 
 Plans:
 - [ ] TBD (promote with /gsd-review-backlog when ready)
