@@ -94,13 +94,20 @@ describe("Webhook Bearer token authentication", () => {
     expect(body.status).toBe("accepted");
   });
 
-  it("processa normalmente com token correto e runner injetado (retorna ok + fullResponse)", async () => {
+  it("processa normalmente com token correto e runner injetado (retorna ok + fullResponse + tokenUsage)", async () => {
     process.env.WEBHOOK_TOKEN = "meu-token-secreto";
-    // Duck typed — compatível com nova IBrainRunnerLike (SDK-06)
+    // Duck typed — compatível com IBrainRunnerLike (D-02: wrapper { brainOutput, tokenUsage })
     const mockRunner = {
       run: async (_event: unknown) => ({
-        fullResponse: "Olá! Como posso ajudar?",
-        responseMode: "text" as const,
+        brainOutput: {
+          fullResponse: "Olá! Como posso ajudar?",
+          responseMode: "text" as const,
+        },
+        tokenUsage: {
+          inputTokens: 10,
+          outputTokens: 5,
+          totalTokens: 15,
+        },
       }),
     };
     const app = createWebhookApp(mockRunner);
@@ -122,5 +129,7 @@ describe("Webhook Bearer token authentication", () => {
     expect(body.fullResponse).toBe("Olá! Como posso ajudar?");
     expect(body.responseMode).toBe("text");
     expect(body.reply).toBeUndefined();
+    // D-09 (Phase 17): tokenUsage na resposta HTTP
+    expect(body.tokenUsage).toEqual({ inputTokens: 10, outputTokens: 5, totalTokens: 15 });
   });
 });
