@@ -93,6 +93,23 @@ Plans:
 Plans:
 - [ ] TBD
 
+### Phase 17: Expor contagem de tokens gastos na resposta da API REST e RabbitMQ
+**Goal**: Capturar e expor consumo de tokens LLM (inputTokens/outputTokens/totalTokens) por turno — acumulado via BrainStateAnnotation, retornado no wrapper de BrainRunner.run(), exposto na resposta HTTP e logado no RabbitMQ consumer
+**Depends on**: Phase 16
+**Requirements**: TOK-01, TOK-02, TOK-03, TOK-04, TOK-05, TOK-06, D-03, D-04, D-05, D-06, D-07, D-08, D-09, D-10
+**Success Criteria** (what must be TRUE):
+  1. Resposta HTTP do webhook inclui `tokenUsage: { inputTokens, outputTokens, totalTokens }` ao lado de `fullResponse`
+  2. Para Brain SDR com ReAct (múltiplos LLM calls por turno), tokenUsage reflete a soma de todos os calls do turno — não apenas o último
+  3. RabbitMQ consumer loga tokenUsage com pino.info a cada turno processado — sem publicar em fila separada
+  4. BrainOutput (packages/shared) e BrainOutputSchema (Zod) permanecem inalterados — backward compatibility preservada
+  5. Provider sem suporte a usage_metadata retorna zeros explícitos — resposta HTTP nunca tem tokenUsage undefined
+**Plans**: 3 plans
+
+Plans:
+- [ ] 17-01-PLAN.md — TokenUsage type + extractTokenUsage helper + BrainStateAnnotation.tokenUsage reducer
+- [ ] 17-02-PLAN.md — BrainRunner.run() wrapper + handler.ts HTTP response + consumer.ts log
+- [ ] 17-03-PLAN.md — Integrar extractTokenUsage nos nós llm de brain-sdr e brain-echo
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -113,7 +130,7 @@ Plans:
 | 14. TD-01 Fix | v1.3 | 1/1 | Complete    | 2026-06-16 |
 | 15. MCP Integration | v1.3 | 0/? | Not started | - |
 | 16. Dynamic responseMode | v1.3 | 0/? | Not started | - |
-| 17. Expor contagem de tokens gastos | v1.3 | 0/? | Not started | - |
+| 17. Expor contagem de tokens gastos | v1.3 | 0/3 | Not started | - |
 
 ## Backlog
 
@@ -128,13 +145,3 @@ Plans:
 
 Plans:
 - [ ] TBD (promote with /gsd-review-backlog when ready)
-
-### Phase 17: Expor contagem de tokens gastos na resposta da API REST e RabbitMQ
-
-**Goal:** [To be planned]
-**Requirements**: TBD
-**Depends on:** Phase 16
-**Plans:** 0 plans
-
-Plans:
-- [ ] TBD (run /gsd-plan-phase 17 to break down)
