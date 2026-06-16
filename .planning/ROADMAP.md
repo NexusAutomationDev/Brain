@@ -45,7 +45,7 @@
 **Milestone Goal:** Conectar Brains a ferramentas externas via MCP e deixar o LLM controlar o formato de resposta dinamicamente.
 
 - [x] **Phase 14: TD-01 Fix** — qualifier.ts com prepare: false, elimina blocker de produção com PgBouncer (completed 2026-06-16)
-- [ ] **Phase 15: MCP Integration** — Brain conecta a servidor MCP externo, registra tools no startup, SIGTERM limpo
+- [x] **Phase 15: MCP Integration** — Brain conecta a servidor MCP externo, registra tools no startup, SIGTERM limpo (completed 2026-06-16)
 - [ ] **Phase 16: Dynamic responseMode** — LLM escolhe responseMode via schema-as-tool, sem hardcode, multi-provider
 
 ## Phase Details
@@ -76,9 +76,9 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 15-01-PLAN.md — Instalar @langchain/mcp-adapters + testes Wave 0 + mcpTools em interface.ts + MCP lifecycle em runner.ts
-- [ ] 15-02-PLAN.md — brain-sdr e brain-echo espalham ctx.mcpTools + .env.example com variáveis MCP
-- [ ] 15-03-PLAN.md — Suite completa + checkpoint verificação manual SIGTERM
+- [x] 15-01-PLAN.md — Instalar @langchain/mcp-adapters + testes Wave 0 + mcpTools em interface.ts + MCP lifecycle em runner.ts
+- [x] 15-02-PLAN.md — brain-sdr e brain-echo espalham ctx.mcpTools + .env.example com variáveis MCP
+- [x] 15-03-PLAN.md — Suite completa + checkpoint verificação manual SIGTERM
 
 ### Phase 16: Dynamic responseMode
 **Goal**: LLM escolhe responseMode (text/audio/image) dinamicamente via schema-as-tool — sem valor hardcoded no código, funcionando em OpenAI e Anthropic
@@ -129,7 +129,7 @@ Plans:
 | 12. Brain SDR Integration | v1.2 | 2/2 | Complete | 2026-06-15 |
 | 13. Suporte a PgBouncer | v1.2 | 2/2 | Complete | 2026-06-15 |
 | 14. TD-01 Fix | v1.3 | 1/1 | Complete    | 2026-06-16 |
-| 15. MCP Integration | v1.3 | 0/3 | Not started | - |
+| 15. MCP Integration | v1.3 | 3/3 | Complete | 2026-06-16 |
 | 16. Dynamic responseMode | v1.3 | 0/? | Not started | - |
 | 17. Expor contagem de tokens gastos | v1.3 | 3/3 | Complete    | 2026-06-16 |
 
@@ -142,7 +142,7 @@ Plans:
 **Context:** Hoje o brain-sdr sempre retorna `responseMode: "text"`. O system prompt contém o bloco `<response_format>` como referência comportamental (o LLM conhece os modos), mas sem um mecanismo de saída estruturada o LLM não consegue sinalizar `"audio"` quando o usuário pede. A solução correta é usar `response_format` (OpenAI) ou `generationConfig.responseMimeType` (Google) no nível da API — não instrução de prompt.
 
 **Requirements:** TBD
-**Plans:** 3/3 plans complete
+**Plans:** 2/3 plans executed
 
 Plans:
 - [ ] TBD (promote with /gsd-review-backlog when ready)

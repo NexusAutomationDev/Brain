@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: MCP Integration + Dynamic responseMode
-status: planning
-stopped_at: Phase 15 context gathered
-last_updated: "2026-06-16T03:06:37.700Z"
+status: in-progress
+stopped_at: Phase 15 complete — all 3 plans done; Phase 16 next
+last_updated: "2026-06-16T12:00:00.000Z"
 last_activity: 2026-06-16
 progress:
   total_phases: 5
-  completed_phases: 2
-  total_plans: 4
-  completed_plans: 4
-  percent: 100
+  completed_phases: 3
+  total_plans: 7
+  completed_plans: 7
+  percent: 60
 ---
 
 # Project State
@@ -22,31 +22,32 @@ See: .planning/PROJECT.md (updated 2026-06-15 — milestone v1.3 started)
 
 **Core value:** Infraestrutura de agentes modular onde novos Brains são criados definindo apenas prompts, tools, embeddings e fluxos — sem reescrever a base
 
-**Current focus:** Milestone v1.3 — Phase 14: TD-01 Fix
+**Current focus:** Milestone v1.3 — Phase 15 COMPLETE; Phase 16 next (Dynamic responseMode)
 
 ## Current Position
 
-Phase: 999.1 of 17 (responsemode dinâmico via structured output multi provider (backlog))
+Phase: 16 (Dynamic responseMode via schema-as-tool)
 Plan: Not started
-Status: Ready to plan
+Status: Ready to execute
 Last activity: 2026-06-16
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [██████░░░░] 60%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 4 (v1.3)
-- Average duration: — (no plans yet)
-- Total execution time: —
+- Total plans completed: 7 (v1.3)
+- Average duration: ~10 minutos/plano
+- Total execution time: ~70 minutos
 
 **By Phase:**
 
-| Phase | Plans | Total | Avg/Plan |
-|-------|-------|-------|----------|
-| 14 | 1 | - | - |
-| 17 | 3 | - | - |
+| Phase | Plans | Status |
+|-------|-------|--------|
+| 14 | 1/1 | COMPLETE |
+| 15 | 3/3 | COMPLETE |
+| 16 | 0/? | Next |
 
 *Updated after each plan completion*
 
@@ -80,6 +81,6 @@ Recent decisions affecting v1.3:
 
 ## Session Continuity
 
-Last session: 2026-06-16T03:06:37.692Z
-Stopped at: Phase 15 context gathered
-Resume: Run `/gsd-plan-phase 14`
+Last session: 2026-06-16T12:00:00.000Z
+Stopped at: Phase 15 complete — 15-03-SUMMARY.md criado, SIGTERM aprovado em 511ms, todos os 5 critérios MCP-01..MCP-05 verificados
+Resume: Run `/gsd-execute-phase 16` para iniciar Dynamic responseMode
