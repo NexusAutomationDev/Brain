@@ -23,6 +23,12 @@ export interface BrainBuildContext {
   tools: StructuredTool[];
   /** D-01: sql opcional — injetado pelo BrainRunner para tools de DB via buildGraph(). Brains sem DB tools ignoram. */
   sql?: Sql;
+  /**
+   * MCP-01, D-01: MCP tools carregadas do servidor externo no startup.
+   * D-02: Sempre um array (nunca undefined) — [] quando MCP_URL não definido.
+   * Brains espalham via: bindTools([...nativeTools, ...ctx.mcpTools])
+   */
+  mcpTools: StructuredTool[];
 }
 
 /**

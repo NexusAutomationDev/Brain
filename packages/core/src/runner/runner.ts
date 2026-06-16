@@ -8,6 +8,7 @@
 
 import { createCheckpointer, createLLM } from "@brain-pkg/ai";
 import type { LLMOptions } from "@brain-pkg/ai";
+import { MultiServerMCPClient } from "@langchain/mcp-adapters";
 import { runMigrations } from "@brain-pkg/database";
 import { MemoryManager } from "@brain-pkg/memory";
 import { createTracingCallbacks } from "@brain-pkg/observability";
@@ -60,6 +61,7 @@ export class BrainRunner {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private compiledGraph: any | null = null;
   private memoryManager: MemoryManager | null = null;
+  private mcpClient: MultiServerMCPClient | null = null;
   private leadService!: LeadService; // inicializado no construtor
 
   constructor(options: BrainRunnerOptions) {
@@ -116,6 +118,15 @@ export class BrainRunner {
     }
 
     await this._compileGraph();
+
+    // D-05, MCP-05: Auto-registrar SIGTERM handler — SDK cuida do shutdown transparentemente.
+    // Registrado APÓS _compileGraph() para garantir que mcpClient está pronto quando SIGTERM chegar.
+    // Apps (index.ts) NÃO precisam adicionar SIGTERM handlers.
+    process.on('SIGTERM', async () => {
+      this.logger.info({ brainId: this.brain.id }, 'SIGTERM received — shutting down cleanly');
+      await this.close();
+      process.exit(0);
+    });
 
     this.logger.info({ brainId: this.brain.id }, "BrainRunner initialized");
   }
@@ -254,6 +265,18 @@ export class BrainRunner {
     return { brainOutput, tokenUsage };
   }
 
+  /**
+   * MCP-05, D-04: Fecha o MultiServerMCPClient de forma limpa.
+   * No-op quando mcpClient é null (sem MCP configurado).
+   * Chamado pelo handler SIGTERM registrado em init().
+   */
+  async close(): Promise<void> {
+    if (this.mcpClient) {
+      await this.mcpClient.close();
+      this.mcpClient = null;
+    }
+  }
+
   /** Internal: compile the graph with checkpointer and inject context */
   private async _compileGraph(): Promise<void> {
     // D-06: Fail-fast if DATABASE_URL missing — avoids cryptic downstream connection errors
@@ -283,11 +306,64 @@ export class BrainRunner {
 
     const llm = await createLLM(this.llmOptions);
 
+    // --- BLOCO MCP (MCP-01, D-01) ---
+    // D-14 CORREÇÃO: transport é "http" no JS (@langchain/mcp-adapters JS) — NÃO "streamable_http"
+    // "streamable_http" é o valor do Python (langchain-mcp-adapters) e causa erro no schema Zod do JS.
+    let mcpTools: import("@langchain/core/tools").StructuredTool[] = [];
+    const mcpUrl = process.env.MCP_URL?.trim();
+
+    if (mcpUrl) {
+      try {
+        this.mcpClient = new MultiServerMCPClient({
+          mcpServers: {
+            "external-server": {
+              // transport omitido — presença de `url` identifica HTTP. Alternativa: transport: "http"
+              url: mcpUrl,
+              // D-10: Bearer token via MCP_AUTH_TOKEN — ausente = sem auth
+              ...(process.env.MCP_AUTH_TOKEN && {
+                headers: { Authorization: `Bearer ${process.env.MCP_AUTH_TOKEN}` },
+              }),
+            },
+          },
+          // PITFALL-1: default é "throw" — usar "ignore" para não travar startup se servidor inacessível
+          onConnectionError: "ignore",
+        });
+
+        let allTools = await this.mcpClient.getTools();
+
+        // D-08: MCP_TOOLS CSV filtra por nome exato; D-07: ausente/vazio = todas
+        const toolFilter = process.env.MCP_TOOLS?.trim();
+        if (toolFilter) {
+          const allowed = new Set(
+            toolFilter.split(",").map((t) => t.trim()).filter(Boolean)
+          );
+          allTools = allTools.filter((t) => allowed.has(t.name));
+        }
+
+        mcpTools = allTools;
+        this.logger.info(
+          { brainId: this.brain.id, mcpToolCount: mcpTools.length },
+          "MCP tools loaded successfully"
+        );
+      } catch (err) {
+        // D-12: defensive catch — servidor inacessível não impede startup
+        // SECURITY: nunca logar process.env.MCP_AUTH_TOKEN no err (T-15-01)
+        this.logger.warn(
+          { brainId: this.brain.id, err },
+          "MCP server unreachable at startup — continuing with native tools only (MCP-03)"
+        );
+        this.mcpClient = null;
+        mcpTools = [];
+      }
+    }
+    // --- FIM BLOCO MCP ---
+
     const ctx: BrainBuildContext = {
       llm,
       prompts: this.prompts,
       tools: filteredTools,
       sql: this.sql, // D-03: injetado para tools de DB — buildGraph() acessa via ctx.sql
+      mcpTools, // D-01: sempre array; [] quando MCP_URL ausente (D-09)
     };
 
     // D-02: compile() called HERE — never inside buildGraph()
