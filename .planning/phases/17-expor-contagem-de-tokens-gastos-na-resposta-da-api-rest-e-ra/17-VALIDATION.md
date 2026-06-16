@@ -1,10 +1,11 @@
 ---
 phase: 17
 slug: expor-contagem-de-tokens-gastos-na-resposta-da-api-rest-e-ra
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: complete
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-06-15
+audited: 2026-06-16
 ---
 
 # Phase 17 — Validation Strategy
@@ -19,9 +20,9 @@ created: 2026-06-15
 |----------|-------|
 | **Framework** | bun test |
 | **Config file** | `package.json` (workspaces) |
-| **Quick run command** | `bun test packages/shared packages/ai packages/core packages/transport` |
-| **Full suite command** | `bun test` |
-| **Estimated runtime** | ~10 seconds |
+| **Quick run command** | `bun test packages/ai/src/graph/state.test.ts apps/brain-sdr/src/__tests__/unit/brain.test.ts apps/brain-echo/src/__tests__/unit/brain.test.ts` |
+| **Full suite command** | `bun test packages/shared packages/ai packages/core packages/transport apps/brain-sdr apps/brain-echo` |
+| **Estimated runtime** | ~15 seconds |
 
 ---
 
@@ -36,16 +37,16 @@ created: 2026-06-15
 
 ## Per-Task Verification Map
 
-| Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
-|---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 17-01-01 | 01 | 1 | D-03 | — | N/A | unit | `bun test packages/shared` | ❌ W0 | ⬜ pending |
-| 17-01-02 | 01 | 1 | D-07 | — | N/A | unit | `bun test packages/ai` | ❌ W0 | ⬜ pending |
-| 17-01-03 | 01 | 1 | D-07 | — | N/A | unit | `bun test packages/ai` | ❌ W0 | ⬜ pending |
-| 17-02-01 | 02 | 2 | D-02,D-08 | — | N/A | unit | `bun test packages/core` | ✅ | ⬜ pending |
-| 17-02-02 | 02 | 2 | D-09 | — | N/A | unit | `bun test packages/transport` | ✅ | ⬜ pending |
-| 17-02-03 | 02 | 2 | D-10 | — | N/A | unit | `bun test packages/transport` | ✅ | ⬜ pending |
-| 17-03-01 | 03 | 3 | D-06,D-07 | — | N/A | integration | `bun test apps/brain-sdr` | ✅ | ⬜ pending |
-| 17-03-02 | 03 | 3 | D-06,D-07 | — | N/A | integration | `bun test apps/brain-echo` | ✅ | ⬜ pending |
+| Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File | Status |
+|---------|------|------|-------------|------------|-----------------|-----------|-------------------|------|--------|
+| 17-01-01 | 01 | 1 | D-03 | — | N/A | unit | `bun test packages/ai/src/__tests__/unit/token.test.ts` | `packages/ai/src/__tests__/unit/token.test.ts` | ✅ green |
+| 17-01-02 | 01 | 1 | D-07 | — | N/A | unit | `bun test packages/ai/src/__tests__/unit/token.test.ts` | `packages/ai/src/__tests__/unit/token.test.ts` | ✅ green |
+| 17-01-03 | 01 | 1 | D-07 | — | N/A | unit | `bun test packages/ai/src/graph/state.test.ts` | `packages/ai/src/graph/state.test.ts` | ✅ green |
+| 17-02-01 | 02 | 2 | D-02,D-08 | — | N/A | unit | `bun test packages/core/src/runner/__tests__/brain-runner.test.ts` | `packages/core/src/runner/__tests__/brain-runner.test.ts` | ✅ green |
+| 17-02-02 | 02 | 2 | D-09 | — | N/A | unit | `bun test packages/transport/src/webhook/handler.test.ts` | `packages/transport/src/webhook/handler.test.ts` | ✅ green |
+| 17-02-03 | 02 | 2 | D-10 | — | N/A | unit | `bun test packages/transport/src/__tests__/unit/rabbitmq/consumer.test.ts` | `packages/transport/src/__tests__/unit/rabbitmq/consumer.test.ts` | ✅ green |
+| 17-03-01 | 03 | 3 | D-06,D-07 | — | N/A | unit | `bun test apps/brain-sdr/src/__tests__/unit/brain.test.ts` | `apps/brain-sdr/src/__tests__/unit/brain.test.ts` | ✅ green |
+| 17-03-02 | 03 | 3 | D-06,D-07 | — | N/A | unit | `bun test apps/brain-echo/src/__tests__/unit/brain.test.ts` | `apps/brain-echo/src/__tests__/unit/brain.test.ts` | ✅ green |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -53,9 +54,15 @@ created: 2026-06-15
 
 ## Wave 0 Requirements
 
-- [ ] `packages/shared/src/__tests__/unit/token-usage.test.ts` — stubs para tipo `TokenUsage` (D-03)
-- [ ] `packages/ai/src/__tests__/unit/token.test.ts` — stubs para `extractTokenUsage()` helper (D-07)
-- [ ] `packages/ai/src/__tests__/unit/state.test.ts` — stubs para reducer de soma em `BrainStateAnnotation` (D-07)
+All resolved during execution — no pending stubs.
+
+- [x] `packages/ai/src/__tests__/unit/token.test.ts` — TOK-01/02: extractTokenUsage() helper (D-07) — 5 pass
+- [x] `packages/ai/src/graph/state.test.ts` — TOK-03a/b/c: BrainStateAnnotation.tokenUsage reducer (D-07, D-06) — added to existing file
+- [x] TokenUsage type (D-03) verified via TypeScript compilation in token.test.ts
+
+> Note: `packages/ai/src/__tests__/unit/state-token.test.ts` exists and passes in isolation but
+> has a Bun 1.3.2 module-cache isolation issue in multi-file runs. Equivalent coverage was added
+> to `packages/ai/src/graph/state.test.ts` (TOK-03b, TOK-03c) which passes in all contexts.
 
 ---
 
@@ -70,11 +77,29 @@ created: 2026-06-15
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 15s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have automated verify
+- [x] Sampling continuity: all tasks covered
+- [x] Wave 0 resolved: token.test.ts (TOK-01/02) + state.test.ts (TOK-03a/b/c)
+- [x] No watch-mode flags
+- [x] Feedback latency < 15s
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** 2026-06-16
+
+---
+
+## Validation Audit 2026-06-16
+
+| Metric | Count |
+|--------|-------|
+| Gaps found | 3 |
+| Resolved | 3 |
+| Escalated | 0 |
+
+### Resolution detail
+
+| Gap | Task | Resolution |
+|-----|------|------------|
+| PARTIAL | 17-01-03 | TOK-03b/TOK-03c added to `packages/ai/src/graph/state.test.ts` — avoids Bun 1.3.2 module isolation bug |
+| MISSING | 17-03-01 | TOK-07 added to `apps/brain-sdr/src/__tests__/unit/brain.test.ts` — asserts tokenUsage from mock AIMessage with usage_metadata |
+| MISSING | 17-03-02 | TOK-08 added to `apps/brain-echo/src/__tests__/unit/brain.test.ts` — same pattern |
