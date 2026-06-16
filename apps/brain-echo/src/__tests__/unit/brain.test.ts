@@ -27,11 +27,16 @@ describe("EchoBrain — IBrain contract", () => {
 
   test("buildGraph(ctx) retorna StateGraph (tem método addNode)", async () => {
     const mod = await import("../../brain.js");
-    // Mock mínimo de BrainBuildContext
+    // Mock mínimo de BrainBuildContext — inclui bindTools (ReAct) e mcpTools (MCP-02)
     const ctx = {
-      llm: { invoke: mock(async () => ({ content: "ok" })) },
+      llm: {
+        bindTools: mock(() => ({
+          invoke: mock(async () => ({ content: "ok", tool_calls: [] })),
+        })),
+      },
       prompts: { system: "Você é um assistente útil." },
       tools: [],
+      mcpTools: [], // MCP-02: sempre array (D-02)
     };
     const graph = mod.echoBrain.buildGraph(ctx as any);
     // StateGraph retorna objeto com métodos de grafo — não deve ser null
@@ -105,15 +110,18 @@ describe("HIST-03: context window no nó do grafo", () => {
 
     const mod = await import("../../brain.js");
     let capturedMessages: any[] = [];
+    const llmInvokeMock = mock(async (msgs: any[]) => {
+      capturedMessages = msgs;
+      return { content: "resposta", tool_calls: [] };  // Não vai ao messagesStateReducer neste teste
+    });
+    // MCP-02: brain-echo agora usa ReAct — ctx precisa de bindTools e mcpTools
     const ctx = {
       llm: {
-        invoke: mock(async (msgs: any[]) => {
-          capturedMessages = msgs;
-          return { content: "resposta" };  // Não vai ao messagesStateReducer neste teste
-        }),
+        bindTools: mock(() => ({ invoke: llmInvokeMock })),
       },
       prompts: { system: "system prompt" },
       tools: [],
+      mcpTools: [], // D-02: sempre array
     };
 
     // Extrair a função do nó "llm" diretamente, sem compilar o grafo
