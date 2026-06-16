@@ -34,6 +34,7 @@ describe("BrainSDR — IBrain contract (SDR-01, SDR-04)", () => {
       prompts: { system: "prompt sistema", qualification: "prompt qualificacao" },
       tools: [],
       sql: {} as any, // D-14: mock simples — createXTool(sql) acessa DB apenas na invocação, não na criação
+      mcpTools: [], // MCP-02: sempre array, nunca undefined (D-02)
     };
     const graph = mod.sdrBrain.buildGraph(ctx as any);
     expect(graph).toBeTruthy();
@@ -88,6 +89,7 @@ describe("BrainSDR — Standard Tools binding (D-07, D-08, TOOLS-STD-03)", () =>
       prompts: { system: "prompt sistema", qualification: "prompt qualificacao" },
       tools: [],
       sql: {} as any, // D-14: mock simples — factory aceita qualquer objeto em construção
+      mcpTools: [], // MCP-02: mcpTools vazio → bindTools ainda recebe 3 tools nativas
     };
     mod.sdrBrain.buildGraph(ctx as any);
     // Verificar que bindTools foi chamado 1 vez com array de 3 tools
@@ -127,6 +129,7 @@ describe("BrainSDR — nó llm seta brainOutput (D-09, PARSER-03)", () => {
       prompts: { system: "prompt sistema", qualification: "prompt qualificacao" },
       tools: [],
       sql: {} as any,
+      mcpTools: [], // MCP-02: sempre array (D-02)
     };
     const graph = mod.sdrBrain.buildGraph(ctx as any);
     const compiled = graph.compile();
@@ -137,5 +140,34 @@ describe("BrainSDR — nó llm seta brainOutput (D-09, PARSER-03)", () => {
     expect(result.brainOutput).toBeDefined();
     expect(result.brainOutput.fullResponse).toBe("resposta do llm");
     expect(result.brainOutput.responseMode).toBe("text");
+  });
+});
+
+describe("BrainSDR — MCP tools integration (MCP-02, D-03)", () => {
+  test("buildGraph(ctx) com ctx.mcpTools=[mockTool] chama bindTools com 4 tools", async () => {
+    const mod = await import("../../brain.js");
+    const bindToolsMock = mock(() => ({
+      invoke: mock(async () => ({ content: "resposta", tool_calls: [] })),
+    }));
+    const fakeMcpTool = {
+      name: "mcp_fake_tool",
+      description: "fake mcp tool para teste",
+      invoke: async () => "result",
+    };
+    const ctx = {
+      llm: { bindTools: bindToolsMock },
+      prompts: { system: "s", qualification: "q" },
+      tools: [],
+      sql: {} as any,
+      mcpTools: [fakeMcpTool], // MCP-02: 1 tool MCP → bindTools deve receber 4 no total
+    };
+    (mod.sdrBrain as any).buildGraph(ctx as any);
+    const callArgs = (bindToolsMock as any).mock.calls[0][0] as Array<{ name: string }>;
+    expect(callArgs).toHaveLength(4);
+    const toolNames = callArgs.map((t: any) => t.name);
+    expect(toolNames).toContain("mcp_fake_tool");
+    expect(toolNames).toContain("qualify_lead");
+    expect(toolNames).toContain("pause_session");
+    expect(toolNames).toContain("finish_conversation");
   });
 });

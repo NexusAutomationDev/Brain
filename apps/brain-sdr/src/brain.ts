@@ -60,11 +60,13 @@ export const sdrBrain: IBrain = {
     if (!ctx.llm.bindTools) {
       throw new Error("LLM provider não suporta tool calling — configure um provider compatível (ex: OpenAI, Anthropic, Gemini)");
     }
-    // D-08 (Fase 12): bind com 3 tools — qualify_lead, pause_session, finish_conversation
+    // D-08 (Fase 12): bind com 3 tools nativas + MCP tools injetadas (MCP-02, D-03)
+    // ctx.mcpTools é sempre array (D-02) — [] quando MCP_URL ausente (sem impacto no comportamento)
     const llmWithTools = ctx.llm.bindTools([
       boundQualifyTool,
       boundPauseSessionTool,
       boundFinishConversationTool,
+      ...ctx.mcpTools,  // D-03: MCP tools injetadas pelo BrainRunner; [] quando MCP_URL ausente (D-02)
     ]);
 
     // HIST-03: context window — slice feito no nó, não no invoke() (Pitfall 3 do runner.ts)
@@ -90,8 +92,12 @@ export const sdrBrain: IBrain = {
           tokenUsage: extractTokenUsage(response),  // D-07: delta do LLM call atual
         };
       })
-      // D-07 (Fase 12): ToolNode com 3 tools — qualify_lead, pause_session, finish_conversation
-      .addNode("tools", new ToolNode([boundQualifyTool, boundPauseSessionTool, boundFinishConversationTool]))
+      // D-07 (Fase 12): ToolNode com 3 tools nativas + MCP tools (MCP-02, D-03)
+      // D-11, MCP-04: handleToolErrors: true — captura erro de MCP tool, injeta ToolMessage — evita thread corrompido (PITFALL-2)
+      .addNode("tools", new ToolNode(
+        [boundQualifyTool, boundPauseSessionTool, boundFinishConversationTool, ...ctx.mcpTools],
+        { handleToolErrors: true }
+      ))
       .addEdge("__start__", "llm")
       // D-02: toolsCondition verifica tool_calls no último AIMessage — roteia para tools ou __end__
       .addConditionalEdges("llm", toolsCondition, ["tools", "__end__"])
