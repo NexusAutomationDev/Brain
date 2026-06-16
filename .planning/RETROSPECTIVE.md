@@ -154,6 +154,58 @@
 
 ---
 
+## Milestone: v1.3 — MCP Integration + Dynamic responseMode
+
+**Shipped:** 2026-06-16
+**Phases:** 4 (14-17) | **Plans:** 9 | **Timeline:** 2 dias (2026-06-15 → 2026-06-16)
+**Commits:** 92 | **Files changed:** 145 | **Lines:** +14.132 / -1.051
+
+### What Was Built
+
+- TD-01 fix: `qualifier.ts` com `prepare: false` — sub-agente de qualificação compatível com PgBouncer transaction mode; static analysis test PGB-TD01 previne regressão
+- MCP Integration: `BrainRunner._compileGraph()` carrega `MultiServerMCPClient` no startup, regista tools em `BrainBuildContext.mcpTools`, fallback gracioso se servidor inacessível, SIGTERM limpo em 511ms
+- brain-sdr e brain-echo integrados com MCP tools em `bindTools()` + `ToolNode`; suporte a `handleToolErrors: true`; teste de integração real contra servidor MCP externo
+- `createRespondTool()` factory stateless: LLM escolhe `responseMode` (text/audio/image/undefined) via schema-as-tool — eliminando hardcode e sendo multi-provider
+- `routeAfterLlm` + nó `respond` em brain-sdr e brain-echo: router detecta chamada `respond` e encaminha para nó dedicado; UAT 2/2 com OpenAI + Anthropic
+- Token Usage Exposure: `BrainStateAnnotation.tokenUsage` com sum reducer acumula tokens de todos os nós llm do turno; exposto em HTTP response e logado no RabbitMQ consumer
+
+### What Worked
+
+- **schema-as-tool como solução para responseMode dinâmico**: descoberta de que `withStructuredOutput()` + `bindTools()` são mutuamente exclusivos (langchainjs #7757) e a solução via `createRespondTool()` foram decisões elegantes que funcionaram perfeitamente no UAT multi-provider
+- **PITFALL list no PLAN.md**: documentar armadilhas conhecidas (PITFALL-1 a PITFALL-6) antes da implementação evitou todos os pitfalls identificados; nenhum blocker inesperado durante execução das phases 15-16
+- **MCP lifecycle em `_compileGraph()`**: inicializar o MCP client uma vez por processo (não por request) foi a decisão correta — SIGTERM limpo em 511ms, sem N conexões simultâneas
+- **Nyquist Wave 0 + VALIDATION.md**: 3 de 4 fases com `nyquist_compliant: true` após execução; Phase 14 adicionada retroativamente após audit — o padrão está maduro
+- **Audit com re-check pós-fix**: ciclo audit → fix → re-audit funcionou bem; `039330d` fechou RESP-01 que o audit anterior tinha flagged, e o audit seguinte confirmou
+
+### What Was Inefficient
+
+- **REQUIREMENTS.md checkboxes `[ ]` pela 4ª vez consecutiva**: 4/4 milestones com todos os requisitos como `[ ]` durante execução — a traceability table do REQUIREMENTS.md é morta em todos os milestones; não foi resolvida sistematicamente apesar de identificada em v1.2 retrospective
+- **Phase 15 VALIDATION.md nunca fechada**: arquivo permanece em `draft` / `nyquist_compliant: false` apesar de Phase 15 estar completamente funcional com 59 testes verdes — erro de processo de não fechar VALIDATION.md no plan de conclusão da phase
+- **ROADMAP.md Phase 16 desatualizada**: Phase 16 completou mas ROADMAP.md mostrou `0/2` / `Not started` até o milestone completion — sinal de que a atualização do ROADMAP.md precisa ser parte do protocol de conclusão de phase
+- **Phase 17 sem REQ-IDs formais**: features significativas (TOK-01 a TOK-06, D-03 a D-10) implementadas sem rastreabilidade em REQUIREMENTS.md — a phase emergiu organicamente durante v1.3 mas não teve requirements definidos formalmente
+
+### Patterns Established
+
+- **`"streamable_http"` com underscore**: formato correto para MCP transport adapter — hífen lança ValueError sem mensagem clara; documentar em CLAUDE.md para evitar regressão
+- **`ResponseMode "undefined"` como sentinela**: LLM precisa de valor de output válido antes de conhecer o modo correto — valor sentinela `"undefined"` (string, não undefined JS) é pattern reutilizável para outros campos dinâmicos
+- **BrainStateAnnotation sum reducer para métricas**: `(a, b) => ({...soma})` em uma Annotation é o padrão correto para acumular métricas ao longo de um turno ReAct — reutilizável para latência, custo, etc.
+- **Teste de integração real contra MCP externo**: `mcp-connection.test.ts` com `MCP_URL` real (env-gated) é o padrão para testar integrações de terceiros sem mock — quando env não disponível, teste é skipped
+
+### Key Lessons
+
+1. **REQUIREMENTS.md `[ ]` problem: aceitar ou eliminar**: 4 milestones com o mesmo padrão de falha. A tabela de traceability nunca foi atualizada durante execução em nenhum milestone. Para v1.4+: ou automatizar via `gsd-tools` no final de cada phase, ou substituir por audit pós-fase como única fonte de verdade de requirement status
+2. **Phase closure deve incluir ROADMAP.md + VALIDATION.md update como tasks explícitas**: as duas omissões mais frequentes em v1.3. Adicionar como tasks obrigatórias no template de conclusão de phase no GSD
+3. **Features emergentes precisam de REQ-IDs antes de implementar**: Phase 17 (token usage) foi adicionada organicamente durante v1.3 mas nunca teve requisitos formais — cria gap de rastreabilidade que o audit depois tem que resolver. Se uma feature nova emerge, criar os REQ-IDs antes de começar a implementar
+4. **Audit pós-milestone ainda é imprescindível**: mesmo com Nyquist compliance e testes verdes, o audit de v1.3 encontrou 1 gap de integração real (brain-echo `hasOtherToolCall`) que os testes unitários não capturaram — o audit cross-phase é insubstituível
+
+### Cost Observations
+
+- Timeline de 2 dias = consistente com v1.1 e v1.2; velocidade de cruzeiro mantida
+- Phase 17 não estava no escopo original de v1.3 e foi concluída em ~3 planos adicionais sem afetar o timeline — indica que o processo absorve bem features emergentes quando o escopo base está bem definido
+- MCP integration com `@langchain/mcp-adapters` teve documentação escassa — o PITFALL-list no PLAN.md foi essencial para mitigar os riscos antes de implementar
+
+---
+
 ## Cross-Milestone Trends
 
 | Milestone | Phases | Plans | Timeline | Requirements | E2E |
@@ -161,8 +213,11 @@
 | v1.0 MVP | 4 | 28 | 23 dias | 28/30 (93%) | 3/3 ✅ |
 | v1.1 SDR | 5 | 12 | 2 dias | 17/20 satisfied + 3 partial (85%) | 1/2 ✅ (Flow 2 ativado pós-audit) |
 | v1.2 Output Parser | 4 | 11 | 2 dias | 8/8 (100%) | 2/2 ✅ |
+| v1.3 MCP + responseMode | 4 | 9 | 2 dias | 9/9 (100%) | 4/5 ✅ (1 flow com intermediate state pollution não-fatal) |
 
 **Trends:**
 - Velocidade estabilizou em ~2 dias por milestone após v1.0; esperado para scopes bem-definidos
-- Cobertura de requisitos melhorando: 93% → 85% (v1.1 com tech debt herdado) → 100% (v1.2)
-- REQUIREMENTS.md como artefato de tracking: 0/3 milestones com checkboxes atualizados durante execução — padrão consistente de falha; precisa de solução sistêmica no v1.3
+- Cobertura de requisitos: 93% → 85% (v1.1) → 100% (v1.2) → 100% (v1.3) — baseline de 100% estabelecida
+- REQUIREMENTS.md como artefato de tracking: 0/4 milestones com checkboxes atualizados durante execução — padrão consistente de falha; needs systemic fix in v1.4
+- Nyquist compliance: 0% (v1.0) → parcial (v1.1/v1.2) → 3/4 phases compliant (v1.3) — progresso real
+- Tech debt carry-over por milestone: v1.0→v1.1 (TD-01 a TD-04), v1.1→v1.2 (TD-01 resolvido parcialmente), v1.2→v1.3 (TD-01 resolvido), v1.3→v1.4 (TD-03, TD-04, brain-echo guard)

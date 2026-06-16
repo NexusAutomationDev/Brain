@@ -10,18 +10,13 @@ O primeiro Brain real (SDR) foi entregue no v1.1 — atende leads no WhatsApp co
 
 Uma infraestrutura de agentes modular onde novos Brains são criados definindo apenas prompts, tools, embeddings e fluxos — sem reescrever a base.
 
-## Current State: Phase 15 complete — MCP Integration deployed (BrainRunner carrega MCP tools no startup, SIGTERM limpo em 511ms)
+## Current State: v1.3 shipped — MCP Integration + Dynamic responseMode + Token Usage entregues (2026-06-16)
 
 Brain Core v1.2 entregou o contrato completo de saída estruturada e tool contracts para todos os Brains. v1.3 foca em conectar Brains a ferramentas externas via MCP e deixar o LLM controlar o formato de resposta dinamicamente. Phase 14 complete: `prepare: false` aplicado em qualifier.ts — sub-agente de qualificação compatível com PgBouncer transaction mode.
 
-## Current Milestone: v1.3 MCP Integration + Dynamic responseMode
+## Previous Milestone: v1.3 MCP Integration + Dynamic responseMode — SHIPPED 2026-06-16
 
-**Goal:** Conectar Brains a ferramentas externas via MCP e deixar o LLM controlar o formato de resposta dinamicamente via structured output multi-provider.
-
-**Target features:**
-- TD-01 fix: `qualifier.ts` com `prepare: false` (risco de falha com PgBouncer em produção)
-- MCP Integration: Brain conecta a servidor MCP externo (n8n) via ENV (`MCP_URL`, `MCP_TOOLS`), registra tools no startup como LangGraph tools normais
-- responseMode dinâmico: LLM decide text/audio/image como parte do BrainOutput via `.withStructuredOutput()` — multi-provider (OpenAI + Anthropic)
+4 fases (14-17), 9 planos, 92 commits, 145 arquivos, +14.132 linhas. MCP Integration + Dynamic responseMode + Token Usage entregues.
 
 ## Requirements
 
@@ -62,13 +57,16 @@ Brain Core v1.2 entregou o contrato completo de saída estruturada e tool contra
 - ✓ Brain SDR migrado para contrato v1.2: BrainOutput estruturado, 3 tools no grafo, webhook sem campo `reply` — v1.2
 - ✓ PgBouncer compatibility: `prepare: false` em TenantPoolManager, row-lock transacional em migrate, CR-01 fix em qualifier.ts — v1.2
 
-### Active
-
 **v1.3 — MCP Integration + Dynamic responseMode**
 
-- [ ] MCP Integration: Brain conecta a servidor MCP externo via ENV (`MCP_URL`, `MCP_TOOLS`) e usa tools externas no LangGraph
-- [ ] responseMode dinâmico: LLM decide `text/audio/image` via `.withStructuredOutput()` — multi-provider (OpenAI + Anthropic)
-- [ ] TD-01 fix: `qualifier.ts` com `prepare: false` — blocker de produção com PgBouncer
+- ✓ TD-01 fix: `qualifier.ts` com `prepare: false` — compatível com PgBouncer transaction mode — v1.3
+- ✓ MCP Integration: BrainRunner carrega tools via `MultiServerMCPClient` no startup; fallback gracioso se inacessível; SIGTERM limpo em 511ms — v1.3
+- ✓ brain-sdr e brain-echo: MCP tools integradas no `bindTools()` + `ToolNode` do grafo LangGraph — v1.3
+- ✓ `createRespondTool()`: factory stateless — LLM escolhe `responseMode` (text/audio/image) via schema-as-tool, sem hardcode — v1.3
+- ✓ `routeAfterLlm` + nó `respond`: multi-provider OpenAI + Anthropic sem branching de código (RESP-01, RESP-02, RESP-03) — v1.3
+- ✓ Token Usage Exposure: `tokenUsage` acumulado via `BrainStateAnnotation` (sum reducer), exposto em HTTP response e logado no RabbitMQ consumer — v1.3
+
+### Active
 
 **Backlog (pós v1.3)**
 
@@ -90,25 +88,28 @@ Brain Core v1.2 entregou o contrato completo de saída estruturada e tool contra
 
 ## Context
 
+**v1.3 (shipped 2026-06-16):** 4 fases (14-17), 9 planos, 92 commits, 145 arquivos (+14.132 / -1.051 linhas), 2 dias. MCP Integration via `@langchain/mcp-adapters`; schema-as-tool pattern para responseMode dinâmico; token usage acumulado via BrainStateAnnotation (sum reducer) e exposto em HTTP + RabbitMQ log.
+
 **v1.2 (shipped 2026-06-15):** 4 fases (10-13), 11 planos, 122 commits, 163 arquivos alterados (+13.153 linhas), 2 dias de desenvolvimento. Contrato de saída estruturado entregue em todos os Brains; PgBouncer-compatible desde Phase 13.
 
 **v1.1 (shipped 2026-06-14):** 5 fases (5-9), 12 planos, ~124 commits, 2 dias.
 
 **v1.0 (shipped 2026-06-13):** ~7.094 linhas TypeScript, 4 fases (1-4), 28 planos, 234 commits, 23 dias.
 
-Stack validado: Bun + Hono + Drizzle (postgres.js driver) + LangGraph + PostgresSaver + pgvector + Pino + Langfuse.
+Stack validado: Bun + Hono + Drizzle (postgres.js driver) + LangGraph + PostgresSaver + pgvector + Pino + Langfuse + `@langchain/mcp-adapters`.
 
-O Brain SDR tem uma arquitetura com sub-agente de qualificação stateless: o Brain principal conversa com leads e aciona o sub-agente quando chega o momento de qualificar. O sub-agente lê o histórico via PostgresSaver.getTuple() e retorna {qualificado, motivo, proximo_passo}. Toda comunicação de transport é via webhook (TRANSPORT=webhook) ou RabbitMQ (TRANSPORT=rabbitmq), selecionável via ENV. Desde v1.2, toda resposta é `BrainOutput` estruturado.
+O Brain SDR tem uma arquitetura com sub-agente de qualificação stateless: o Brain principal conversa com leads e aciona o sub-agente quando chega o momento de qualificar. O sub-agente lê o histórico via PostgresSaver.getTuple() e retorna {qualificado, motivo, proximo_passo}. Toda comunicação de transport é via webhook (TRANSPORT=webhook) ou RabbitMQ (TRANSPORT=rabbitmq), selecionável via ENV. Desde v1.2, toda resposta é `BrainOutput` estruturado. Desde v1.3, Brains conectam a ferramentas externas via MCP e o LLM controla responseMode dinamicamente.
 
 Brains planejados para o futuro: Suporte, Customer Success, Cobrança, RH, Jurídico, E-commerce, Agendamento.
 
-**Tech debt acumulado (carry-over):**
-- TD-01: `qualifier.ts` — `postgres()` sem `prepare: false` (targeted v1.3)
+**Tech debt acumulado (carry-over para v1.4+):**
+- ~~TD-01~~ — resolvido em v1.3 Phase 14
 - TD-03: `BRAIN_TOOLS` whitelist inerte para tools bound diretamente em `buildGraph()`
 - TD-04: `LeadService.setFullpp()` / `setIaAtivada()` sem callers de produção
 - MEM-03: semantic write path (dead code) — createEmbeddings() nunca chamado
 - OBS-02: transport status ausente no GET /health
-- ~~handler.ts sem try/catch~~ — resolvido em quick task (try/catch existe em handler.ts:76-99)
+- brain-echo `hasOtherToolCall` guard ausente no nó LLM — non-fatal (last-write-wins reducer mitiga), mas alinha com brain-sdr
+- Phase 15 VALIDATION.md em draft (doc debt)
 
 ## Constraints
 
@@ -139,6 +140,11 @@ Brains planejados para o futuro: Suporte, Customer Success, Cobrança, RH, Jurí
 | BRAIN_TOOLS como whitelist CSV via ENV (v1.2) | Controle de tools em runtime sem recompilação — enableTool() silenciosamente ignora tools fora da whitelist | ⚠ Revisit — whitelist não cobre tools bound diretamente em buildGraph() (TD-03); cobertura parcial |
 | row-lock via _schema_lock (v1.2, substitui pg_advisory_lock) | pg_advisory_lock não funciona sob PgBouncer (connection-level lock perdido na devolução do pool) | ✓ Good — row-lock transacional funciona em qualquer pooler; DDL idempotente fora de transação |
 | rabbitmq-client (não amqplib-bun) mantido em v1.2 | Sem mudança de decisão — zero deps, Bun-compatible, auto-reconnect built-in | ✓ Good — RabbitMQ consumer fire-and-forget por design; TD-05 documentado mas não é bug |
+| schema-as-tool para responseMode (v1.3) | `withStructuredOutput()` + `bindTools()` mutuamente exclusivos (langchainjs #7757) — `createRespondTool()` via `bindTools()` + nó `respond` + router | ✓ Good — multi-provider sem branching; UAT 2/2 OpenAI + Anthropic |
+| MCP transport `"streamable_http"` com underscore (v1.3) | Hífen lança ValueError sem mensagem clara (mcp-adapters #322) | ✓ Good — documentado em PITFALL list para evitar regressão |
+| MCP client lifecycle em `_compileGraph()` (v1.3) | Inicializado uma vez por processo, não por request — evita N conexões simultâneas | ✓ Good — SIGTERM limpo em 511ms verificado manualmente |
+| ResponseMode `"undefined"` como valor sentinela (v1.3) | LLM precisa de valor de saída antes de conhecer o responseMode correto — `"undefined"` comunica "não determinado ainda" | ✓ Good — BrainOutputSchema aceita "undefined" como válido; fallback D-10 restaurado em 039330d |
+| BrainStateAnnotation.tokenUsage com sum reducer (v1.3) | ReAct faz múltiplos LLM calls por turno — reducer acumula tokens de todos os nós llm automaticamente | ✓ Good — tokenUsage reflete turno completo, não apenas último call |
 
 ## Evolution
 
@@ -158,4 +164,4 @@ Este documento evolui nas transições de fase e marcos de milestone.
 4. Atualizar Context com estado atual
 
 ---
-*Last updated: 2026-06-16 — Phase 17 complete: token usage exposure (tokenUsage field in API response + RabbitMQ log)*
+*Last updated: 2026-06-16 — after v1.3 milestone: MCP Integration + Dynamic responseMode + Token Usage shipped*

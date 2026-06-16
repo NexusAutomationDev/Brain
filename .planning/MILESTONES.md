@@ -1,5 +1,22 @@
 # Milestones
 
+## v1.3 MCP Integration + Dynamic responseMode (Shipped: 2026-06-16)
+
+**Phases completed:** 4 phases (14-17), 9 plans, 92 commits
+**Timeline:** 2026-06-15 → 2026-06-16 (2 days)
+**Files changed:** 145 files, +14.132 / -1.051 linhas
+
+**Key accomplishments:**
+
+1. **TD-01 fix** (Phase 14): `qualifier.ts` com `prepare: false` — sub-agente de qualificação compatível com PgBouncer transaction mode; static analysis test PGB-TD01 previne regressão
+2. **MCP Integration** (Phase 15): BrainRunner carrega MCP tools via `MultiServerMCPClient` no startup, regista-as em `BrainBuildContext.mcpTools` como `StructuredTool[]`; SIGTERM limpo em 511ms verificado manualmente
+3. **brain-sdr + brain-echo com MCP** (Phase 15): ambos os Brains integram `ctx.mcpTools` no `bindTools()` e `ToolNode` do grafo LangGraph; fallback gracioso quando MCP server inacessível (warn + tools nativas preservadas)
+4. **`createRespondTool()`** (Phase 16): factory stateless que expõe `respond` como tool LangGraph — LLM escolhe `responseMode` (text/audio/image/undefined) dinamicamente via schema-as-tool; sem hardcode no código
+5. **routeAfterLlm + nó respond** (Phase 16): router em brain-sdr e brain-echo detecta chamada à `respond` tool e encaminha para nó dedicado; suporte multi-provider OpenAI + Anthropic sem branching de código (RESP-01, RESP-02, RESP-03)
+6. **Token Usage Exposure** (Phase 17): `tokenUsage { inputTokens, outputTokens, totalTokens }` acumulado via `BrainStateAnnotation` (sum reducer); exposto na resposta HTTP e logado no RabbitMQ consumer; zeros explícitos para providers sem `usage_metadata`
+
+---
+
 ## v1.2 Output Parser + Tool Contracts (Shipped: 2026-06-15)
 
 **Phases completed:** 4 phases (10-13), 11 plans, 122 commits

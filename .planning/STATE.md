@@ -2,85 +2,52 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: MCP Integration + Dynamic responseMode
-status: executing
-stopped_at: Phase 16 context gathered
-last_updated: "2026-06-16T15:28:02.301Z"
-last_activity: 2026-06-16 -- Phase 16 execution started
+status: complete
+stopped_at: Milestone v1.3 complete — archived 2026-06-16
+last_updated: "2026-06-16"
+last_activity: 2026-06-16 -- Milestone v1.3 completed and archived
 progress:
-  total_phases: 5
-  completed_phases: 3
+  total_phases: 4
+  completed_phases: 4
   total_plans: 9
-  completed_plans: 7
-  percent: 78
+  completed_plans: 9
+  percent: 100
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-06-15 — milestone v1.3 started)
+See: .planning/PROJECT.md (updated 2026-06-16 — after v1.3 milestone)
 
 **Core value:** Infraestrutura de agentes modular onde novos Brains são criados definindo apenas prompts, tools, embeddings e fluxos — sem reescrever a base
 
-**Current focus:** Phase 16 — dynamic-responsemode
+**Current focus:** Planning next milestone (v1.4)
 
 ## Current Position
 
-Phase: 16 (dynamic-responsemode) — EXECUTING
-Plan: 1 of 2
-Status: Executing Phase 16
-Last activity: 2026-06-16 -- Phase 16 execution started
+Milestone v1.3 COMPLETE — archived to `.planning/milestones/v1.3-ROADMAP.md`
 
-Progress: [██████░░░░] 60%
+Progress: [██████████] 100%
 
-## Performance Metrics
+## Milestone v1.3 Summary
 
-**Velocity:**
+| Phase | Plans | Status | Completed |
+|-------|-------|--------|-----------|
+| 14 TD-01 Fix | 1/1 | COMPLETE | 2026-06-16 |
+| 15 MCP Integration | 3/3 | COMPLETE | 2026-06-16 |
+| 16 Dynamic responseMode | 2/2 | COMPLETE | 2026-06-16 |
+| 17 Token Usage Exposure | 3/3 | COMPLETE | 2026-06-16 |
 
-- Total plans completed: 10 (v1.3)
-- Average duration: ~10 minutos/plano
-- Total execution time: ~70 minutos
+**92 commits | 145 files changed | +14.132 / -1.051 lines | 2 days**
 
-**By Phase:**
+## Tech Debt (carry-over para v1.4+)
 
-| Phase | Plans | Status |
-|-------|-------|--------|
-| 14 | 1/1 | COMPLETE |
-| 15 | 3/3 | COMPLETE |
-| 16 | 0/? | Next |
-
-*Updated after each plan completion*
-
-## Accumulated Context
-
-### Roadmap Evolution
-
-- Phase 17 added: Expor contagem de tokens gastos na resposta da API REST e RabbitMQ
-
-### Decisions
-
-Decisions are logged in PROJECT.md Key Decisions table.
-Recent decisions affecting v1.3:
-
-- schema-as-tool para responseMode (Phase 16): `withStructuredOutput()` + `bindTools()` são mutuamente exclusivos (langchainjs #7757) — usar `createRespondTool()` vinculado via `bindTools()` + nó `respond` + router customizado
-- MCP transport: `"streamable_http"` (underscore) sempre — hífen lança ValueError sem mensagem clara (mcp-adapters #322)
-- MCP client lifecycle em `_compileGraph()`: inicializado uma vez por processo, não por request
-- SSE fora de escopo: deprecated no spec MCP (março 2025) + bug Bun (EventSource not defined)
-
-### Blockers/Concerns
-
-- [Phase 15] PITFALL-1: MultiServerMCPClient descarta tools de todos os servers quando qualquer server falha — defensive catch obrigatório em getTools()
-- [Phase 15] PITFALL-2: MCP tool timeout deixa AIMessage sem par ToolMessage → thread corrompido permanentemente — safe ToolNode wrapper obrigatório
-- [Phase 16] PITFALL-6: LLM pode emitir texto plano em vez de chamar `respond` tool → BrainOutputValidationError — instrução forte no system prompt seed
-
-### Tech Debt (carry-over de v1.2)
-
-- **TD-01** (targeted Phase 14): `qualifier.ts` sem `prepare: false`
 - **TD-03** (Baixo): `BRAIN_TOOLS` whitelist inerte para tools bound diretamente em `buildGraph()`
 - **TD-04** (Baixo): `LeadService.setFullpp()` / `setIaAtivada()` sem callers de produção
+- **brain-echo** `hasOtherToolCall` guard ausente no nó LLM (non-fatal — last-write-wins mitiga)
+- **Phase 15** VALIDATION.md em draft (doc debt)
 
 ## Session Continuity
 
-Last session: 2026-06-16T05:21:25.756Z
-Stopped at: Phase 16 context gathered
-Resume: Run `/gsd-execute-phase 16` para iniciar Dynamic responseMode
+Milestone v1.3 archived. Next: `/gsd-new-milestone` para iniciar v1.4.
