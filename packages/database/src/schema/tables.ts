@@ -11,15 +11,6 @@ if (EMBEDDING_DIM < 128 || EMBEDDING_DIM > 4096) {
   );
 }
 
-// DB-01: Users table — maps external identity to internal UUID
-export const users = pgTable('users', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  externalId: text('external_id').notNull().unique(),
-  metadata: jsonb('metadata').$type<Record<string, unknown>>().default({}),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
-});
-
 // DB-01: Memories table — key/value store for long-term agent memory
 export const memories = pgTable('memories', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -77,7 +68,6 @@ export const prompts = pgTable('prompts', {
 }));
 
 // LEAD-01: Leads table — identity and state for each lead (D-01 to D-08)
-// D-08: aditiva — tabela users NÃO é removida em v1.1
 export const leads = pgTable('leads', {
   // D-01: UUID PK
   id: uuid('id').primaryKey().defaultRandom(),
@@ -91,6 +81,9 @@ export const leads = pgTable('leads', {
   iaAtivada: boolean('ia_ativada').notNull().default(true),
   // D-06: fullpp nullable — flag "follow up IA", sem regra de negócio em v1.1
   fullpp: boolean('fullpp'),
+  // IDdeal e IDcontato — integração CRM (nullable, sem regra de negócio em v1)
+  idDeal: text('id_deal'),
+  idContato: text('id_contato'),
   // D-07: timestamps padrão
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),

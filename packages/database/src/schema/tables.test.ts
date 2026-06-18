@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'bun:test';
-import { users, memories, agentState, embeddings, prompts, leads } from './tables.js';
+import { memories, agentState, embeddings, prompts, leads } from './tables.js';
 
 // Helper: get the Drizzle table name via its well-known symbol
 function tableName(table: Record<symbol, unknown>): string {
@@ -8,16 +8,6 @@ function tableName(table: Record<symbol, unknown>): string {
 
 describe('Schema Tables (DB-01, DB-02, SDK-04)', () => {
   describe('DB-01: Schema defines all required tables', () => {
-    it('exports users table with uuid id and externalId unique constraint', () => {
-      expect(users).toBeDefined();
-      expect(tableName(users as any)).toBe('users');
-      expect(users.id.columnType).toBe('PgUUID');
-      expect(users.id.primary).toBe(true);
-      expect(users.externalId.name).toBe('external_id');
-      expect(users.externalId.isUnique).toBe(true);
-      expect(users.externalId.notNull).toBe(true);
-    });
-
     it('exports memories table with userId and key columns', () => {
       expect(memories).toBeDefined();
       expect(tableName(memories as any)).toBe('memories');
@@ -120,6 +110,16 @@ describe('Schema Tables (DB-01, DB-02, SDK-04)', () => {
     it('D-07: updatedAt maps to updated_at and is NOT NULL', () => {
       expect(leads.updatedAt.name).toBe('updated_at');
       expect(leads.updatedAt.notNull).toBe(true);
+    });
+
+    it('idDeal maps to column id_deal and is nullable (no notNull)', () => {
+      expect(leads.idDeal.name).toBe('id_deal');
+      expect(leads.idDeal.notNull).toBe(false);
+    });
+
+    it('idContato maps to column id_contato and is nullable (no notNull)', () => {
+      expect(leads.idContato.name).toBe('id_contato');
+      expect(leads.idContato.notNull).toBe(false);
     });
   });
 
