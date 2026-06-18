@@ -1,0 +1,79 @@
+# .github/workflows/publish-brain-sdr.yml
+# Publica o brain-sdr no DockGate registry a cada push de tag semver.
+# Para adicionar brain-echo: copiar este workflow, ajustar APP_NAME e IMAGE_NAME.
+name: Publish brain-sdr
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+env:
+  APP_NAME: brain-sdr
+  IMAGE_NAME: brain-sdr
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/brain-sdr/Dockerfile
+          tags: ${{ env.IMAGE_NAME }}:${{ steps.version.outputs.VERSION }}
+          push: false
+          load: true
+          cache-from: type=gha,scope=brain-sdr
+          cache-to: type=gha,mode=max,scope=brain-sdr
+
+      - name: Export image to tar
+        run: docker save $IMAGE_NAME:${{ steps.version.outputs.VERSION }} -o image.tar
+
+      - name: Calculate sha256 and size
+        id: integrity
+        run: |
+          echo "SHA256=$(sha256sum image.tar | awk '{ print $1 }')" >> $GITHUB_OUTPUT
+          echo "SIZE=$(stat -c%s image.tar)" >> $GITHUB_OUTPUT
+
+      - name: Request upload URL from DockGate
+        id: upload_url
+        env:
+          DOCKGATE_URL: ${{ secrets.DOCKGATE_URL }}
+          DOCKGATE_UPLOAD_TOKEN: ${{ secrets.DOCKGATE_UPLOAD_TOKEN }}
+        run: |
+          RESPONSE=$(curl -sf -X POST \
+            -H "Authorization: Bearer $DOCKGATE_UPLOAD_TOKEN" \
+            "$DOCKGATE_URL/apps/$APP_NAME/upload?version=${{ steps.version.outputs.VERSION }}")
+          echo "URL=$(echo $RESPONSE | jq -r .url)" >> $GITHUB_OUTPUT
+
+      - name: Upload image to MinIO
+        run: |
+          curl -sf -X PUT \
+            -H "Content-Type: application/octet-stream" \
+            --upload-file image.tar \
+            "${{ steps.upload_url.outputs.URL }}"
+
+      - name: Publish latest version via DockGate
+        env:
+          DOCKGATE_URL: ${{ secrets.DOCKGATE_URL }}
+          DOCKGATE_UPLOAD_TOKEN: ${{ secrets.DOCKGATE_UPLOAD_TOKEN }}
+        run: |
+          curl -sf -X PUT \
+            -H "Authorization: Bearer $DOCKGATE_UPLOAD_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{\"version\":\"${{ steps.version.outputs.VERSION }}\",\"sha256\":\"${{ steps.integrity.outputs.SHA256 }}\",\"size\":${{ steps.integrity.outputs.SIZE }}}" \
+            "$DOCKGATE_URL/apps/$APP_NAME/latest"
