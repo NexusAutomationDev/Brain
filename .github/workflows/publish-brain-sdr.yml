@@ -62,8 +62,7 @@ jobs:
 
       - name: Upload image to MinIO
         run: |
-          curl -sf -X PUT \
-            -H "Content-Type: application/octet-stream" \
+          curl -f --show-error -X PUT \
             --upload-file image.tar \
             "${{ steps.upload_url.outputs.URL }}"
 
