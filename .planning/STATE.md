@@ -54,6 +54,12 @@ Progress: [██████████] 100%
 |---|-------------|------|--------|-----------|
 | 260618-g2w | remover tabela users das migrations e adicionar colunas IDdeal e IDcontato na tabela leads | 2026-06-18 | 3b7b7b5 | [260618-g2w-remover-tabela-users-das-migrations-e-ad](./quick/260618-g2w-remover-tabela-users-das-migrations-e-ad/) |
 
+## Accumulated Context
+
+### Roadmap Evolution
+
+- Phase 18 added: Build and Publish Docker Image via DockGate
+
 ## Session Continuity
 
 Milestone v1.3 archived. Next: `/gsd-new-milestone` para iniciar v1.4.
