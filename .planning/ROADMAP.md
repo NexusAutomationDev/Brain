@@ -71,6 +71,7 @@
 | 15. MCP Integration | v1.3 | 3/3 | Complete    | 2026-06-16 |
 | 16. Dynamic responseMode | v1.3 | 2/2 | Complete    | 2026-06-16 |
 | 17. Expor contagem de tokens gastos | v1.3 | 3/3 | Complete    | 2026-06-16 |
+| 18. Build and Publish Docker Image via DockGate | — | 0/1 | Planned | — |
 
 ## Backlog
 
@@ -88,10 +89,10 @@ Plans:
 
 ### Phase 18: Build and Publish Docker Image via DockGate
 
-**Goal:** [To be planned]
-**Requirements**: TBD
+**Goal:** Criar o pipeline de CI/CD (GitHub Actions) que builda a imagem Docker do brain-sdr e publica via DockGate — o registry Docker auto-hospedado do projeto, com API sobre MinIO. Disparado por push de tag semver v*.*.*.
+**Requirements**: DOCKER-BUILD-01, DOCKER-EXPORT-01, DOCKGATE-UPLOAD-01, DOCKGATE-PUBLISH-01
 **Depends on:** Phase 17
-**Plans:** 0 plans
+**Plans:** 1 plan
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 18 to break down)
+- [ ] 18-01-PLAN.md — Criar .github/workflows/publish-brain-sdr.yml com pipeline completo de build, export e publicação no DockGate
