@@ -5,7 +5,7 @@ milestone_name: MCP Integration + Dynamic responseMode
 status: complete
 stopped_at: Milestone v1.3 complete — archived 2026-06-16
 last_updated: "2026-06-16"
-last_activity: 2026-06-16 -- Milestone v1.3 completed and archived
+last_activity: 2026-06-18 - Completed quick task 260618-g2w: remover tabela users das migrations e adicionar colunas IDdeal e IDcontato na tabela leads
 progress:
   total_phases: 4
   completed_phases: 4
@@ -47,6 +47,12 @@ Progress: [██████████] 100%
 - **TD-04** (Baixo): `LeadService.setFullpp()` / `setIaAtivada()` sem callers de produção
 - **brain-echo** `hasOtherToolCall` guard ausente no nó LLM (non-fatal — last-write-wins mitiga)
 - **Phase 15** VALIDATION.md em draft (doc debt)
+
+## Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260618-g2w | remover tabela users das migrations e adicionar colunas IDdeal e IDcontato na tabela leads | 2026-06-18 | 3b7b7b5 | [260618-g2w-remover-tabela-users-das-migrations-e-ad](./quick/260618-g2w-remover-tabela-users-das-migrations-e-ad/) |
 
 ## Session Continuity
 
