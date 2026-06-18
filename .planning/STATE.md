@@ -1,17 +1,15 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.3
-milestone_name: MCP Integration + Dynamic responseMode
-status: complete
-stopped_at: Milestone v1.3 complete — archived 2026-06-16
-last_updated: "2026-06-16"
-last_activity: 2026-06-18 - Completed quick task 260618-g2w: remover tabela users das migrations e adicionar colunas IDdeal e IDcontato na tabela leads
+milestone: v1.0
+milestone_name: milestone
+status: Ready to execute
+last_updated: "2026-06-18T16:06:07.176Z"
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 9
-  completed_plans: 9
-  percent: 100
+  total_phases: 2
+  completed_phases: 0
+  total_plans: 1
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
