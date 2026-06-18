@@ -43,6 +43,13 @@
       "when": 1781480611202,
       "tag": "0005_brain_sdr_prompts",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1781793280000,
+      "tag": "0006_leads_cols_remove_users",
+      "breakpoints": true
     }
   ]
 }
