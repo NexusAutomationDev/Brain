@@ -115,7 +115,12 @@ const mockUpsertLead = mock(async () => ({
 
 mock.module("../../leads/lead-service.js", () => ({
   LeadService: mock(function () {
-    return { upsertLead: mockUpsertLead, getByNumero: mock(async () => null) };
+    return {
+      upsertLead: mockUpsertLead,
+      getByNumero: mock(async () => null),
+      // FUP-06: touchLastMessage adicionado ao runner.ts — mock necessário para evitar TypeError
+      touchLastMessage: mock(async () => {}),
+    };
   }),
 }));
 

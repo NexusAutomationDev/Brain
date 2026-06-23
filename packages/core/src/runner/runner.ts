@@ -186,6 +186,11 @@ export class BrainRunner {
       event.Name
     );
 
+    // D-13, FUP-06: Atualizar last_message_at INCONDICIONALMENTE — antes do gate ia_ativada.
+    // FUP-06 exige que last_message_at seja atualizado a cada mensagem recebida,
+    // inclusive quando ia_ativada=false (scheduler de FUP precisa saber o último contato).
+    await this.leadService.touchLastMessage(lead.uniqueId);
+
     // D-04/D-05: Gate ia_ativada — retorna null silenciosamente (LEAD-03)
     // Segurança: iaAtivada vem do banco (upsert), nunca do payload externo
     if (!lead.iaAtivada) {
