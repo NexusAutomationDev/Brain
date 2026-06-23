@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: RAG + Eventos de Tools + FUP Automático
-status: Defining requirements
+status: Ready to plan
 last_updated: "2026-06-23T00:00:00.000Z"
 progress:
-  total_phases: 0
+  total_phases: 4
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -16,18 +16,20 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-06-23 — milestone v1.4 started)
+See: .planning/PROJECT.md (updated 2026-06-23 — milestone v1.4 roadmap created)
 
 **Core value:** Infraestrutura de agentes modular onde novos Brains são criados definindo apenas prompts, tools, embeddings e fluxos — sem reescrever a base
 
-**Current focus:** Milestone v1.4 — RAG + Eventos de Tools + FUP Automático
+**Current focus:** Phase 19 — Database Foundation
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-06-23 — Milestone v1.4 started
+Phase: 19 of 22 (Database Foundation)
+Plan: — (not started)
+Status: Ready to plan
+Last activity: 2026-06-23 — Roadmap v1.4 created (phases 19-22)
+
+Progress: [░░░░░░░░░░] 0%
 
 ## Milestone v1.3 Summary
 
@@ -55,10 +57,27 @@ Last activity: 2026-06-23 — Milestone v1.4 started
 
 ## Accumulated Context
 
-### Roadmap Evolution
+### Roadmap v1.4 — Phases 19-22
 
-- Phase 18 added: Build and Publish Docker Image via DockGate
+| Phase | Goal | Requirements |
+|-------|------|--------------|
+| 19 Database Foundation | Schema estável para as 3 features em migration única | FUP-04, FUP-06 |
+| 20 Tool Events | Canal de saída separado por tool result | EVT-01, EVT-02, EVT-03, EVT-04 |
+| 21 RAG | Ingest + search_knowledge tool | RAG-01, RAG-02, RAG-03, RAG-04 |
+| 22 FUP Automático | Scheduler de follow-ups para leads silenciosos | FUP-01, FUP-02, FUP-03, FUP-05, FUP-06, FUP-07, FUP-08 |
+
+### Research Flags (verificar durante execução)
+
+- Phase 20: `handleToolEnd` dispara para tools MCP-proxied? (não documentado em `@langchain/mcp-adapters`)
+- Phase 21: pgvector 0.8.x no Docker image? (`hnsw.iterative_scan = relaxed_order` requer 0.8.0+)
+- Phase 22: Prototipar `BrainRunner.runFup()` com HumanMessage sintético antes de construir scheduler
+
+### Blockers/Concerns
+
+None.
 
 ## Session Continuity
 
-Milestone v1.3 archived. Next: `/gsd-new-milestone` para iniciar v1.4.
+Last session: 2026-06-23
+Stopped at: Roadmap v1.4 criado — próximo passo: `/gsd-plan-phase 19`
+Resume file: None

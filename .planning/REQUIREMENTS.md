@@ -72,28 +72,28 @@ Preenchido pelo roadmapper após criação do roadmap.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| RAG-01 | — | Pending |
-| RAG-02 | — | Pending |
-| RAG-03 | — | Pending |
-| RAG-04 | — | Pending |
-| EVT-01 | — | Pending |
-| EVT-02 | — | Pending |
-| EVT-03 | — | Pending |
-| EVT-04 | — | Pending |
-| FUP-01 | — | Pending |
-| FUP-02 | — | Pending |
-| FUP-03 | — | Pending |
-| FUP-04 | — | Pending |
-| FUP-05 | — | Pending |
-| FUP-06 | — | Pending |
-| FUP-07 | — | Pending |
-| FUP-08 | — | Pending |
+| RAG-01 | Phase 21 | Pending |
+| RAG-02 | Phase 21 | Pending |
+| RAG-03 | Phase 21 | Pending |
+| RAG-04 | Phase 21 | Pending |
+| EVT-01 | Phase 20 | Pending |
+| EVT-02 | Phase 20 | Pending |
+| EVT-03 | Phase 20 | Pending |
+| EVT-04 | Phase 20 | Pending |
+| FUP-01 | Phase 22 | Pending |
+| FUP-02 | Phase 22 | Pending |
+| FUP-03 | Phase 22 | Pending |
+| FUP-04 | Phase 19 | Pending |
+| FUP-05 | Phase 22 | Pending |
+| FUP-06 | Phase 19 | Pending |
+| FUP-07 | Phase 22 | Pending |
+| FUP-08 | Phase 22 | Pending |
 
 **Coverage:**
 - v1.4 requirements: 16 total
-- Mapped to phases: 0 (aguardando roadmap)
-- Unmapped: 16 ⚠️
+- Mapped to phases: 16 ✓
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-06-23*
-*Last updated: 2026-06-23 — milestone v1.4 kickoff*
+*Last updated: 2026-06-23 — traceability filled after roadmap v1.4 creation*
