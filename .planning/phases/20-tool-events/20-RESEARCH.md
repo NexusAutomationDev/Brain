@@ -587,17 +587,19 @@ describe("NoopEventPublisher", () => {
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Quando múltiplas tools são chamadas no mesmo turno**
    - O que sabemos: Um ReAct loop pode invocar `qualify_lead` e depois `pause_session` no mesmo turno
    - O que é incerto: Ordem de aparição em `result.messages` — provavelmente cronológica
    - Recomendação: Implementar `for...of` em `result.messages` em ordem, publicar todos os eventos. `event_id` diferente por `tool_call_id` garante deduplicação no consumidor (EVT-04)
+   - **RESOLVED:** Decisão — usar `for...of` em ordem cronológica em `result.messages`; `event_id = threadId:tool_call_id` garante idempotência no consumidor (EVT-04)
 
 2. **`ToolMessage.name` no contexto de `ToolNode` do LangGraph**
    - O que sabemos: `ToolNode` do LangGraph cria `ToolMessage` com `name` preenchido (verificado em `mcp-tool-error.test.ts` linha 24 — `name: "failing_mcp_tool"` aparece nas propriedades resultantes)
    - O que é incerto: Se `ToolNode` usa `tool.name` da definição da tool como `ToolMessage.name`
    - Recomendação: Wave 0 deve incluir um teste de integração que verifique `ToolMessage.name` no estado real
+   - **RESOLVED:** `ToolNode` do LangGraph preenche `ToolMessage.name` com o nome da tool (evidência em `mcp-tool-error.test.ts`); guard `typeof msg.name === "string"` protege casos edge; validação confirmada no Wave 0 documentada em VALIDATION.md
 
 ---
 
