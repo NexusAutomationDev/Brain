@@ -2,14 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: RAG + Eventos de Tools + FUP Automático
-status: Ready to plan
-last_updated: "2026-06-23T00:00:00.000Z"
+status: planning
+stopped_at: "Roadmap v1.4 criado — próximo passo: `/gsd-plan-phase 19`"
+last_updated: "2026-06-23T22:10:23.075Z"
+last_activity: 2026-06-23
 progress:
-  total_phases: 4
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+  total_phases: 6
+  completed_phases: 1
+  total_plans: 2
+  completed_plans: 2
+  percent: 100
 ---
 
 # Project State
@@ -24,10 +26,10 @@ See: .planning/PROJECT.md (updated 2026-06-23 — milestone v1.4 roadmap created
 
 ## Current Position
 
-Phase: 19 of 22 (Database Foundation)
-Plan: — (not started)
+Phase: 20 of 22 (tool events)
+Plan: Not started
 Status: Ready to plan
-Last activity: 2026-06-23 — Roadmap v1.4 created (phases 19-22)
+Last activity: 2026-06-23
 
 Progress: [░░░░░░░░░░] 0%
 
