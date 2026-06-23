@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: RAG + Eventos de Tools + FUP Automático
 status: planning
-stopped_at: "Roadmap v1.4 criado — próximo passo: `/gsd-plan-phase 19`"
-last_updated: "2026-06-23T22:10:23.075Z"
+stopped_at: Phase 20 context gathered
+last_updated: "2026-06-23T22:27:31.714Z"
 last_activity: 2026-06-23
 progress:
   total_phases: 6
@@ -80,6 +80,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-06-23
-Stopped at: Roadmap v1.4 criado — próximo passo: `/gsd-plan-phase 19`
-Resume file: None
+Last session: 2026-06-23T22:27:31.683Z
+Stopped at: Phase 20 context gathered
+Resume file: .planning/phases/20-tool-events/20-CONTEXT.md
