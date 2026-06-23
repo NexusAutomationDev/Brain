@@ -84,7 +84,12 @@
   3. Cada evento carrega `event_id` derivado de `thread_id:tool_call_id` — dois eventos do mesmo tool call produzem o mesmo `event_id`
   4. Publicação de evento nunca bloqueia nem atrasa a resposta do Brain ao lead
   5. Quando nenhum ENV de Tool Events está configurado, o sistema funciona normalmente sem publicar eventos
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 20-01-PLAN.md — IEventPublisher + EventPublisher (webhook/RabbitMQ) com TDD
+- [ ] 20-02-PLAN.md — Integrar EventPublisher no BrainRunner + barrel export + testes
+
 **UI hint**: no
 
 ### Phase 21: RAG
@@ -135,7 +140,7 @@
 | 17. Expor contagem de tokens gastos | v1.3 | 3/3 | Complete | 2026-06-16 |
 | 18. Build and Publish Docker Image via DockGate | — | 0/1 | Planned | — |
 | 19. Database Foundation | v1.4 | 2/2 | Complete    | 2026-06-23 |
-| 20. Tool Events | v1.4 | 0/? | Not started | — |
+| 20. Tool Events | v1.4 | 0/2 | Not started | — |
 | 21. RAG | v1.4 | 0/? | Not started | — |
 | 22. FUP Automático | v1.4 | 0/? | Not started | — |
 
