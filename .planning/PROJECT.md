@@ -169,4 +169,4 @@ Este documento evolui nas transições de fase e marcos de milestone.
 4. Atualizar Context com estado atual
 
 ---
-*Last updated: 2026-06-16 — after v1.3 milestone: MCP Integration + Dynamic responseMode + Token Usage shipped*
+*Last updated: 2026-06-23 — Phase 19 complete: database foundation for v1.4 (knowledge_chunks, fup_config, FUP columns in leads, touchLastMessage)*
