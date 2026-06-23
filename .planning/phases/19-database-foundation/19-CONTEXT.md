@@ -21,6 +21,7 @@ Criar todas as tabelas e colunas necessárias para RAG, Tool Events e FUP em uma
 - **D-04:** Dias permitidos armazenados como `text[]` na coluna `allowed_days`. Ex: `{'mon','tue','wed','thu','fri'}`. Phase 22 verifica com `allowed_days.includes(dayOfWeek)`.
 - **D-05:** Fuso horário armazenado como `text` (IANA timezone string). Ex: `'America/Sao_Paulo'`.
 - **D-06:** Horários min/max armazenados como `integer` (hora do dia, 0–23). Ex: `min_hour = 8`, `max_hour = 18`.
+- **D-16:** `fup_config` tem coluna `enabled boolean NOT NULL DEFAULT true` — controle de ativação de FUP por brain_type sem deletar a configuração. Scheduler do Phase 22 filtra `WHERE brain_type = ? AND enabled = true`. UPDATE simples para ativar/desativar sem perder intervalos, dias e horários.
 
 ### knowledge_chunks — Estrutura
 
