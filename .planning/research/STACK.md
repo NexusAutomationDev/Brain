@@ -1,387 +1,270 @@
 # Technology Stack
 
-**Project:** Brain Core v1.1 — RabbitMQ Transport + Brain SDR
-**Researched:** 2026-06-13
-**Research Mode:** Ecosystem (incremental — v1.1 additions only)
+**Project:** Brain Core v1.4 — RAG + Tool Events + FUP Automático
+**Researched:** 2026-06-23
+**Research Mode:** Ecosystem (incremental — v1.4 additions only)
 **Confidence:** HIGH
 
 ---
 
 ## Scope
 
-This document covers **only what is new or changed for v1.1**. The full v1.0 stack (Bun, Hono, Drizzle + postgres.js, LangGraph, PostgresSaver, pgvector, Pino, Langfuse) is validated and unchanged. Do not re-evaluate those choices.
+This document covers **only what is new or changed for v1.4**. The validated stack from prior milestones — Bun 1.x, Hono 4.12.x, Drizzle 0.45.x (postgres.js driver), LangGraph 1.4.x, PostgresSaver, pgvector 0.3.x, Pino, rabbitmq-client 5.0.8, @langchain/mcp-adapters 1.1.3 — is unchanged and NOT re-evaluated here.
+
+The three new capability domains researched:
+
+1. **RAG** — text chunking, embedding generation, pgvector upsert, semantic retrieval tool
+2. **Tool Events** — outbound event publishing when a Brain tool produces a result
+3. **FUP Automático** — background scheduler detecting silent leads, timezone-aware time window enforcement
 
 ---
 
-## New Dependencies for v1.1
+## New Dependencies for v1.4
 
-### RabbitMQ Transport
+### RAG: Text Chunking
 
-| Package | Version | Purpose | Source |
-|---------|---------|---------|--------|
-| `rabbitmq-client` | `^5.0.8` | RabbitMQ consumer + publisher | Installed, verified Bun-compatible |
+| Package | Version | Purpose | Where to Install |
+|---------|---------|---------|-----------------|
+| `@langchain/textsplitters` | `^0.1.0` | RecursiveCharacterTextSplitter for ingest pipeline | `packages/core` or new `packages/rag` |
 
-**Recommendation: Use `rabbitmq-client` instead of `amqplib-bun`.**
+**Why this and not custom code:** `RecursiveCharacterTextSplitter` splits on paragraph → sentence → word boundaries in order, gracefully handling real-world documents without splitting mid-concept. Writing an equivalent chunker from scratch is error-prone and not differentiating work for this project.
 
-The CLAUDE.md constraint names `amqplib-bun`, but the research reveals `rabbitmq-client` is the stronger choice for v1.1:
+**Why not `langchain` (the monolith package):** `@langchain/textsplitters` is the standalone JS package that was extracted from langchain. Installs only text splitting logic (~few KB) with no LLM adapter dependencies.
 
-- `amqplib-bun` v0.10.4 still carries legacy dependencies: `readable-stream@1.x`, `buffer-more-ints@1.0.x`, `url-parse`. These are Node.js compatibility shims that create unnecessary surface area in Bun.
-- `rabbitmq-client` v5.0.8 has **zero production dependencies** — pure TypeScript compiled to CJS. Confirmed imports cleanly in Bun 1.3.2 (`import { Connection } from 'rabbitmq-client'` works without errors).
-- `rabbitmq-client` v5.0.3+ explicitly supports RabbitMQ 4.1.x+. `amqplib-bun` v0.10.4 is based on amqplib 0.10 which also supports RabbitMQ 4.1 (amqplib >= 0.10.7 requirement from RabbitMQ 4.1.0 release notes).
-- `rabbitmq-client` provides a high-level `Consumer` / `Publisher` API with **built-in auto-reconnect**, which is critical for a production transport layer. Raw `amqplib-bun` requires hand-rolling reconnect logic.
-- The `node:stream` compatibility issue (Bun issue #5627, still open) that affects `amqplib-bun` does not affect `rabbitmq-client` since it uses its own frame parser.
+**Peer dependency situation:** `@langchain/textsplitters` peer-depends on `@langchain/core ^0.3.x || ^1.x`. The project already has `@langchain/core ^1.1.48` — fully satisfied. No version conflict.
 
-**If the team decides to keep `amqplib-bun`** for constraint compliance, the reconnect pattern must be implemented manually (see Integration Points below). `rabbitmq-client` eliminates this work.
+**Bun compatibility:** Confirmed installable via `bun add @langchain/textsplitters`. Package uses standard ESM and has no native modules or Node.js stream dependencies. Docs specify Node.js 22+ runtime requirement, which Bun 1.x satisfies via Node.js API compatibility.
 
-**Package to add to `packages/transport/package.json`:**
-```bash
-pnpm add rabbitmq-client --filter @brain-pkg/transport
+**RecursiveCharacterTextSplitter configuration for RAG:**
+```typescript
+import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
+
+const splitter = new RecursiveCharacterTextSplitter({
+  chunkSize: 512,      // chars per chunk — matches 3-small's ~380 token window well
+  chunkOverlap: 64,    // 12.5% overlap — prevents context loss at boundaries
+});
+
+const chunks = await splitter.splitText(rawText);
+// chunks: string[] — each under chunkSize chars
 ```
 
----
+### RAG: Embedding Generation
 
-## Version Changes
+**No new package required.** The project already has:
 
-### No version bumps required
+- `@langchain/openai ^1.4.7` in `packages/ai` — provides `OpenAIEmbeddings`
+- `@langchain/google-genai ^2.1.31` — provides `GoogleGenerativeAIEmbeddings`
+- `createEmbeddings()` factory already exists in `packages/ai/src/embeddings/factory.ts` — reads `EMBEDDING_MODEL`, `EMBEDDING_DIMENSIONS`, `API_KEY` from ENV and returns the correct `Embeddings` instance
 
-All currently installed packages in the project lock file are at the correct versions:
+The `createEmbeddings()` factory already handles both OpenAI and Gemini. The RAG ingest endpoint calls this factory, passes chunks through `embeddings.embedDocuments(chunks)`, and stores the resulting vectors in pgvector.
 
-| Package | Installed | Status |
-|---------|-----------|--------|
-| `@langchain/langgraph` | 1.4.1 | Current — no bump needed |
-| `@langchain/langgraph-checkpoint-postgres` | 1.0.3 | Current — no bump needed |
-| `drizzle-orm` | 0.45.2 | Stable — no bump needed (v1.0 RC not recommended) |
-| `drizzle-kit` | 0.31.10 | Current stable |
-| `postgres` | 3.4.9 | Current — no bump needed |
-| `zod` | 3.23.8 | Current — no bump needed |
-| `hono` | 4.12.x | Current — no bump needed |
+**Recommended embedding model for v1.4:** `text-embedding-3-small` at 1536 dimensions.
 
-No additional LangChain packages (`@langchain/community`, etc.) are needed for Brain SDR. All SDR tools are custom `StructuredTool` implementations using the already-installed `@langchain/core`.
+- **Cost:** $0.02/1M input tokens. For a 100K-document corpus, annual embedding cost is ~$2.72 — negligible.
+- **Quality:** MTEB retrieval score 62% vs 67% for 3-large. The 5-point gap rarely matters for intra-domain SDR knowledge bases (product info, playbooks, FAQs).
+- **Dimensions:** Use 1536 (the model default). This matches the existing `EMBEDDING_DIMENSIONS=1536` default in `packages/database/src/schema/tables.ts`.
+- **When to upgrade to 3-large:** If retrieval quality testing shows measurable miss-rate on critical knowledge. The 6.5x cost premium ($0.13/1M) is only justified when precision demonstrably matters.
 
----
+### RAG: Vector Store
 
-## What NOT to Add
+**No new package required.** The project already has:
 
-| Package | Why to Avoid |
-|---------|-------------|
-| `amqplib` (vanilla) | Bun incompatibility — open issues #4791 and #5627 for connection failures and invalid frame errors on large messages |
-| `amqp-connection-manager` | Wraps `amqplib` — inherits all its Bun issues; depends on the broken base |
-| `@langchain/community` | Not needed for Brain SDR. Adds 200+ optional integrations as dead weight. All SDR tools are custom. |
-| `bull` / `bullmq` | Adds Redis dependency; not a requirement for v1.1 |
-| Any stream-dependent AMQP lib | Bun's `node:stream` implementation has open compatibility bugs as of June 2026 |
+- `pgvector ^0.3.0` in `packages/database` — npm client with Bun SQL support documented
+- `embeddings` table in `packages/database/src/schema/tables.ts` with HNSW index on `vector_cosine_ops`
+- `upsertEmbedding()` and `searchSimilar()` already implemented in `packages/memory/src/semantic.ts`
 
----
+**Schema gap:** The existing `embeddings` table uses `userId` + `sessionId` as the partition key, not a `collection` field. The RAG ingest endpoint needs a `collection` dimension to segment knowledge by topic (e.g., "product-playbook", "faq"). A **new Drizzle migration** is required to add a `collection` column and update the HNSW index strategy.
 
-## Integration Points
+No new npm package — only schema + migration change.
 
-### 1. RabbitMQ Transport — `packages/transport`
+### FUP Automático: Background Scheduler
 
-The ITransport interface already exists. The RabbitMQ implementation slot is the `default` case in the factory that currently throws `ConfigurationError`. The integration path:
+| Package | Version | Purpose | Where to Install |
+|---------|---------|---------|-----------------|
+| `croner` | `^10.0.1` | In-process cron scheduler with timezone support | `packages/core` |
 
-**Factory change (`packages/transport/src/factory.ts`):**
+**Why croner and not Bun.cron():**
+
+Bun 1.3.11+ ships `Bun.cron()` as a native built-in. It works for in-process callbacks. However, it has a critical limitation for this use case: **the in-process callback variant interprets schedules in UTC only with no timezone parameter.** FUP Automático must respect `FUP_TIMEZONE` ENV (e.g., `America/Sao_Paulo`) to enforce `FUP_MIN_HOUR`/`FUP_MAX_HOUR` business windows correctly. Bun.cron cannot do this.
+
+**Why croner and not node-cron:**
+
+- `croner` explicitly supports timezone via `{ timezone: "America/Sao_Paulo" }` option
+- `croner` uses Intl API (zero external IANA database bundled) — timezone database from the runtime, always current, no extra weight
+- `croner` has zero dependencies
+- `croner` works in Bun >=1.0.0 (confirmed; Bun CI workflow shown in GitHub repo)
+- `croner` handles DST transitions correctly — tested explicitly. node-cron has known DST bugs where jobs fire at wrong hour during spring-forward/fall-back
+- `croner` is TypeScript-native with bundled `.d.ts`
+- `croner` has `.pause()` / `.resume()` / `.stop()` lifecycle controls, needed when `ia_ativada=false` disables FUP for a lead
+
+**croner usage for FUP:**
 ```typescript
-case "rabbitmq":
-  return new RabbitMQTransport();
+import { Cron } from "croner";
+
+const job = new Cron(
+  "*/30 * * * * *",    // every 30 seconds — FUP_CHECK_INTERVAL from ENV
+  { timezone: process.env.FUP_TIMEZONE ?? "America/Sao_Paulo" },
+  async () => {
+    await checkAndSendFups();  // scans leads table, sends follow-ups
+  }
+);
+
+// To stop:
+job.stop();
 ```
 
-**RabbitMQ transport shape (using `rabbitmq-client`):**
+**Why not pg-boss:** pg-boss is a job queue backed by PostgreSQL. It adds significant complexity (schema, worker polling, dead letter queues) that is disproportionate to the FUP requirement. The FUP scheduler is a single-process background loop — a simple in-process cron is the correct tool. pg-boss is appropriate when jobs must survive process restarts and be distributed across multiple workers; FUP state is tracked in the `leads` table in PG already.
+
+**Why not setInterval with Intl math:** Would work, but reinvents the wheel. croner's timezone-aware scheduling eliminates custom DST arithmetic and is zero-cost.
+
+### Tool Events: Outbound Channel
+
+**No new package required.** The existing stack already handles both outbound patterns:
+
+**Webhook outbound:** Bun's native `fetch()` (globally available, no import) handles `HTTP POST` to `TOOL_EVENT_WEBHOOK_URL`. No library needed — standard Web API.
+
 ```typescript
-import { Connection } from 'rabbitmq-client';
+await fetch(process.env.TOOL_EVENT_WEBHOOK_URL!, {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ action, lead, result }),
+});
+```
 
-export class RabbitMQTransport implements ITransport {
-  private conn: Connection | undefined;
+**RabbitMQ outbound:** `rabbitmq-client` is already installed in `packages/transport`. The existing `RabbitMQTransport` already uses `this.pub = this.rabbit.createPublisher({ confirm: true })` and `pub.send(queue, payload)` for DLQ. The same `Publisher` API publishes tool events to `TOOL_EVENT_RABBITMQ_QUEUE`.
 
-  async start(): Promise<void> {
-    this.conn = new Connection(process.env.RABBITMQ_URL!);
-    const consumer = this.conn.createConsumer(
-      { queue: process.env.RABBITMQ_QUEUE! },
-      async (msg) => {
-        // Parse BrainEvent from msg.body
-        // Call runner.run(event)
-        // Ack/nack inside this callback
-      }
-    );
-    // consumer handles reconnect internally — no manual retry loop needed
-  }
+The outbound channel selection is `TOOL_EVENT_TRANSPORT=webhook|rabbitmq` ENV — pure application logic, no new library.
 
-  async stop(): Promise<void> {
-    await this.conn?.close();
-  }
+### Timezone Handling
+
+**No new package required.** `Intl.DateTimeFormat` (built into V8, used by Bun) handles all timezone logic needed for FUP:
+
+```typescript
+// Check current hour in configured timezone
+function getCurrentHourInTz(tz: string): number {
+  return parseInt(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: tz,
+      hour: "numeric",
+      hour12: false,
+    }).format(new Date()),
+    10
+  );
+}
+
+// Check allowed weekday
+function getCurrentWeekdayInTz(tz: string): number {
+  // 0=Sunday ... 6=Saturday
+  return parseInt(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: tz,
+      weekday: "numeric",  // returns day-of-week number as string
+    }).format(new Date()),
+    10
+  );
 }
 ```
 
-**Key difference from WebhookTransport:** RabbitMQ messages are acked/nacked in the consumer callback, not returned over HTTP. The runner injection problem (GAP-1) that affects WebhookTransport also applies here — the runner must be injected into RabbitMQTransport at construction time.
-
-### 2. BrainEvent Schema Change — `packages/transport/src/webhook/events.ts`
-
-The current schema uses `conversationId`, `stepIndex`, `userId`, `content`. The v1.1 spec introduces standardized fields: `Name`, `Message`, `Numero`, `IDLead`. This is a **breaking schema change** affecting both WebhookTransport and RabbitMQTransport.
-
-**Decision required by roadmap:** Whether to replace the existing fields or add a compatibility layer. Recommendation: replace `userId` with `IDLead` (as the unique lead identifier), `content` with `Message`, map `Name` and `Numero` into the event. The `conversationId` can be derived from `Numero` or `IDLead` for thread continuity.
-
-No new package is needed — this is a `zod` schema change in the existing file.
-
-### 3. Leads Schema Migration — `packages/database`
-
-The `users` table (DB-01) is replaced by `leads`. The migration pattern already works correctly:
-
-- `migrate()` from `drizzle-orm/postgres-js/migrator` is already used in `packages/database/src/migrate.ts`
-- Auto-migrate at Brain startup is already called in `apps/brain-echo/src/index.ts`
-- The new migration is a standard Drizzle-generated SQL file added to `packages/database/src/migrations/`
-
-The `leads` table needs these columns: `id` (uuid, pk), `unique_id` (text, unique — maps to `IDLead`), `nome` (text), `numero` (text, unique), `ia_ativada` (boolean, default true), `fullpp` (text, nullable), `created_at`, `updated_at`.
-
-No new packages. Only schema file + migration file changes.
-
-### 4. Brain SDR Implementation — `apps/brain-sdr`
-
-Brain SDR follows the exact pattern established by `apps/brain-echo`. It implements the `IBrain` interface from `@brain-pkg/core`. All required packages are already in the workspace.
-
-**SDR-specific tools are custom `StructuredTool` instances using `@langchain/core/tools`:**
-- `RegisterLeadTool` — inserts/updates lead in the `leads` table via drizzle
-- `CheckIAAtivadaTool` — reads `ia_ativada` flag from `leads` table
-- `GetConversationHistoryTool` — retrieves memory via existing `MemoryManager`
-
-No new packages. The `StructuredTool` base class and tool calling interface are provided by the already-installed `@langchain/core@1.1.48`.
-
-### 5. WebhookTransport GAP-1 Fix
-
-The `WebhookTransport.start()` creates a Hono app without runner injection:
-```typescript
-// Current (broken):
-const app = createWebhookApp(); // runner is undefined → fallback path in production
-```
-
-Fix requires changing the constructor to accept an `IBrainRunnerLike` parameter and storing it for use in `start()`. This is purely a code change — no new packages.
-
----
-
-## Environment Variables for v1.1
-
-| Variable | Purpose | Used By |
-|----------|---------|---------|
-| `TRANSPORT` | `"webhook"` or `"rabbitmq"` (default: `"webhook"`) | `packages/transport/src/factory.ts` |
-| `RABBITMQ_URL` | AMQP connection string (e.g., `amqp://user:pass@host:5672`) | `RabbitMQTransport` |
-| `RABBITMQ_QUEUE` | Queue name to consume from | `RabbitMQTransport` |
-
-Existing variables (`DATABASE_URL`, `OPENAI_API_KEY`, `LANGCHAIN_*`) are unchanged.
-
----
-
-## Confidence Assessment
-
-| Area | Confidence | Basis |
-|------|------------|-------|
-| `rabbitmq-client` Bun compatibility | HIGH | Tested: `import { Connection } from 'rabbitmq-client'` in Bun 1.3.2 — no errors |
-| `rabbitmq-client` vs `amqplib-bun` | HIGH | Direct package inspection: zero deps vs legacy shims; auto-reconnect built-in |
-| No new LangChain packages for SDR | HIGH | Reviewed IBrain interface + BrainBuildContext — StructuredTool from @langchain/core covers all SDR tool needs |
-| Schema migration (Drizzle) | HIGH | Existing `migrate()` pattern already works; confirmed in `packages/database/src/migrate.ts` |
-| No version bumps required | HIGH | pnpm lock file reviewed — all packages at current stable versions |
-| Leads schema design | MEDIUM | Field names match PROJECT.md spec; `ia_ativada` flag logic is straightforward Drizzle query |
-
----
-
-## Sources
-
-- `rabbitmq-client` v5.0.8 installed and tested in Bun 1.3.2 — zero deps, Bun import confirmed
-- `amqplib-bun` v0.10.4 — package.json inspected: still uses `readable-stream@1.x` and `buffer-more-ints@1.0.x`
-- Bun issue #5627 (invalid frame in amqplib) — confirmed still open as of June 2026
-- `amqplib` v2.0.1 GitHub releases — removed `buffer-more-ints`, now uses BigInt; but vanilla amqplib still has Bun stream issues
-- `rabbitmq-client` GitHub: v5.0.3+ required for RabbitMQ 4.1.x support
-- pnpm-lock.yaml reviewed: langgraph@1.4.1, checkpoint-postgres@1.0.3, drizzle-orm@0.45.2 all confirmed installed
-- `packages/database/src/migrate.ts` — confirmed programmatic `migrate()` from `drizzle-orm/postgres-js/migrator` already implemented and working
-- `packages/core/src/brain/interface.ts` — confirmed `StructuredTool` from `@langchain/core/tools` covers SDR tool requirements
-
----
-
-*Stack research for: Brain Core v1.1 — RabbitMQ transport + Brain SDR (incremental)*
-*Researched: 2026-06-13*
-
----
-
----
-
-# Stack Research: v1.3 MCP Integration + Dynamic responseMode
-
-**Researched:** 2026-06-15
-**Scope:** New dependencies only — existing stack (Bun, Hono, LangGraph, Drizzle, postgres.js, pgvector, rabbitmq-client, Pino, Langfuse) is validated and unchanged.
-
----
-
-## New Dependencies Needed
-
-| Package | Version | Purpose | Why |
-|---------|---------|---------|-----|
-| `@langchain/mcp-adapters` | `^1.1.3` | Convert MCP server tools into LangGraph-compatible `StructuredTool[]` | Official LangChain adapter; peer deps (`@langchain/core ^1.0.0`, `@langchain/langgraph ^1.3.4`) already satisfied by project; supports Streamable HTTP and SSE — both used by n8n MCP Server Trigger |
-| `@langchain/anthropic` | `^1.4.0` | Anthropic Claude provider with `.withStructuredOutput()` | **ALREADY INSTALLED** in `packages/ai/package.json` at `^1.4.0` (latest: 1.4.1 as of June 2026); no upgrade needed |
-
-**Total new packages: 1** (`@langchain/mcp-adapters`).
-
-The `@modelcontextprotocol/sdk` (`^1.29.0`) is a direct dependency of `@langchain/mcp-adapters` and installs automatically as a transitive dep — do not add it explicitly.
-
-### Where to Install
-
-```bash
-# packages/ai is where @langchain/langgraph and @langchain/core live
-cd packages/ai
-bun add @langchain/mcp-adapters
-```
-
----
-
-## MCP Transport Protocol
-
-### What n8n MCP Server Trigger Exposes
-
-n8n's MCP Server Trigger node exposes HTTP endpoints. The transport evolved across n8n versions:
-
-| n8n Version | Transport | Endpoint Pattern |
-|-------------|-----------|-----------------|
-| Pre-v1.99 | SSE (HTTP+SSE, deprecated) | `/mcp/{id}/sse` |
-| v1.99+ (current, 2026) | Streamable HTTP | `/mcp/{id}` (no `/sse` suffix) |
-
-**The `/sse` postfix was removed in n8n v1.99** as part of the MCP spec migration to Streamable HTTP (spec revision 2025-03-26). The URL shown in the n8n trigger panel is used as-is — no manual modification required.
-
-The MCP Server Trigger node also still supports SSE for backward compatibility with older MCP clients.
-
-### Connecting from LangGraph via `MultiServerMCPClient`
-
-`@langchain/mcp-adapters` exports `MultiServerMCPClient` which supports three transport types: `stdio`, `sse`, and `http` (Streamable HTTP). For n8n:
-
-```typescript
-import { MultiServerMCPClient } from "@langchain/mcp-adapters";
-
-// Streamable HTTP — correct for n8n v1.99+ (2026 default)
-const client = new MultiServerMCPClient({
-  mcpServers: {
-    n8n: {
-      transport: "http",                     // Streamable HTTP
-      url: process.env.MCP_URL!,            // e.g. https://n8n.example.com/mcp/abc123
-      headers: {
-        Authorization: `Bearer ${process.env.MCP_TOKEN}`,
-      },
-      automaticSSEFallback: true,           // auto-fallback to SSE if server signals it
-    },
-  },
-});
-
-// Returns StructuredTool[] — plug directly into LangGraph ToolNode
-const mcpTools = await client.getTools();
-```
-
-For older n8n instances (pre-v1.99), use `transport: "sse"` and append `/sse` to the URL.
-
-### ENV-Driven Tool Filtering (`MCP_TOOLS`)
-
-The v1.3 requirement specifies `MCP_TOOLS` ENV as a whitelist. Pure application logic, no extra packages:
-
-```typescript
-const allMcpTools = await client.getTools();
-const allowed = (process.env.MCP_TOOLS ?? "").split(",").filter(Boolean);
-const tools = allowed.length > 0
-  ? allMcpTools.filter(t => allowed.includes(t.name))
-  : allMcpTools;
-
-// Register into LangGraph ToolNode alongside existing tools
-const toolNode = new ToolNode([...existingTools, ...tools]);
-```
-
-### `MultiServerMCPClient` Lifecycle Notes
-
-- **Stateless by default**: Each tool invocation creates a fresh MCP session, executes the tool, then closes. Good for the Brain's per-message execution model.
-- **Startup cost**: `getTools()` must be called before the graph runs — do it in `BrainRunner.init()` (or `IBrain.init()`), not on each message.
-- **Connection caching**: If MCP_URL is set, init the client once in startup; if unset, skip MCP tool registration entirely.
-
----
-
-## Provider Compatibility for `.withStructuredOutput()`
-
-### Status
-
-Both `ChatOpenAI` and `ChatAnthropic` implement `.withStructuredOutput()` with Zod schemas. The call signature is identical across providers. The internal implementation differs but the behavior is equivalent for Zod schemas with the default method.
-
-### Method Options Comparison
-
-| Method | OpenAI | Anthropic | Recommendation |
-|--------|--------|-----------|----------------|
-| `"functionCalling"` (default, no option needed) | Tool-call with JSON output | Forces `tool_choice: {type: "tool", name: ...}` | **Use this** — most reliable cross-provider |
-| `"jsonSchema"` | Native Structured Outputs (`strict: true`) | Anthropic native structured output, no `strict` | Avoid for cross-provider code — subtle differences |
-| `"jsonMode"` | `response_format: {type: "json_object"}` | Not supported | Never use for Anthropic |
-
-**Use the default (no explicit `method` option).** Both providers fall through to `"functionCalling"` which works reliably with Zod schemas.
-
-### Zod Schema for `BrainOutput` with `responseMode`
-
-```typescript
-import { z } from "zod";
-
-// In packages/shared or packages/core — BrainOutputSchema
-const BrainOutputSchema = z.object({
-  fullResponse: z.string().describe("Complete response text to deliver to the user"),
-  responseMode: z.enum(["text", "audio", "image"]).describe(
-    "Output format chosen by the model: text for messages, audio for voice, image for visual content"
-  ),
-  // ...other existing BrainOutput fields
-});
-
-// Usage — identical for OpenAI and Anthropic:
-const structuredLlm = model.withStructuredOutput(BrainOutputSchema, {
-  name: "BrainOutput",  // REQUIRED for Anthropic — see gotchas below
-});
-```
-
-### Cross-Provider Gotchas
-
-**1. Always pass `name` option for Anthropic (HIGH priority)**
-Without `{ name: "SchemaName" }`, older Anthropic versions generate a generic tool name. In `@langchain/anthropic ^1.4.x` it should default cleanly, but passing `name` explicitly is required for reliability across both providers.
-
-**2. Make `responseMode` required, not optional**
-`z.enum(["text","audio","image"]).optional()` causes incomplete outputs on Anthropic — the model may omit the field when it's optional, producing a Zod validation error. The field must be required in the schema.
-
-**3. Do not combine `method: "jsonSchema"` with `strict: true`**
-In `@langchain/anthropic ^1.4.x`, passing `strict: true` together with `method: "jsonSchema"` throws. This is not a concern if using the default method (which is the recommendation).
-
-**4. Model must support tool calling**
-`.withStructuredOutput()` requires a model with tool-calling capability. Confirmed working: GPT-4o, GPT-4 Turbo, Claude 3+ (all variants including Haiku 3.5). Claude 2.x does NOT support tool calling — avoid if targeting older Claude.
-
-**5. No Bun-specific issues**
-LangChain providers use standard `fetch` API for all provider calls. Bun's native `fetch` is fully compatible. No shims or workarounds needed.
-
-### Version Alignment (already satisfied)
-
-```
-packages/ai/package.json — current state:
-  @langchain/anthropic:  ^1.4.0   ← current (1.4.1 latest June 2026)
-  @langchain/core:       ^1.1.48  ← satisfies peer dep ^1.0.0
-  @langchain/langgraph:  ^1.4.1   ← satisfies peer dep ^1.3.4
-  @langchain/openai:     ^1.4.7   ← current
-```
-
-No version bumps required for structured output functionality.
-
----
-
-## Bun Runtime Risk: MCP SSE Transport Startup Latency
-
-**Severity: MEDIUM — mitigated by using Streamable HTTP transport.**
-
-Open Bun issue (#22396, reported September 2025, unresolved as of June 2026): `SSEClientTransport` startup takes ~15 seconds in Bun vs ~130ms in Node.js. Root cause is Bun's `EventSource` implementation behavior under the `@modelcontextprotocol/sdk`'s SSE client.
-
-**Mitigation:** Use `transport: "http"` (Streamable HTTP) in `MultiServerMCPClient`, never `transport: "sse"`. Streamable HTTP uses standard `fetch` (not `EventSource`), which Bun handles at full native speed. The `@modelcontextprotocol/sdk` v1.29.0 explicitly confirms Bun support for its Streamable HTTP transport.
-
-Since n8n v1.99+ exposes Streamable HTTP at `/mcp/{id}` by default, this risk is **neutralized** — the correct transport is also the performant one. Only a risk if connecting to an older n8n instance.
+Bun's V8 engine carries the full IANA timezone database — no library needed. `luxon` and `date-fns-tz` would add 30-50KB bundle weight for identical functionality. Use native Intl.
 
 ---
 
 ## What NOT to Add
 
-| Library | Why Avoid |
-|---------|-----------|
-| `@modelcontextprotocol/sdk` (direct dep) | Transitively installed by `@langchain/mcp-adapters`; adding directly risks version conflict |
-| `mcp` (older npm package) | Pre-standard, effectively unmaintained; replaced by `@modelcontextprotocol/sdk` |
-| `n8n-nodes-mcp` | Community node for n8n *consuming* MCP servers — wrong direction; we are the MCP client, not n8n |
-| `@h1deya/langchain-mcp-tools` | Third-party alternative; use the official `@langchain/mcp-adapters` |
-| `@langchain/community` | Not needed — MCP adapter is in `@langchain/mcp-adapters`, not community |
-| Direct `zod` version change | `@langchain/mcp-adapters` requires `zod "^3.25.76 || ^4"`; project uses `^4.4.3` — already satisfied |
+| Package | Why Avoid | Use Instead |
+|---------|-----------|-------------|
+| `luxon` | Adds ~60KB for IANA timezone DB that V8 already has | Native `Intl.DateTimeFormat` |
+| `date-fns-tz` | Same issue — bundles IANA data unnecessarily; verbose API | Native `Intl.DateTimeFormat` |
+| `node-cron` | DST bugs; no timezone parameter on the `schedule()` overload used for Bun | `croner` |
+| `Bun.cron()` (in-process) | UTC-only for in-process callbacks; no timezone parameter | `croner` |
+| `pg-boss` | Job queue with full PG schema — overkill for single-process FUP | `croner` + leads table columns |
+| `bullmq` | Requires Redis — adds infrastructure dependency; no requirement here | `croner` + leads table columns |
+| `@langchain/community` | 200+ bundled adapters; adds dead weight. Text splitting is in `@langchain/textsplitters` | `@langchain/textsplitters` |
+| `langchain` (monolith) | Wraps everything including deprecated modules; heavyweight; peer dep conflicts with existing `@langchain/*` packages | `@langchain/textsplitters` only |
+| `openai` SDK (direct) | Already using `@langchain/openai` which wraps it. Direct SDK use creates dual dependency and version mismatch risk | `@langchain/openai` (already installed) |
+| `axios` / `got` | HTTP clients for outbound webhook — Bun has native `fetch()` | `fetch()` (built-in) |
+
+---
+
+## Summary: Net New Packages
+
+| Package | Version | Added To | Purpose |
+|---------|---------|---------|---------|
+| `@langchain/textsplitters` | `^0.1.0` | `packages/core` (or `packages/rag`) | Text chunking for RAG ingest |
+| `croner` | `^10.0.1` | `packages/core` | Timezone-aware cron for FUP scheduler |
+
+**Total new packages: 2.** All other v1.4 capabilities (embeddings, vector store, outbound webhook, outbound RabbitMQ, timezone arithmetic) are served by existing stack or built-in Bun/V8 APIs.
+
+---
+
+## Installation
+
+```bash
+# Text chunking for RAG ingest
+pnpm add @langchain/textsplitters --filter @brain-pkg/core
+
+# Timezone-aware scheduler for FUP Automático
+pnpm add croner --filter @brain-pkg/core
+```
+
+---
+
+## Schema Changes Required (no new packages — only Drizzle migrations)
+
+### 1. `embeddings` table — add `collection` column
+
+The existing `embeddings` table scopes by `userId` + `sessionId`. RAG requires a `collection` dimension (e.g., `"product-playbook"`, `"faq"`, `"pricing"`). Add:
+
+```sql
+ALTER TABLE embeddings ADD COLUMN collection text NOT NULL DEFAULT 'default';
+CREATE INDEX embeddings_collection_idx ON embeddings(collection);
+```
+
+The `searchSimilar()` function in `packages/memory/src/semantic.ts` needs a `collection` filter parameter.
+
+### 2. `leads` table — add FUP tracking columns
+
+FUP Automático tracks per-lead state:
+
+```sql
+ALTER TABLE leads ADD COLUMN fup_step integer NOT NULL DEFAULT 0;
+ALTER TABLE leads ADD COLUMN fup_enabled boolean NOT NULL DEFAULT false;
+ALTER TABLE leads ADD COLUMN last_message_at timestamp;
+```
+
+- `fup_step`: which follow-up message (0=none, 1=first FUP, 2=second, ..., N=last). When last step reached → set `ia_ativada=false`, `fup_enabled=false`.
+- `fup_enabled`: explicit flag — set to true when lead stops responding, false when disabled or ia_ativada=false.
+- `last_message_at`: timestamp of last inbound message — scheduler computes elapsed time against this.
+
+---
+
+## Environment Variables for v1.4
+
+| Variable | Purpose | Default |
+|----------|---------|---------|
+| `TOOL_EVENT_TRANSPORT` | `"webhook"` or `"rabbitmq"` — outbound tool event channel | (none — feature disabled if unset) |
+| `TOOL_EVENT_WEBHOOK_URL` | Target URL for webhook tool events | — |
+| `TOOL_EVENT_RABBITMQ_QUEUE` | RabbitMQ queue name for tool events | — |
+| `FUP_ENABLED` | `"true"` to activate FUP scheduler | `"false"` |
+| `FUP_SILENCE_THRESHOLD_SECONDS` | Seconds with no response before first FUP trigger | `86400` (24h) |
+| `FUP_INTERVALS_SECONDS` | Comma-separated intervals between FUP steps (e.g., `"86400,172800"`) | — |
+| `FUP_MIN_HOUR` | Earliest hour to send FUP (0-23, in FUP_TIMEZONE) | `9` |
+| `FUP_MAX_HOUR` | Latest hour to send FUP (0-23, in FUP_TIMEZONE) | `18` |
+| `FUP_ALLOWED_WEEKDAYS` | Comma-separated weekdays (0=Sun ... 6=Sat) | `"1,2,3,4,5"` (Mon-Fri) |
+| `FUP_TIMEZONE` | IANA timezone string | `"America/Sao_Paulo"` |
+| `FUP_CHECK_INTERVAL_SECONDS` | How often the scheduler checks for due FUPs | `60` |
+
+Existing variables (`EMBEDDING_MODEL`, `EMBEDDING_DIMENSIONS`, `API_KEY`, `LLM_PROVIDER`) already cover RAG embedding configuration — no new ENV needed for embeddings.
+
+---
+
+## Version Compatibility
+
+| Package | Compatible With | Notes |
+|---------|-----------------|-------|
+| `@langchain/textsplitters ^0.1.0` | `@langchain/core ^1.x` | Peer dep satisfied by existing `^1.1.48` |
+| `croner ^10.0.1` | Bun >=1.0.0 | Zero deps; uses Intl API for timezone — fully Bun-native |
+| `croner ^10.0.1` | TypeScript 5.x | Bundled `.d.ts`; no @types package needed |
 
 ---
 
@@ -389,33 +272,39 @@ Since n8n v1.99+ exposes Streamable HTTP at `/mcp/{id}` by default, this risk is
 
 | Area | Confidence | Basis |
 |------|------------|-------|
-| `@langchain/mcp-adapters` version (1.1.3) | HIGH | npm package page confirmed; GitHub package.json confirmed |
-| n8n Streamable HTTP default (v1.99+) | MEDIUM | n8n community thread confirmed; official docs partially loaded |
-| Streamable HTTP transport config API | HIGH | GitHub source (client.ts) inspected; `transport: "http"` with `url` and `headers` confirmed |
-| `@langchain/anthropic` version (1.4.x) | HIGH | npm confirmed; `packages/ai/package.json` read directly |
-| `.withStructuredOutput()` cross-provider | MEDIUM | LangChain docs + GitHub issues reviewed; default `functionCalling` method confirmed working; some historical issues exist with `jsonSchema` method |
-| Bun SSE latency risk | HIGH | Bun issue #22396 confirmed; mitigation via Streamable HTTP confirmed |
-| `name` option requirement for Anthropic | MEDIUM | Referenced in multiple sources; best practice confirmed |
+| `@langchain/textsplitters` Bun compat | HIGH | ESM package; no native modules; LangChain docs confirm `bun add` works; peer dep satisfied |
+| `croner` Bun compat | HIGH | Explicitly listed as Bun >=1.0.0 in docs; Bun CI workflow in GitHub repo |
+| `croner` timezone | HIGH | Intl API-based; DST-tested in v10.0 changelog; `{ timezone }` option confirmed |
+| Bun.cron() UTC limitation | HIGH | Official Bun docs state "interpret schedules in UTC" — no timezone param for in-process callback |
+| `fetch()` for outbound webhook | HIGH | Bun native Web API; no compatibility concerns |
+| `rabbitmq-client` for outbound publish | HIGH | `pub.send()` already used in project for DLQ; same API applies |
+| `createEmbeddings()` reuse for RAG | HIGH | Factory already exists in `packages/ai/src/embeddings/factory.ts`; confirmed multi-provider |
+| `text-embedding-3-small` default | HIGH | $0.02/1M, sufficient MTEB score for intra-domain RAG; already default dimension in schema |
+| Schema migration approach | HIGH | Drizzle migration pattern proven across v1.0–v1.3 |
+| `Intl.DateTimeFormat` for timezone | HIGH | V8 built-in; Bun confirmed; no external IANA DB needed |
 
 ---
 
 ## Sources
 
-- `@langchain/mcp-adapters` npm (v1.1.3): https://www.npmjs.com/package/@langchain/mcp-adapters
-- `@langchain/mcp-adapters` source (client.ts transport types): https://github.com/langchain-ai/langchainjs/blob/main/libs/langchain-mcp-adapters/src/client.ts
-- LangChain MCP docs (JS): https://docs.langchain.com/oss/javascript/langchain/mcp
-- LangChain MCP streamable HTTP announcement: https://changelog.langchain.com/announcements/mcp-with-streamable-http-transport
-- `@langchain/anthropic` npm (v1.4.1, June 2026): https://www.npmjs.com/package/@langchain/anthropic
-- `@langchain/anthropic` withStructuredOutput reference: https://reference.langchain.com/javascript/langchain-anthropic/ChatAnthropic
-- `@modelcontextprotocol/sdk` GitHub (v1.29.0, Bun-compatible): https://github.com/modelcontextprotocol/typescript-sdk
-- Bun MCP SSE startup latency (open issue): https://github.com/oven-sh/bun/issues/22396
-- n8n MCP Server Trigger docs: https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-langchain.mcptrigger/
-- n8n community — /sse removed in v1.99: https://community.n8n.io/t/why-doesnt-the-mcp-trigger-node-url-include-sse-endpoint-v1-99-1-deployed-on-hostinger/145518
-- MCP spec: SSE deprecated, Streamable HTTP standard (March 2025): https://blog.fka.dev/blog/2025-06-06-why-mcp-deprecated-sse-and-went-with-streamable-http/
-- Anthropic structured output issue (langchain #30158): https://github.com/langchain-ai/langchain/issues/30158
-- `packages/ai/package.json` — read directly (confirmed installed versions)
+- Bun.cron() docs (UTC-only for in-process): https://bun.com/docs/runtime/cron
+- Bun 1.3.11 cron API introduction: https://itacademy.com.ua/en/articles/2026-03-19/bun-v1311-cron-api-and-improvements-2026-03-19/
+- croner v10.0.1 GitHub (zero deps, Bun >=1.0.0, timezone option): https://github.com/Hexagon/croner
+- croner docs (API reference, timezone syntax): https://croner.56k.guru/
+- croner vs node-cron comparison 2026 (DST handling): https://www.pkgpulse.com/guides/node-cron-vs-node-schedule-vs-croner-task-scheduling-2026
+- @langchain/textsplitters npm (v0.1.0, last published 7 months ago): https://www.npmjs.com/package/@langchain/textsplitters
+- LangChain text splitter integrations (bun install confirmed): https://docs.langchain.com/oss/javascript/integrations/splitters
+- text-embedding-3-small pricing ($0.02/1M tokens): https://tokenmix.ai/blog/openai-embedding-pricing
+- Embedding model comparison 2026 (MTEB scores): https://pecollective.com/tools/text-embedding-models-compared/
+- Intl.DateTimeFormat timezone (MDN): https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/DateTimeFormat
+- Bun + Intl timezone support confirmed: https://bun.sh/docs/test/dates-times
+- rabbitmq-client Publisher.send() API: https://github.com/cody-greene/node-rabbitmq-client
+- packages/ai/src/embeddings/factory.ts — read directly (createEmbeddings already multi-provider)
+- packages/memory/src/semantic.ts — read directly (upsertEmbedding + searchSimilar already implemented)
+- packages/database/src/schema/tables.ts — read directly (embeddings table with HNSW index confirmed)
+- packages/transport/src/rabbitmq/consumer.ts — read directly (pub.send() pattern confirmed)
 
 ---
 
-*Stack research for: Brain Core v1.3 — MCP Integration + Dynamic responseMode (incremental)*
-*Researched: 2026-06-15*
+*Stack research for: Brain Core v1.4 — RAG + Tool Events + FUP Automático (incremental)*
+*Researched: 2026-06-23*
