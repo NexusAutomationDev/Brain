@@ -33,6 +33,14 @@ class MockAIMessage {
 class MockHumanMessage {
   constructor(public content: string) {}
 }
+class MockToolMessage {
+  constructor(public props: Record<string, unknown>) {
+    Object.assign(this, props);
+  }
+  static isInstance(msg: unknown): msg is MockToolMessage {
+    return msg instanceof MockToolMessage;
+  }
+}
 
 mock.module("@langchain/langgraph", () => ({
   MemorySaver: MockMemorySaver,
@@ -45,6 +53,7 @@ mock.module("@langchain/core/messages", () => ({
   AIMessage: MockAIMessage,
   HumanMessage: MockHumanMessage,
   BaseMessage: MockAIMessage,
+  ToolMessage: MockToolMessage,
 }));
 
 const mockMemorySaver = new MockMemorySaver();
@@ -128,6 +137,12 @@ mock.module("../../leads/lead-service.js", () => ({
 import { BrainRunner } from "../runner.js";
 import { ToolsRegistry } from "../../tools/registry.js";
 import type { IBrain } from "../../brain/interface.js";
+import type { IEventPublisher } from "../../events/event-publisher.js";
+// NOTE: ToolMessage in tests uses MockToolMessage (via mock.module("@langchain/core/messages"))
+// Use MockToolMessage directly in test instances — ToolMessage.isInstance() in runner.ts will
+// recognize them because the mock replaces ToolMessage with MockToolMessage.
+// Alias for clarity in test code:
+const ToolMessage = MockToolMessage;
 
 function makeBrain(promptKeys = ["system"]): IBrain {
   return {
@@ -595,5 +610,161 @@ describe("BrainRunner", () => {
       // thread_id deve ser lead.uniqueId ("lead-abc" do mockUpsertLead)
       expect(calledConfig.configurable.thread_id).toBe("lead-abc");
     });
+  });
+});
+
+describe("EVT-01: EventPublisher — sem ENV configurada", () => {
+  let registry: ToolsRegistry;
+
+  beforeEach(() => {
+    registry = new ToolsRegistry();
+    registry.enableTool("test", "dummy");
+  });
+
+  test("BrainRunner.init() e run() funcionam normalmente sem TOOL_EVENTS_URL nem TOOL_EVENTS_QUEUE", async () => {
+    // Garantir que ENVs de eventos NÃO estão presentes
+    const origUrl = process.env.TOOL_EVENTS_URL;
+    const origQueue = process.env.TOOL_EVENTS_QUEUE;
+    delete process.env.TOOL_EVENTS_URL;
+    delete process.env.TOOL_EVENTS_QUEUE;
+
+    const brain = makeBrain(["system"]);
+    const runner = new BrainRunner({
+      brain,
+      sql: {} as never,
+      toolsRegistry: registry,
+    });
+    await runner.init();
+    const result = await runner.run(makeEvent());
+    // run() retorna resultado normal — sem erro
+    expect(result).not.toBeNull();
+    expect(result?.brainOutput.fullResponse).toBe("test reply");
+
+    // Restore
+    if (origUrl) process.env.TOOL_EVENTS_URL = origUrl;
+    if (origQueue) process.env.TOOL_EVENTS_QUEUE = origQueue;
+  });
+});
+
+describe("EVT-01: close() com publisher injetado", () => {
+  let registry: ToolsRegistry;
+
+  beforeEach(() => {
+    registry = new ToolsRegistry();
+    registry.enableTool("test", "dummy");
+  });
+
+  test("close() chama mockPublisher.close() exatamente 1 vez quando publisher é injetado", async () => {
+    const mockClose = mock(async () => {});
+    const mockPublisher: IEventPublisher = {
+      publish: mock(async () => {}),
+      close: mockClose,
+    };
+
+    const brain = makeBrain(["system"]);
+    const runner = new BrainRunner({
+      brain,
+      sql: {} as never,
+      toolsRegistry: registry,
+      eventPublisher: mockPublisher,
+    });
+    await runner.init();
+    await runner.close();
+
+    expect(mockClose).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("EVT-02, EVT-04: Whitelist e event_id — injeção via BrainRunnerOptions (D-11)", () => {
+  let registry: ToolsRegistry;
+
+  beforeEach(() => {
+    registry = new ToolsRegistry();
+    registry.enableTool("test", "dummy");
+  });
+
+  test("run() chama publish() com evento correto quando ToolMessage da whitelist está em result.messages", async () => {
+    const mockPublish = mock(async (_events: unknown[]) => {});
+    const mockPublisherClose = mock(async () => {});
+    const mockEventPublisher: IEventPublisher = {
+      publish: mockPublish as unknown as IEventPublisher["publish"],
+      close: mockPublisherClose,
+    };
+
+    const brain = makeBrain(["system"]);
+    brain.buildGraph = mock(() => ({
+      compile: mock(() => ({
+        invoke: mock(async () => ({
+          messages: [
+            new MockHumanMessage("hello"),
+            // qualify_lead na whitelist — deve gerar evento
+            new ToolMessage({ name: "qualify_lead", tool_call_id: "call-abc-123", content: "Lead qualificado" }),
+            // respond fora da whitelist — não deve gerar evento
+            new ToolMessage({ name: "respond", tool_call_id: "call-xyz-999", content: "Respondendo" }),
+            new MockAIMessage("test reply"),
+          ],
+          brainOutput: { fullResponse: "test reply", responseMode: "text" },
+          tokenUsage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+        })),
+        getState: mock(async () => ({ values: { messages: [] } })),
+      })),
+    })) as unknown as IBrain["buildGraph"];
+
+    const runner = new BrainRunner({
+      brain,
+      sql: {} as never,
+      toolsRegistry: registry,
+      eventPublisher: mockEventPublisher,
+    });
+    await runner.init();
+    await runner.run(makeEvent());
+
+    // EVT-02: somente qualify_lead (na whitelist) gera evento — respond é ignorado
+    // EVT-04: event_id = threadId:tool_call_id
+    // A Promise do publish corre em fire-and-forget — aguardar microtasks
+    await Promise.resolve();
+    expect(mockPublish).toHaveBeenCalledTimes(1);
+    const [publishedEvents] = mockPublish.mock.calls[0] as [unknown[]];
+    expect(publishedEvents).toHaveLength(1);
+    expect((publishedEvents[0] as Record<string, unknown>).action).toBe("qualify_lead");
+    expect((publishedEvents[0] as Record<string, unknown>).event_id).toMatch(/:call-abc-123$/);
+  });
+
+  test("run() não chama publish() quando ToolMessage.name é undefined", async () => {
+    const mockPublish = mock(async (_events: unknown[]) => {});
+    const mockEventPublisher: IEventPublisher = {
+      publish: mockPublish as unknown as IEventPublisher["publish"],
+      close: mock(async () => {}),
+    };
+
+    const brain = makeBrain(["system"]);
+    brain.buildGraph = mock(() => ({
+      compile: mock(() => ({
+        invoke: mock(async () => ({
+          messages: [
+            new MockHumanMessage("hello"),
+            // ToolMessage sem name — não deve passar o guard typeof === "string"
+            new ToolMessage({ tool_call_id: "call-no-name", content: "sem nome" }),
+            new MockAIMessage("test reply"),
+          ],
+          brainOutput: { fullResponse: "test reply", responseMode: "text" },
+          tokenUsage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+        })),
+        getState: mock(async () => ({ values: { messages: [] } })),
+      })),
+    })) as unknown as IBrain["buildGraph"];
+
+    const runner = new BrainRunner({
+      brain,
+      sql: {} as never,
+      toolsRegistry: registry,
+      eventPublisher: mockEventPublisher,
+    });
+    await runner.init();
+    await runner.run(makeEvent());
+
+    // name undefined não passa o guard typeof === "string" → publish não é chamado
+    await Promise.resolve();
+    expect(mockPublish).not.toHaveBeenCalled();
   });
 });

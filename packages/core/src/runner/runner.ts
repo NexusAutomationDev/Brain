@@ -15,6 +15,7 @@ import { createTracingCallbacks } from "@brain-pkg/observability";
 import { createLogger } from "@brain-pkg/observability";
 import { ConfigurationError, BrainOutputValidationError } from "@brain-pkg/shared";
 import type { BrainOutput, TokenUsage } from "@brain-pkg/shared";
+import { ToolMessage } from "@langchain/core/messages";
 import type { BaseMessage } from "@langchain/core/messages";
 import type { BrainEvent } from "@brain-pkg/transport";
 import type { Sql } from "postgres";
@@ -24,6 +25,15 @@ import { loadPrompts, upsertPrompts } from "../prompts/loader.js";
 import { LeadService } from "../leads/lead-service.js";
 import type { Lead } from "../leads/lead-service.js";
 import { BrainOutputSchema } from "../output/schema.js";
+import type { IEventPublisher, ToolEvent } from "../events/event-publisher.js";
+import { EventPublisher } from "../events/event-publisher.js";
+
+// EVT-02: Whitelist hardcoded como constante de módulo — LLM não pode injetar novo nome via prompt injection (T-20-07)
+const TOOL_EVENTS_WHITELIST = new Set([
+  "qualify_lead",
+  "pause_session",
+  "finish_conversation",
+]);
 
 /** Options for constructing a BrainRunner */
 export interface BrainRunnerOptions {
@@ -37,6 +47,8 @@ export interface BrainRunnerOptions {
   llmOptions?: LLMOptions;
   /** Pasta de migrations para auto-migrate no init(). Se omitido, usa MIGRATIONS_FOLDER ENV. */
   migrationsFolder?: string;
+  /** EventPublisher injetável para testes (D-11). Ausente = criado em init() a partir de ENVs. */
+  eventPublisher?: IEventPublisher;
 }
 
 
@@ -62,6 +74,7 @@ export class BrainRunner {
   private compiledGraph: any | null = null;
   private memoryManager: MemoryManager | null = null;
   private mcpClient: MultiServerMCPClient | null = null;
+  private eventPublisher: IEventPublisher | null = null;
   private leadService!: LeadService; // inicializado no construtor
   // MCP session TTL: n8n fecha a sessão após inatividade; recompilamos antes de expirar.
   // Configurável via MCP_SESSION_TTL_MS ENV (default: 4 min).
@@ -76,6 +89,10 @@ export class BrainRunner {
     this.llmOptions = options.llmOptions;
     this.migrationsFolder = options.migrationsFolder;
     this.leadService = new LeadService(options.sql);
+    // D-11: EventPublisher injetável para testes; null = criado em init() a partir de ENVs
+    if (options.eventPublisher) {
+      this.eventPublisher = options.eventPublisher;
+    }
   }
 
   /**
@@ -123,6 +140,17 @@ export class BrainRunner {
     }
 
     await this._compileGraph();
+
+    // EVT-01: Inicializar EventPublisher se ENVs configuradas (D-11: skip se já injetado)
+    if (!this.eventPublisher) {
+      const hasQueue = !!process.env.TOOL_EVENTS_QUEUE?.trim();
+      const hasUrl = !!process.env.TOOL_EVENTS_URL?.trim();
+      if (hasQueue || hasUrl) {
+        const publisher = new EventPublisher();
+        await publisher.init();
+        this.eventPublisher = publisher;
+      }
+    }
 
     // D-05, MCP-05: Auto-registrar SIGTERM handler — SDK cuida do shutdown transparentemente.
     // Registrado APÓS _compileGraph() para garantir que mcpClient está pronto quando SIGTERM chegar.
@@ -244,6 +272,40 @@ export class BrainRunner {
       }
     );
 
+    // EVT-01, EVT-02, EVT-04: Publicar eventos de tools da whitelist (D-01, D-03)
+    // Intercepção via result.messages (pós-invoke) — sem callbacks LangGraph, independente de MCP
+    if (this.eventPublisher) {
+      const toolEvents: ToolEvent[] = [];
+      for (const msg of result.messages ?? []) {
+        if (
+          ToolMessage.isInstance(msg) &&
+          typeof msg.name === "string" &&
+          TOOL_EVENTS_WHITELIST.has(msg.name)
+        ) {
+          toolEvents.push({
+            event_id: `${threadId}:${msg.tool_call_id}`,
+            action: msg.name,
+            lead: {
+              id: lead.uniqueId,
+              nome: lead.nome ?? null,
+              numero: lead.numero,
+            },
+            result:
+              typeof msg.content === "string"
+                ? msg.content
+                : JSON.stringify(msg.content),
+            timestamp: new Date().toISOString(),
+          });
+        }
+      }
+      // D-08, EVT-01: fire-and-forget — NUNCA await aqui; não bloqueia resposta ao lead
+      if (toolEvents.length > 0) {
+        this.eventPublisher.publish(toolEvents).catch((err: unknown) => {
+          this.logger.warn({ err }, "EventPublisher.publish failed — ignoring (fire-and-forget)");
+        });
+      }
+    }
+
     // Step 3: Validate structured output (SDK-06, D-12, D-14)
     // O nó do grafo DEVE setar state.brainOutput — BrainRunner valida e lança erro se ausente.
     // Pitfall 3: BrainOutputSchema.parse() lança ZodError — re-lançar como BrainOutputValidationError.
@@ -294,6 +356,11 @@ export class BrainRunner {
     if (this.mcpClient) {
       await this.mcpClient.close();
       this.mcpClient = null;
+    }
+    // EVT-01: Fechar EventPublisher (fecha conexão RabbitMQ se aberta)
+    if (this.eventPublisher) {
+      await this.eventPublisher.close();
+      this.eventPublisher = null;
     }
   }
 
