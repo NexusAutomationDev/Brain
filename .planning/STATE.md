@@ -1,13 +1,13 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: milestone
-status: Ready to execute
-last_updated: "2026-06-18T16:06:07.176Z"
+milestone: v1.4
+milestone_name: RAG + Eventos de Tools + FUP Automático
+status: Defining requirements
+last_updated: "2026-06-23T00:00:00.000Z"
 progress:
-  total_phases: 2
+  total_phases: 0
   completed_phases: 0
-  total_plans: 1
+  total_plans: 0
   completed_plans: 0
   percent: 0
 ---
@@ -16,17 +16,18 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-06-16 — after v1.3 milestone)
+See: .planning/PROJECT.md (updated 2026-06-23 — milestone v1.4 started)
 
 **Core value:** Infraestrutura de agentes modular onde novos Brains são criados definindo apenas prompts, tools, embeddings e fluxos — sem reescrever a base
 
-**Current focus:** Planning next milestone (v1.4)
+**Current focus:** Milestone v1.4 — RAG + Eventos de Tools + FUP Automático
 
 ## Current Position
 
-Milestone v1.3 COMPLETE — archived to `.planning/milestones/v1.3-ROADMAP.md`
-
-Progress: [██████████] 100%
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-06-23 — Milestone v1.4 started
 
 ## Milestone v1.3 Summary
 

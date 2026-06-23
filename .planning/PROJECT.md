@@ -10,9 +10,14 @@ O primeiro Brain real (SDR) foi entregue no v1.1 — atende leads no WhatsApp co
 
 Uma infraestrutura de agentes modular onde novos Brains são criados definindo apenas prompts, tools, embeddings e fluxos — sem reescrever a base.
 
-## Current State: v1.3 shipped — MCP Integration + Dynamic responseMode + Token Usage entregues (2026-06-16)
+## Current Milestone: v1.4 RAG + Eventos de Tools + FUP Automático
 
-Brain Core v1.2 entregou o contrato completo de saída estruturada e tool contracts para todos os Brains. v1.3 foca em conectar Brains a ferramentas externas via MCP e deixar o LLM controlar o formato de resposta dinamicamente. Phase 14 complete: `prepare: false` aplicado em qualifier.ts — sub-agente de qualificação compatível com PgBouncer transaction mode.
+**Goal:** Dar aos Brains base de conhecimento semântica, expor resultados de tools para sistemas externos via canal dedicado, e enviar follow-ups automáticos para leads que param de responder.
+
+**Target features:**
+- RAG: POST /api/v1/ingest (texto → embedding → pgvector por coleção) + tool `search_knowledge` para todos os Brains
+- Eventos de tools: canal de saída separado (webhook ou RabbitMQ via ENV) publicando resultado de cada tool com `{ action, lead, result }`
+- FUP Automático: scheduler que detecta leads silenciosos e envia follow-ups em intervalos configuráveis (segundos), respeitando horário/dias/fuso — com controle de etapa no DB e desativação automática no último FUP
 
 ## Previous Milestone: v1.3 MCP Integration + Dynamic responseMode — SHIPPED 2026-06-16
 
