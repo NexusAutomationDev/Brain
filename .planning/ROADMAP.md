@@ -72,7 +72,11 @@
   3. Tabela `fup_config` existe com colunas de configuração de intervalos, horários, dias e fuso horário
   4. Tabela `leads` possui colunas `fup_enabled`, `fup_step`, `fup_next_at` e `last_message_at`
   5. `BrainRunner.run()` chama `LeadService.touchLastMessage()` a cada mensagem recebida, atualizando `last_message_at` incondicionalmente
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 19-01-PLAN.md — Schema + Migration (0007_v1_4_foundation.sql, _journal.json, tables.ts, testes scaffold)
+- [ ] 19-02-PLAN.md — LeadService.touchLastMessage() + BrainRunner integração + verificação [BLOCKING] de migration
 
 ### Phase 20: Tool Events
 **Goal**: Brains publicam automaticamente o resultado de cada tool relevante em canal de saída separado (webhook ou RabbitMQ), sem bloquear o fluxo principal
@@ -134,7 +138,7 @@
 | 16. Dynamic responseMode | v1.3 | 2/2 | Complete | 2026-06-16 |
 | 17. Expor contagem de tokens gastos | v1.3 | 3/3 | Complete | 2026-06-16 |
 | 18. Build and Publish Docker Image via DockGate | — | 0/1 | Planned | — |
-| 19. Database Foundation | v1.4 | 0/? | Not started | — |
+| 19. Database Foundation | v1.4 | 0/2 | Not started | — |
 | 20. Tool Events | v1.4 | 0/? | Not started | — |
 | 21. RAG | v1.4 | 0/? | Not started | — |
 | 22. FUP Automático | v1.4 | 0/? | Not started | — |
