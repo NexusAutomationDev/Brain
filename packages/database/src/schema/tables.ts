@@ -1,4 +1,4 @@
-import { pgTable, text, uuid, timestamp, jsonb, boolean, index, vector, uniqueIndex } from 'drizzle-orm/pg-core';
+import { pgTable, text, uuid, timestamp, jsonb, boolean, index, vector, uniqueIndex, integer } from 'drizzle-orm/pg-core';
 
 // DB-02: Read dimension from env — must be locked before first migration.
 // WARNING: Cannot be changed after first migration without re-embedding all data.
@@ -87,7 +87,51 @@ export const leads = pgTable('leads', {
   // D-07: timestamps padrão
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  // FUP-04: Colunas de estado de FUP por lead (D-10, D-11)
+  // fup_enabled e fup_step têm defaults válidos — NOT NULL
+  // fup_next_at e last_message_at são nullable — leads existentes não têm esses valores
+  fupEnabled: boolean('fup_enabled').notNull().default(false),
+  fupStep: integer('fup_step').notNull().default(0),
+  fupNextAt: timestamp('fup_next_at', { withTimezone: true }),      // nullable por design
+  lastMessageAt: timestamp('last_message_at', { withTimezone: true }), // nullable por design (D-11)
 }, (table) => ({
   // D-04: UNIQUE constraint em numero — chave de upsert para Phase 7
   numeroIdx: uniqueIndex('leads_numero_unique_idx').on(table.numero),
 }));
+
+// RAG-04: knowledge_chunks — base de conhecimento semântica para RAG (D-07, D-08, D-09)
+// Separada de embeddings: concerns diferentes (RAG vs memória de conversa)
+// D-09: Sem índice HNSW — criado manualmente pós-ingestão em produção
+export const knowledgeChunks = pgTable('knowledge_chunks', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  collection: text('collection').notNull(),
+  content: text('content').notNull(),
+  // D-08: Mesma dimensão que embeddings — EMBEDDING_DIM do ENV
+  embedding: vector('embedding', { dimensions: EMBEDDING_DIM }).notNull(),
+  embeddingModel: text('embedding_model').notNull(),
+  chunkIndex: integer('chunk_index').notNull(),
+  totalChunks: integer('total_chunks').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+// FUP-01: fup_config — configuração de follow-up por brain_type (D-01 a D-06, D-16)
+// D-02: brain_type como text PK — desvio consciente de UUID padrão; simplifica upsert por tipo
+// D-16: enabled para controle sem deletar config; scheduler filtra WHERE enabled = true
+export const fupConfig = pgTable('fup_config', {
+  // D-02: text PK — sem UUID separado
+  brainType: text('brain_type').primaryKey(),
+  // D-16: ativação por brain_type sem deletar intervalos/horários
+  enabled: boolean('enabled').notNull().default(true),
+  // D-03: integer[] — ex: [3600, 86400, 259200] = steps em segundos
+  intervalsSeconds: integer('intervals_seconds').array().notNull(),
+  // D-06: hora do dia 0–23
+  minHour: integer('min_hour').notNull(),
+  maxHour: integer('max_hour').notNull(),
+  // D-04: ex: ['mon','tue','wed','thu','fri']
+  allowedDays: text('allowed_days').array().notNull(),
+  // D-05: IANA timezone string — ex: 'America/Sao_Paulo'
+  timezone: text('timezone').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
