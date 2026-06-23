@@ -43,6 +43,11 @@ mock.module("@brain-pkg/database", () => ({
     createdAt: "leads.created_at",
     updatedAt: "leads.updated_at",
     id: "leads.id",
+    // FUP-06: novas colunas adicionadas na migration 0007_v1_4_foundation
+    lastMessageAt: "leads.last_message_at",
+    fupEnabled: "leads.fup_enabled",
+    fupStep: "leads.fup_step",
+    fupNextAt: "leads.fup_next_at",
   },
 }));
 
@@ -116,5 +121,41 @@ describe("LeadService — métodos de atualização de lead (TOOLS-STD-01, TOOLS
     const setArg = mockSet2.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(setArg).toHaveProperty("iaAtivada", false);
     expect(setArg).toHaveProperty("updatedAt");
+  });
+});
+
+describe("LeadService — touchLastMessage (FUP-06)", () => {
+  const mockWhere3 = mock(async () => []);
+  const mockSet3 = mock(() => ({ where: mockWhere3 }));
+  const mockUpdate3 = mock(() => ({ set: mockSet3 }));
+
+  let service3: LeadService;
+
+  beforeEach(() => {
+    mockWhere3.mockClear();
+    mockSet3.mockClear();
+    mockUpdate3.mockClear();
+    (mockDb as Record<string, unknown>).update = mockUpdate3;
+    service3 = new LeadService({} as never);
+  });
+
+  it("touchLastMessage() chama db.update com { lastMessageAt: Date } onde eq(leads.uniqueId, uniqueId)", async () => {
+    await service3.touchLastMessage("lead-abc");
+    expect(mockUpdate3).toHaveBeenCalledTimes(1);
+    expect(mockSet3).toHaveBeenCalledTimes(1);
+    const setArg = mockSet3.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(setArg).toHaveProperty("lastMessageAt");
+    expect(setArg.lastMessageAt).toBeInstanceOf(Date);
+  });
+
+  it("touchLastMessage() NÃO inclui updatedAt no set (D-11: last_message_at é coluna especializada)", async () => {
+    await service3.touchLastMessage("lead-abc");
+    const setArg = mockSet3.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(setArg).not.toHaveProperty("updatedAt");
+  });
+
+  it("touchLastMessage() chama where com leads.uniqueId (eq chamado com uniqueId correto)", async () => {
+    await service3.touchLastMessage("lead-abc");
+    expect(mockWhere3).toHaveBeenCalledTimes(1);
   });
 });

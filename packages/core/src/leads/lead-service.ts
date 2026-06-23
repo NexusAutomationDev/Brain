@@ -101,4 +101,22 @@ export class LeadService {
       .set({ iaAtivada: value, updatedAt: new Date() })
       .where(eq(leads.uniqueId, uniqueId));
   }
+
+  /**
+   * FUP-06: Atualiza last_message_at do lead para NOW() por uniqueId.
+   * Chamado por BrainRunner.run() ANTES do gate ia_ativada — FUP-06 exige
+   * atualização a cada mensagem recebida, inclusive quando ia_ativada=false.
+   *
+   * D-11: last_message_at é DISTINTO de updatedAt — rastreia especificamente
+   * quando o humano enviou mensagem (não mudanças programáticas como setIaAtivada).
+   * Por isso NÃO incluímos updatedAt no set desta operação.
+   *
+   * @param uniqueId - lead.uniqueId (IDLead canonical = thread_id do BrainRunner)
+   */
+  async touchLastMessage(uniqueId: string): Promise<void> {
+    await this.db
+      .update(leads)
+      .set({ lastMessageAt: new Date() })
+      .where(eq(leads.uniqueId, uniqueId));
+  }
 }
