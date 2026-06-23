@@ -31,3 +31,7 @@ export type { BrainOutput, ResponseMode } from "./output/schema.js";
 export { createPauseSessionTool } from "./tools/pause-session.js";
 export { createFinishConversationTool } from "./tools/finish-conversation.js";
 export { createRespondTool } from "./tools/respond.js";
+
+// EVT-01: EventPublisher — canal de saída para eventos de tools
+export type { IEventPublisher, ToolEvent } from "./events/event-publisher.js";
+export { EventPublisher, NoopEventPublisher } from "./events/event-publisher.js";
