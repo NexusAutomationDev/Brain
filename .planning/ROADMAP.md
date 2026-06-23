@@ -77,19 +77,14 @@
 ### Phase 20: Tool Events
 **Goal**: Brains publicam automaticamente o resultado de cada tool relevante em canal de saída separado (webhook ou RabbitMQ), sem bloquear o fluxo principal
 **Depends on**: Phase 19
-**Requirements**: EVT-01, EVT-02, EVT-04
+**Requirements**: EVT-01, EVT-02, EVT-03, EVT-04
 **Success Criteria** (what must be TRUE):
   1. Ao configurar `TOOL_EVENTS_URL` via ENV, cada execução de `qualify_lead`, `pause_session` ou `finish_conversation` dispara um POST fire-and-forget com `{ event_id, action, lead, result, timestamp }` para a URL configurada
   2. Ao configurar `TOOL_EVENTS_QUEUE` via ENV, os mesmos eventos são publicados na fila RabbitMQ correspondente
   3. Cada evento carrega `event_id` derivado de `thread_id:tool_call_id` — dois eventos do mesmo tool call produzem o mesmo `event_id`
   4. Publicação de evento nunca bloqueia nem atrasa a resposta do Brain ao lead
   5. Quando nenhum ENV de Tool Events está configurado, o sistema funciona normalmente sem publicar eventos
-**Plans**: 2 plans
-
-Plans:
-- [ ] 20-01-PLAN.md — IEventPublisher + EventPublisher (webhook/RabbitMQ) com TDD
-- [ ] 20-02-PLAN.md — Integrar EventPublisher no BrainRunner + barrel export + testes
-
+**Plans**: TBD
 **UI hint**: no
 
 ### Phase 21: RAG
@@ -106,7 +101,7 @@ Plans:
 ### Phase 22: FUP Automático
 **Goal**: Leads que param de responder recebem follow-ups personalizados gerados por LLM em intervalos configuráveis, respeitando horário comercial e fuso horário — com controle de etapa no DB e desativação automática no último FUP
 **Depends on**: Phase 19, Phase 20
-**Requirements**: FUP-01, FUP-02, FUP-03, EVT-03, FUP-05, FUP-06, FUP-07, FUP-08
+**Requirements**: FUP-01, FUP-02, FUP-03, FUP-05, FUP-06, FUP-07, FUP-08
 **Success Criteria** (what must be TRUE):
   1. Lead que para de responder recebe mensagem de FUP gerada por LLM usando o histórico da conversa, no intervalo configurado em `fup_config`, respeitando `fup_min_hour`, `fup_max_hour`, dias permitidos e fuso horário IANA
   2. Quando o lead responde, todos os FUPs pendentes são cancelados e `last_message_at` é atualizado — FUP não dispara para leads ativos
@@ -140,7 +135,7 @@ Plans:
 | 17. Expor contagem de tokens gastos | v1.3 | 3/3 | Complete | 2026-06-16 |
 | 18. Build and Publish Docker Image via DockGate | — | 0/1 | Planned | — |
 | 19. Database Foundation | v1.4 | 2/2 | Complete    | 2026-06-23 |
-| 20. Tool Events | v1.4 | 0/2 | Not started | — |
+| 20. Tool Events | v1.4 | 0/? | Not started | — |
 | 21. RAG | v1.4 | 0/? | Not started | — |
 | 22. FUP Automático | v1.4 | 0/? | Not started | — |
 
