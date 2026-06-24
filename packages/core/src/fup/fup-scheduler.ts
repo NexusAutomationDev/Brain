@@ -242,7 +242,12 @@ export class FupScheduler implements IFupScheduler {
           { err, uniqueId: lead.uniqueId, attempt },
           "FupScheduler: tentativa de FUP falhou"
         );
-        // D-15: retry simples sem delay (backoff exponencial é FUP-F01)
+        // WR-04: delay de 1s fixo entre tentativas — evita thundering herd de 30 calls
+        // simultâneos ao LLM em cenário de falha (BATCH_SIZE=10 × 3 retries).
+        // Backoff exponencial adiado para FUP-F01.
+        if (attempt < MAX_FUP_ATTEMPTS) {
+          await new Promise((r) => setTimeout(r, 1000));
+        }
       }
     }
 

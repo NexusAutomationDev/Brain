@@ -295,6 +295,30 @@ describe("FupScheduler._processFupForLead()", () => {
     // Fetch ainda deve ter sido chamado (envio do FUP)
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
+
+  test("WR-04: com 2 falhas seguidas de sucesso na 3ª tentativa, scheduler completa e chama fetch 3x", async () => {
+    const lead = makeLead({ fupStep: 0, intervalsSeconds: [3600, 86400] });
+    let callCount = 0;
+    const generateSpy = mock(() => {
+      callCount++;
+      if (callCount < 3) return Promise.reject(new Error(`Falha tentativa ${callCount}`));
+      return Promise.resolve("Mensagem de FUP no 3º attempt");
+    });
+
+    const fetchMock = mock(async () => new Response(null, { status: 200 }));
+    const { scheduler } = makeScheduler({ leads: [lead], fetchMock });
+
+    (scheduler as unknown as { _generateFupMessage: typeof generateSpy })._generateFupMessage = generateSpy;
+
+    // Usar fake timer seria ideal, mas dado o timeout de 2s total, configurar timeout maior:
+    // O delay real de 1s × 2 = 2s, por isso o timeout do teste é 5000ms
+    await scheduler._processFupForLead(lead);
+
+    // Geração chamada 3x (2 falhas + 1 sucesso)
+    expect(generateSpy).toHaveBeenCalledTimes(3);
+    // Fetch chamado apenas 1x (somente na tentativa bem-sucedida)
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  }, 5000); // timeout explícito para cobrir 2x delay de 1s
 });
 
 describe("FupScheduler.stop()", () => {
