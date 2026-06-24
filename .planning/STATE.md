@@ -3,11 +3,11 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: RAG + Eventos de Tools + FUP Automático
 status: executing
-stopped_at: Phase 21 context gathered
-last_updated: "2026-06-24T20:11:31.361Z"
+stopped_at: Phase 23 context gathered
+last_updated: "2026-06-24T21:48:25.458Z"
 last_activity: 2026-06-24
 progress:
-  total_phases: 6
+  total_phases: 9
   completed_phases: 4
   total_plans: 8
   completed_plans: 10
@@ -80,6 +80,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-06-24T18:16:27.912Z
-Stopped at: Phase 21 context gathered
-Resume file: .planning/phases/21-rag/21-CONTEXT.md
+Last session: 2026-06-24T21:48:25.450Z
+Stopped at: Phase 23 context gathered
+Resume file: .planning/phases/23-rag-wiring-fix/23-CONTEXT.md
