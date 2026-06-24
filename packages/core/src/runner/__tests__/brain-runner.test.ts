@@ -129,6 +129,8 @@ mock.module("../../leads/lead-service.js", () => ({
       getByNumero: mock(async () => null),
       // FUP-06: touchLastMessage adicionado ao runner.ts — mock necessário para evitar TypeError
       touchLastMessage: mock(async () => {}),
+      // FUP-06: resetFup adicionado ao runner.ts — mock necessário para evitar TypeError
+      resetFup: mock(async () => {}),
     };
   }),
 }));
