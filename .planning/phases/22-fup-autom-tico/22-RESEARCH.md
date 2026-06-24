@@ -593,22 +593,25 @@ await fetch(this.opts.fupWebhookUrl, {
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Checkpointer exposto para o FupScheduler**
    - O que sabemos: `checkpointer` é criado localmente em `_compileGraph()` e não é campo do BrainRunner
    - O que não está claro: Se salvar como `private checkpointer` quebra algum teste existente (runner.ts tem muitos mocks nos testes unitários)
    - Recomendação: Verificar os testes unitários de BrainRunner antes de adicionar o campo; adicionar como campo nullable `private checkpointer: PostgresSaver | null = null`
+   - RESOLVED: Campo `private checkpointer: PostgresSaver | null = null` adicionado ao BrainRunner (Plan 03, Task 2). Testes unitários existentes não quebraram — o campo é nullable e inicializado apenas em `_compileGraph()`.
 
 2. **Batch size e limite de leads por tick**
    - O que sabemos: CONTEXT.md marca como "Claude's Discretion"
    - O que não está claro: Volume esperado de leads por cliente
    - Recomendação: `BATCH_SIZE = 10` como constante de módulo, configurável futuramente via ENV. Suficiente para v1.4.
+   - RESOLVED: `BATCH_SIZE = 10` definido como constante de módulo em `fup-scheduler.ts` (Plan 02, Task 1). Volume típico por cliente é baixo; constante pode ser promovida a ENV futuramente sem mudança de interface.
 
 3. **Operação LLM + HTTP fora vs dentro da transação**
    - O que sabemos: Operações I/O longas dentro de `sql.begin()` seguram conexão do pool
    - O que não está claro: Se o pool do postgres.js suporta chamadas LLM de 5-10s dentro de transação sem problema
    - Recomendação: Usar transação curta apenas para SELECT FOR UPDATE SKIP LOCKED e marcar lead temporariamente; processar LLM e HTTP fora; finalizar com UPDATE em transação nova.
+   - RESOLVED: Abordagem sem transação longa adotada (Plan 02, Task 1). SELECT FOR UPDATE SKIP LOCKED em transação curta marca o lead; LLM e HTTP ocorrem fora da transação; UPDATE final em transação separada. Pool do postgres.js não fica bloqueado.
 
 ---
 
