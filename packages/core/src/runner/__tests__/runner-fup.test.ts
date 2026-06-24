@@ -72,6 +72,7 @@ mock.module("@brain-pkg/shared", () => ({
 
 // Mock mockTouchLastMessage para rastrear chamadas
 const mockTouchLastMessage = mock(async (_uniqueId: string) => {});
+const mockResetFup = mock(async (_uniqueId: string) => {});
 const mockUpsertLead = mock(async () => ({
   id: "uuid-1",
   uniqueId: "lead-fup-test",
@@ -94,6 +95,7 @@ mock.module("../../leads/lead-service.js", () => ({
     return {
       upsertLead: mockUpsertLead,
       touchLastMessage: mockTouchLastMessage,
+      resetFup: mockResetFup,
     };
   }),
 }));
@@ -149,6 +151,7 @@ describe("BrainRunner.run() — FUP-06: touchLastMessage antes do gate ia_ativad
 
   beforeEach(async () => {
     mockTouchLastMessage.mockClear();
+    mockResetFup.mockClear();
     mockUpsertLead.mockClear();
     mockGetState.mockClear();
     mockInvoke.mockClear();
