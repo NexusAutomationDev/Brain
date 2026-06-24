@@ -60,7 +60,7 @@
 - [x] **Phase 21: RAG** - Base de conhecimento semântica com ingest endpoint e tool search_knowledge (completed 2026-06-24)
 - [x] **Phase 22: FUP Automático** - Scheduler que detecta leads silenciosos e envia follow-ups personalizados (completed 2026-06-24)
 - [x] **Phase 23: RAG Wiring Fix** - Vincular createSearchKnowledgeTool ao LLM em brain-sdr/brain.ts — fecha RAG-02, RAG-03 (completed 2026-06-24)
-- [ ] **Phase 24: Tech Debt & Tracker Cleanup** - Corrigir WR-01..WR-04, 4 erros TypeScript, atualizar REQUIREMENTS.md tracker
+- [x] **Phase 24: Tech Debt & Tracker Cleanup** - Corrigir WR-01..WR-04, 4 erros TypeScript, atualizar REQUIREMENTS.md tracker (completed 2026-06-24)
 - [ ] **Phase 25: FUP Activation Trigger** - Ativar fup_enabled automaticamente ao criar/configurar lead para FUP disparar sem intervenção manual
 
 ## Phase Details
@@ -152,9 +152,9 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 24-01-PLAN.md — WR-01 (warning checkpointer null) + WR-02 (updatedAt em resetFup) + WR-03 (SIGTERM handler cleanup)
-- [ ] 24-02-PLAN.md — WR-04 (delay entre retries no FupScheduler)
-- [ ] 24-03-PLAN.md — SC-5 verificação TypeScript + atualização REQUIREMENTS.md tracker
+- [x] 24-01-PLAN.md — WR-01 (warning checkpointer null) + WR-02 (updatedAt em resetFup) + WR-03 (SIGTERM handler cleanup)
+- [x] 24-02-PLAN.md — WR-04 (delay entre retries no FupScheduler)
+- [x] 24-03-PLAN.md — SC-5 verificação TypeScript + atualização REQUIREMENTS.md tracker
 
 ### Phase 25: FUP Activation Trigger
 **Goal**: Leads recém-criados ou configurados para FUP têm `fup_enabled` ativado automaticamente — sem necessidade de intervenção manual no banco, tornando o FUP operacional em produção sem setup adicional por lead
@@ -196,7 +196,7 @@ Plans:
 | 21. RAG | v1.4 | 3/3 | Complete    | 2026-06-24 |
 | 22. FUP Automático | v1.4 | 3/2 | Complete   | 2026-06-24 |
 | 23. RAG Wiring Fix | v1.4 | 1/1 | Complete    | 2026-06-24 |
-| 24. Tech Debt & Tracker Cleanup | v1.4 | 0/3 | Planned | — |
+| 24. Tech Debt & Tracker Cleanup | v1.4 | 3/3 | Complete    | 2026-06-24 |
 | 25. FUP Activation Trigger | v1.4 | 0/TBD | Planned | — |
 
 ## Backlog
@@ -208,7 +208,7 @@ Plans:
 **Context:** Hoje o brain-sdr sempre retorna `responseMode: "text"`. O system prompt contém o bloco `<response_format>` como referência comportamental (o LLM conhece os modos), mas sem um mecanismo de saída estruturada o LLM não consegue sinalizar `"audio"` quando o usuário pede. A solução correta é usar `response_format` (OpenAI) ou `generationConfig.responseMimeType` (Google) no nível da API — não instrução de prompt.
 
 **Requirements:** TBD
-**Plans:** 1/1 plans complete
+**Plans:** 3/3 plans complete
 
 Plans:
 - [ ] TBD (promote with /gsd-review-backlog when ready)
