@@ -56,7 +56,7 @@
 **Milestone Goal:** Dar aos Brains base de conhecimento semântica, expor resultados de tools para sistemas externos via canal dedicado, e enviar follow-ups automáticos para leads que param de responder.
 
 - [x] **Phase 19: Database Foundation** - Migration única com todas as tabelas e colunas necessárias para RAG, Tool Events e FUP (completed 2026-06-23)
-- [x] **Phase 20: Tool Events** - Canal de saída separado publicando resultado de cada tool via webhook ou RabbitMQ (completed 2026-06-23)
+- [ ] **Phase 20: Tool Events** - Canal de saída separado publicando resultado de cada tool via webhook ou RabbitMQ
 - [ ] **Phase 21: RAG** - Base de conhecimento semântica com ingest endpoint e tool search_knowledge
 - [ ] **Phase 22: FUP Automático** - Scheduler que detecta leads silenciosos e envia follow-ups personalizados
 
@@ -108,12 +108,7 @@
   3. Ao enviar o último FUP da sequência, o sistema seta `ia_ativada = false` e `fup_enabled = false` automaticamente
   4. Múltiplas instâncias do Brain em paralelo nunca enviam o mesmo FUP duas vezes — `SELECT FOR UPDATE SKIP LOCKED` garante que apenas uma instância processa cada FUP
   5. Se LLM ou transport falhar ao enviar FUP, o sistema re-tenta até 3 vezes antes de marcar como falha e logar alerta; se a janela de horário não permitir envio, o scheduler agenda para o próximo slot válido
-**Plans**: 3 plans
-
-Plans:
-- [ ] 22-01-PLAN.md — Migration 0008 + schema Drizzle para fup_failure_count
-- [ ] 22-02-PLAN.md — FupScheduler (classe + lógica de negócio + testes unitários)
-- [ ] 22-03-PLAN.md — Integração BrainRunner + LeadService.resetFup() + barrel export + schema push
+**Plans**: TBD
 
 ## Progress
 
@@ -140,9 +135,9 @@ Plans:
 | 17. Expor contagem de tokens gastos | v1.3 | 3/3 | Complete | 2026-06-16 |
 | 18. Build and Publish Docker Image via DockGate | — | 0/1 | Planned | — |
 | 19. Database Foundation | v1.4 | 2/2 | Complete    | 2026-06-23 |
-| 20. Tool Events | v1.4 | 2/1 | Complete   | 2026-06-23 |
+| 20. Tool Events | v1.4 | 0/? | Not started | — |
 | 21. RAG | v1.4 | 0/? | Not started | — |
-| 22. FUP Automático | v1.4 | 0/3 | Not started | — |
+| 22. FUP Automático | v1.4 | 0/? | Not started | — |
 
 ## Backlog
 
@@ -153,7 +148,7 @@ Plans:
 **Context:** Hoje o brain-sdr sempre retorna `responseMode: "text"`. O system prompt contém o bloco `<response_format>` como referência comportamental (o LLM conhece os modos), mas sem um mecanismo de saída estruturada o LLM não consegue sinalizar `"audio"` quando o usuário pede. A solução correta é usar `response_format` (OpenAI) ou `generationConfig.responseMimeType` (Google) no nível da API — não instrução de prompt.
 
 **Requirements:** TBD
-**Plans:** 2/1 plans complete
+**Plans:** 2/2 plans complete
 
 Plans:
 - [ ] TBD (promote with /gsd-review-backlog when ready)
