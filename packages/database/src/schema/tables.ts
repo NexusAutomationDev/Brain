@@ -94,6 +94,10 @@ export const leads = pgTable('leads', {
   fupStep: integer('fup_step').notNull().default(0),
   fupNextAt: timestamp('fup_next_at', { withTimezone: true }),      // nullable por design
   lastMessageAt: timestamp('last_message_at', { withTimezone: true }), // nullable por design (D-11)
+  // FUP-08: Contador de falhas de envio de FUP — persistente no banco (D-14)
+  // Incrementado a cada falha de LLM ou transport. Reset a cada FUP bem-sucedido.
+  // Quando >= 3 (MAX_FUP_FAILURES): fup_enabled setado para false automaticamente.
+  fupFailureCount: integer('fup_failure_count').notNull().default(0),
 }, (table) => ({
   // D-04: UNIQUE constraint em numero — chave de upsert para Phase 7
   numeroIdx: uniqueIndex('leads_numero_unique_idx').on(table.numero),
