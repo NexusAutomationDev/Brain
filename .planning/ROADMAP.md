@@ -59,6 +59,9 @@
 - [x] **Phase 20: Tool Events** - Canal de saída separado publicando resultado de cada tool via webhook ou RabbitMQ (completed 2026-06-23)
 - [x] **Phase 21: RAG** - Base de conhecimento semântica com ingest endpoint e tool search_knowledge (completed 2026-06-24)
 - [x] **Phase 22: FUP Automático** - Scheduler que detecta leads silenciosos e envia follow-ups personalizados (completed 2026-06-24)
+- [ ] **Phase 23: RAG Wiring Fix** - Vincular createSearchKnowledgeTool ao LLM em brain-sdr/brain.ts — fecha RAG-02, RAG-03
+- [ ] **Phase 24: Tech Debt & Tracker Cleanup** - Corrigir WR-01..WR-04, 4 erros TypeScript, atualizar REQUIREMENTS.md tracker
+- [ ] **Phase 25: FUP Activation Trigger** - Ativar fup_enabled automaticamente ao criar/configurar lead para FUP disparar sem intervenção manual
 
 ## Phase Details
 
@@ -120,6 +123,42 @@ Plans:
 - [x] 22-02-PLAN.md — FupScheduler (classe + lógica de negócio + testes unitários)
 - [x] 22-03-PLAN.md — Integração BrainRunner + LeadService.resetFup() + barrel export + schema push
 
+### Phase 23: RAG Wiring Fix
+**Goal**: Vincular `createSearchKnowledgeTool` ao LLM em `apps/brain-sdr/src/brain.ts` — o ingest já funciona, mas o LLM nunca enxerga `search_knowledge` porque a tool não está no `bindTools()` nem no `ToolNode` do Brain SDR
+**Depends on**: Phase 21, Phase 22
+**Requirements**: RAG-02, RAG-03
+**Gap Closure**: Fecha gaps RAG-02, RAG-03 e integration gap Phase 21 → buildGraph()
+**Success Criteria** (what must be TRUE):
+  1. `buildGraph()` em `apps/brain-sdr/src/brain.ts` instancia `createSearchKnowledgeTool(ctx.sql!)` e adiciona ao `bindTools()` e ao `ToolNode`
+  2. O LLM pode chamar `search_knowledge` e receber trechos ordenados por similaridade — fluxo RAG end-to-end funcional
+  3. Teste de integração confirma que o LLM recebe chunks relevantes ao consultar uma coleção previamente ingerida
+**Plans**: TBD
+
+### Phase 24: Tech Debt & Tracker Cleanup
+**Goal**: Corrigir debt técnico acumulado de v1.4 — WR-01..WR-04 no FupScheduler, 4 erros TypeScript pré-existentes em packages/core, e atualizar REQUIREMENTS.md tracker para refletir estado real do código
+**Depends on**: Phase 22
+**Requirements**: (nenhum requirement novo — closes tech debt)
+**Gap Closure**: Fecha itens de tech debt identificados na auditoria v1.4
+**Success Criteria** (what must be TRUE):
+  1. FupScheduler loga warning quando `FUP_WEBHOOK_URL` está configurado mas `checkpointer` é null (WR-01)
+  2. `resetFup()` inclui `updatedAt` na atualização — consistente com outros métodos do LeadService (WR-02)
+  3. SIGTERM listener é removido em `close()` do FupScheduler — sem acúmulo de listeners em chamadas múltiplas (WR-03)
+  4. FupScheduler adiciona delay entre retries — sem 30 calls simultâneos ao LLM em cenário de falha (WR-04)
+  5. `bun tsc --noEmit` em packages/core retorna 0 erros (4 erros TypeScript eliminados)
+  6. REQUIREMENTS.md com checkboxes e traceability refletindo estado real do código implementado
+**Plans**: TBD
+
+### Phase 25: FUP Activation Trigger
+**Goal**: Leads recém-criados ou configurados para FUP têm `fup_enabled` ativado automaticamente — sem necessidade de intervenção manual no banco, tornando o FUP operacional em produção sem setup adicional por lead
+**Depends on**: Phase 22, Phase 23
+**Requirements**: FUP-01, FUP-02 (extensão)
+**Gap Closure**: Fecha integration gap "fup_enabled sem trigger automático" identificado na auditoria
+**Success Criteria** (what must be TRUE):
+  1. Quando `fup_config` existe no banco para o Brain, novos leads têm `fup_enabled = true` setado automaticamente via `LeadService.upsert()` ou trigger de startup
+  2. O FUP dispara sem intervenção manual no banco para leads que param de responder — fluxo FUP automático completo em produção
+  3. Leads que explicitamente têm `fup_enabled = false` (desativado manualmente) não são afetados pela ativação automática
+**Plans**: TBD
+
 ## Progress
 
 **Execution Order:** Phases execute in numeric order: 19 → 20 → 21 → 22
@@ -148,6 +187,9 @@ Plans:
 | 20. Tool Events | v1.4 | 2/1 | Complete   | 2026-06-23 |
 | 21. RAG | v1.4 | 3/3 | Complete    | 2026-06-24 |
 | 22. FUP Automático | v1.4 | 3/2 | Complete   | 2026-06-24 |
+| 23. RAG Wiring Fix | v1.4 | 0/TBD | Planned | — |
+| 24. Tech Debt & Tracker Cleanup | v1.4 | 0/TBD | Planned | — |
+| 25. FUP Activation Trigger | v1.4 | 0/TBD | Planned | — |
 
 ## Backlog
 

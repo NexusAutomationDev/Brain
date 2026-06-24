@@ -9,28 +9,28 @@ Requirements para o milestone v1.4. Cada um mapeia para fases do roadmap.
 
 ### RAG — Base de Conhecimento Semântica
 
-- [ ] **RAG-01**: Operador pode enviar texto e nome de coleção via POST /api/v1/ingest e o sistema chunka, embede e armazena no pgvector, autenticado via INGEST_TOKEN
+- [x] **RAG-01**: Operador pode enviar texto e nome de coleção via POST /api/v1/ingest e o sistema chunka, embede e armazena no pgvector, autenticado via INGEST_TOKEN
 - [ ] **RAG-02**: LLM pode buscar contexto relevante chamando a tool `search_knowledge(query, collections[])` que retorna trechos ordenados por similaridade
 - [ ] **RAG-03**: `search_knowledge` aceita array de coleções e busca em múltiplas coleções simultaneamente numa única chamada
-- [ ] **RAG-04**: Cada chunk armazenado registra collection_name, embedding_model, chunk_index e total_chunks como metadados não-nulos
+- [x] **RAG-04**: Cada chunk armazenado registra collection_name, embedding_model, chunk_index e total_chunks como metadados não-nulos
 
 ### EVT — Eventos de Tools (Canal de Saída)
 
-- [ ] **EVT-01**: Brain publica eventos de resultado de tools em canal separado (webhook via TOOL_EVENTS_URL ou RabbitMQ via TOOL_EVENTS_QUEUE) configurável via ENV, sem bloquear o fluxo principal
-- [ ] **EVT-02**: Quando qualify_lead, pause_session ou finish_conversation produzem resultado, o evento `{ action, lead: { id, nome, numero }, result }` é publicado automaticamente no canal de saída
-- [ ] **EVT-03**: Quando FUP envia mensagem, publica evento `{ action: "fup", lead, result: { step, message } }` no canal de saída
-- [ ] **EVT-04**: Cada evento carrega `event_id` derivado de `thread_id:tool_call_id` para permitir deduplicação idempotente pelo consumidor
+- [x] **EVT-01**: Brain publica eventos de resultado de tools em canal separado (webhook via TOOL_EVENTS_URL ou RabbitMQ via TOOL_EVENTS_QUEUE) configurável via ENV, sem bloquear o fluxo principal
+- [x] **EVT-02**: Quando qualify_lead, pause_session ou finish_conversation produzem resultado, o evento `{ action, lead: { id, nome, numero }, result }` é publicado automaticamente no canal de saída
+- [x] **EVT-03**: Quando FUP envia mensagem, publica evento `{ action: "fup", lead, result: { step, message } }` no canal de saída
+- [x] **EVT-04**: Cada evento carrega `event_id` derivado de `thread_id:tool_call_id` para permitir deduplicação idempotente pelo consumidor
 
 ### FUP — Follow-up Automático
 
 - [x] **FUP-01**: Configuração de FUP (intervalos em segundos, hora mínima, hora máxima, dias permitidos, fuso horário IANA) é armazenada em tabela `fup_config` no banco — não em ENV
 - [x] **FUP-02**: Scheduler background detecta leads silenciosos (last_message_at + limiar via ENV) e processa FUPs usando SELECT FOR UPDATE SKIP LOCKED para segurança em múltiplas instâncias
-- [ ] **FUP-03**: Conteúdo de cada FUP é gerado por chamada LLM one-shot usando o histórico da conversa (via PostgresSaver.getTuple) e o prompt "fup" do banco — sem invocar o grafo completo
-- [ ] **FUP-04**: Estado de FUP de cada lead é persistido no banco com colunas fup_step, fup_next_at e fup_enabled na tabela leads — sem estado em memória
-- [ ] **FUP-05**: Ao enviar o último FUP da sequência configurada, o sistema seta ia_ativada = false e fup_enabled = false automaticamente
+- [x] **FUP-03**: Conteúdo de cada FUP é gerado por chamada LLM one-shot usando o histórico da conversa (via PostgresSaver.getTuple) e o prompt "fup" do banco — sem invocar o grafo completo
+- [x] **FUP-04**: Estado de FUP de cada lead é persistido no banco com colunas fup_step, fup_next_at e fup_enabled na tabela leads — sem estado em memória
+- [x] **FUP-05**: Ao enviar o último FUP da sequência configurada, o sistema seta ia_ativada = false e fup_enabled = false automaticamente
 - [x] **FUP-06**: BrainRunner.run() cancela todos os FUPs pendentes e atualiza last_message_at do lead a cada mensagem recebida
-- [ ] **FUP-07**: Se a janela de horário ou dias não permitir envio no momento calculado, o scheduler agenda para o próximo slot válido em vez de descartar
-- [ ] **FUP-08**: Se LLM ou transport falhar ao enviar FUP, o sistema re-tenta até 3 vezes (failure_count) antes de marcar a etapa como falha e logar alerta
+- [x] **FUP-07**: Se a janela de horário ou dias não permitir envio no momento calculado, o scheduler agenda para o próximo slot válido em vez de descartar
+- [x] **FUP-08**: Se LLM ou transport falhar ao enviar FUP, o sistema re-tenta até 3 vezes (failure_count) antes de marcar a etapa como falha e logar alerta
 
 ## Requisitos Futuros
 
@@ -72,22 +72,22 @@ Preenchido pelo roadmapper após criação do roadmap.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| RAG-01 | Phase 21 | Pending |
-| RAG-02 | Phase 21 | Pending |
-| RAG-03 | Phase 21 | Pending |
-| RAG-04 | Phase 21 | Pending |
-| EVT-01 | Phase 20 | Pending |
-| EVT-02 | Phase 20 | Pending |
-| EVT-03 | Phase 20 | Pending |
-| EVT-04 | Phase 20 | Pending |
+| RAG-01 | Phase 21 | Complete |
+| RAG-02 | Phase 23 | Pending |
+| RAG-03 | Phase 23 | Pending |
+| RAG-04 | Phase 21 | Complete |
+| EVT-01 | Phase 20 | Complete |
+| EVT-02 | Phase 20 | Complete |
+| EVT-03 | Phase 22 | Complete |
+| EVT-04 | Phase 20 | Complete |
 | FUP-01 | Phase 22 | Complete |
 | FUP-02 | Phase 22 | Complete |
-| FUP-03 | Phase 22 | Pending |
-| FUP-04 | Phase 19 | Pending |
-| FUP-05 | Phase 22 | Pending |
+| FUP-03 | Phase 22 | Complete |
+| FUP-04 | Phase 19 | Complete |
+| FUP-05 | Phase 22 | Complete |
 | FUP-06 | Phase 19 | Complete |
-| FUP-07 | Phase 22 | Pending |
-| FUP-08 | Phase 22 | Pending |
+| FUP-07 | Phase 22 | Complete |
+| FUP-08 | Phase 22 | Complete |
 
 **Coverage:**
 - v1.4 requirements: 16 total
