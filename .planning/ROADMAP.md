@@ -96,7 +96,12 @@
   2. O LLM pode chamar `search_knowledge(query, collections[])` e receber trechos ordenados por similaridade cosine acima do threshold configurado
   3. Uma chamada a `search_knowledge` com múltiplas coleções retorna resultados de todas elas em único response, ordenados por score
   4. Cada chunk armazenado registra `collection_name`, `embedding_model`, `chunk_index` e `total_chunks` como metadados não-nulos — campo `embedding_model` permite detectar drift de modelo
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 21-01-PLAN.md — Test stubs (Wave 0 / Nyquist) + D-17 factory update (createEmbeddings defaults por provider)
+- [ ] 21-02-PLAN.md — RAG core: chunker.ts + search.ts + ingest.ts (POST /api/v1/ingest)
+- [ ] 21-03-PLAN.md — createSearchKnowledgeTool + barrel export @brain-pkg/core + integração brain-sdr
 
 ### Phase 22: FUP Automático
 **Goal**: Leads que param de responder recebem follow-ups personalizados gerados por LLM em intervalos configuráveis, respeitando horário comercial e fuso horário — com controle de etapa no DB e desativação automática no último FUP
@@ -141,7 +146,7 @@ Plans:
 | 18. Build and Publish Docker Image via DockGate | — | 0/1 | Planned | — |
 | 19. Database Foundation | v1.4 | 2/2 | Complete    | 2026-06-23 |
 | 20. Tool Events | v1.4 | 2/1 | Complete   | 2026-06-23 |
-| 21. RAG | v1.4 | 0/? | Not started | — |
+| 21. RAG | v1.4 | 0/3 | Not started | — |
 | 22. FUP Automático | v1.4 | 3/2 | Complete   | 2026-06-24 |
 
 ## Backlog
