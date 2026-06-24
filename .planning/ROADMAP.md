@@ -57,7 +57,7 @@
 
 - [x] **Phase 19: Database Foundation** - Migration única com todas as tabelas e colunas necessárias para RAG, Tool Events e FUP (completed 2026-06-23)
 - [x] **Phase 20: Tool Events** - Canal de saída separado publicando resultado de cada tool via webhook ou RabbitMQ (completed 2026-06-23)
-- [ ] **Phase 21: RAG** - Base de conhecimento semântica com ingest endpoint e tool search_knowledge
+- [x] **Phase 21: RAG** - Base de conhecimento semântica com ingest endpoint e tool search_knowledge (completed 2026-06-24)
 - [x] **Phase 22: FUP Automático** - Scheduler que detecta leads silenciosos e envia follow-ups personalizados (completed 2026-06-24)
 
 ## Phase Details
@@ -99,9 +99,9 @@
 **Plans**: 3 plans
 
 Plans:
-- [ ] 21-01-PLAN.md — Test stubs (Wave 0 / Nyquist) + D-17 factory update (createEmbeddings defaults por provider)
-- [ ] 21-02-PLAN.md — RAG core: chunker.ts + search.ts + ingest.ts (POST /api/v1/ingest)
-- [ ] 21-03-PLAN.md — createSearchKnowledgeTool + barrel export @brain-pkg/core + integração brain-sdr
+- [x] 21-01-PLAN.md — Test stubs (Wave 0 / Nyquist) + D-17 factory update (createEmbeddings defaults por provider)
+- [x] 21-02-PLAN.md — RAG core: chunker.ts + search.ts + ingest.ts (POST /api/v1/ingest)
+- [x] 21-03-PLAN.md — createSearchKnowledgeTool + barrel export @brain-pkg/core + integração brain-sdr
 
 ### Phase 22: FUP Automático
 **Goal**: Leads que param de responder recebem follow-ups personalizados gerados por LLM em intervalos configuráveis, respeitando horário comercial e fuso horário — com controle de etapa no DB e desativação automática no último FUP
@@ -146,7 +146,7 @@ Plans:
 | 18. Build and Publish Docker Image via DockGate | — | 0/1 | Planned | — |
 | 19. Database Foundation | v1.4 | 2/2 | Complete    | 2026-06-23 |
 | 20. Tool Events | v1.4 | 2/1 | Complete   | 2026-06-23 |
-| 21. RAG | v1.4 | 0/3 | Not started | — |
+| 21. RAG | v1.4 | 3/3 | Complete    | 2026-06-24 |
 | 22. FUP Automático | v1.4 | 3/2 | Complete   | 2026-06-24 |
 
 ## Backlog
@@ -158,7 +158,7 @@ Plans:
 **Context:** Hoje o brain-sdr sempre retorna `responseMode: "text"`. O system prompt contém o bloco `<response_format>` como referência comportamental (o LLM conhece os modos), mas sem um mecanismo de saída estruturada o LLM não consegue sinalizar `"audio"` quando o usuário pede. A solução correta é usar `response_format` (OpenAI) ou `generationConfig.responseMimeType` (Google) no nível da API — não instrução de prompt.
 
 **Requirements:** TBD
-**Plans:** 3/2 plans complete
+**Plans:** 3/3 plans complete
 
 Plans:
 - [ ] TBD (promote with /gsd-review-backlog when ready)
