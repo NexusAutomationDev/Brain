@@ -460,17 +460,19 @@ const res = await app.fetch(
 
 **Nota:** Os claims de maior confiança (padrões de código, schema, drizzle API) foram todos verificados via leitura do codebase. Apenas A1 e A2 são baseados em training knowledge sobre a API do LangChain — ambos têm fallbacks simples se errados.
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **pgvector 0.8.x no Docker image?**
    - O que sabemos: STATE.md menciona "pgvector 0.8.x no Docker image? (`hnsw.iterative_scan = relaxed_order` requer 0.8.0+)" como research flag.
    - O que é incerto: Versão do pgvector instalada na imagem Docker atual (`oven/bun:1` + pg).
    - Recomendação: **Sem impacto na Phase 21** — HNSW index é criado manualmente pós-ingestão (D-09 / out of scope). Esta fase usa apenas sequential scan (sem HNSW). A flag do STATE.md é para fase futura.
+   - RESOLVED: Sem impacto na Phase 21. Phase 21 usa sequential scan apenas; HNSW fica para fase futura. Nenhuma ação necessária nesta fase.
 
 2. **`@langchain/textsplitters` vs implementação própria**
    - O que sabemos: `@langchain/textsplitters@1.0.1` é compatível com `@langchain/core ^1.1.48`; dep de `js-tiktoken` para tokenização.
    - O que é incerto: Se `js-tiktoken` causa incompatibilidade com Bun 1.3.2 (CLAUDE.md menciona sensibilidade a compatibilidade Bun).
    - Recomendação: Se `js-tiktoken` causar problema em Bun, implementação própria de ~40 linhas é fallback imediato. Testar na Wave 0 (install + import).
+   - RESOLVED: Plano 02 Task 1 instrui o executor a tentar `@langchain/textsplitters` primeiro e usar implementação própria como fallback explícito se `js-tiktoken` causar incompatibilidade com Bun. Ambos os caminhos documentados no action.
 
 ## Environment Availability
 
