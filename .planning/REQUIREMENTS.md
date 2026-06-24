@@ -10,8 +10,8 @@ Requirements para o milestone v1.4. Cada um mapeia para fases do roadmap.
 ### RAG — Base de Conhecimento Semântica
 
 - [x] **RAG-01**: Operador pode enviar texto e nome de coleção via POST /api/v1/ingest e o sistema chunka, embede e armazena no pgvector, autenticado via INGEST_TOKEN
-- [ ] **RAG-02**: LLM pode buscar contexto relevante chamando a tool `search_knowledge(query, collections[])` que retorna trechos ordenados por similaridade
-- [ ] **RAG-03**: `search_knowledge` aceita array de coleções e busca em múltiplas coleções simultaneamente numa única chamada
+- [x] **RAG-02**: LLM pode buscar contexto relevante chamando a tool `search_knowledge(query, collections[])` que retorna trechos ordenados por similaridade
+- [x] **RAG-03**: `search_knowledge` aceita array de coleções e busca em múltiplas coleções simultaneamente numa única chamada
 - [x] **RAG-04**: Cada chunk armazenado registra collection_name, embedding_model, chunk_index e total_chunks como metadados não-nulos
 
 ### EVT — Eventos de Tools (Canal de Saída)
@@ -73,8 +73,8 @@ Preenchido pelo roadmapper após criação do roadmap.
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | RAG-01 | Phase 21 | Complete |
-| RAG-02 | Phase 23 | Pending |
-| RAG-03 | Phase 23 | Pending |
+| RAG-02 | Phase 23 | Complete |
+| RAG-03 | Phase 23 | Complete |
 | RAG-04 | Phase 21 | Complete |
 | EVT-01 | Phase 20 | Complete |
 | EVT-02 | Phase 20 | Complete |
@@ -96,4 +96,4 @@ Preenchido pelo roadmapper após criação do roadmap.
 
 ---
 *Requirements defined: 2026-06-23*
-*Last updated: 2026-06-23 — traceability filled after roadmap v1.4 creation*
+*Last updated: 2026-06-24 — Phase 24 cleanup: RAG-02/03 [x], EVT-03 traceability Phase 20→22*
