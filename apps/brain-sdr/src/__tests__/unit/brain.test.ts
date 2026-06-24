@@ -17,10 +17,12 @@ describe("BrainSDR — IBrain contract (SDR-01, SDR-04)", () => {
     expect(mod.sdrBrain.promptKeys).toEqual(["system", "qualification"]);
   });
 
-  test("sdrBrain.tools tem exatamente 1 tool: qualify_lead", async () => {
+  test("sdrBrain.tools tem exatamente 2 tools: qualify_lead e search_knowledge (D-02, D-03 Phase 23)", async () => {
     const mod = await import("../../brain.js");
-    expect(mod.sdrBrain.tools).toHaveLength(1);
-    expect(mod.sdrBrain.tools[0].name).toBe("qualify_lead");
+    expect(mod.sdrBrain.tools).toHaveLength(2);
+    const toolNames = mod.sdrBrain.tools.map((t: any) => t.name);
+    expect(toolNames).toContain("qualify_lead");
+    expect(toolNames).toContain("search_knowledge");
   });
 
   test("buildGraph(ctx) retorna StateGraph (tem addNode e compile)", async () => {
@@ -78,7 +80,7 @@ describe("contextWindowSize — parse seguro (SDR-01, HIST-03)", () => {
 });
 
 describe("BrainSDR — Standard Tools binding (D-07, D-08, TOOLS-STD-03)", () => {
-  test("buildGraph(ctx) com ctx.sql mock chama bindTools com 4 tools (incluindo respond)", async () => {
+  test("buildGraph(ctx) com ctx.sql mock chama bindTools com 5 tools (incluindo search_knowledge e respond)", async () => {
     // Re-importar para garantir estado limpo (Bun test pode cachear módulos)
     const mod = await import("../../brain.js");
     const bindToolsMock = mock(() => ({
@@ -89,25 +91,29 @@ describe("BrainSDR — Standard Tools binding (D-07, D-08, TOOLS-STD-03)", () =>
       prompts: { system: "prompt sistema", qualification: "prompt qualificacao" },
       tools: [],
       sql: {} as any, // D-14: mock simples — factory aceita qualquer objeto em construção
-      mcpTools: [], // MCP-02: mcpTools vazio → bindTools ainda recebe 4 tools nativas (com respond)
+      mcpTools: [], // MCP-02: mcpTools vazio → bindTools recebe 5 tools nativas (Phase 23: +search_knowledge)
     };
     mod.sdrBrain.buildGraph(ctx as any);
-    // Verificar que bindTools foi chamado 1 vez com array de 4 tools (Fase 16: +respond tool)
+    // Verificar que bindTools foi chamado 1 vez com array de 5 tools (Phase 23: +search_knowledge)
     expect(bindToolsMock).toHaveBeenCalledTimes(1);
     const callArgs = (bindToolsMock as any).mock.calls[0][0] as Array<{ name: string }>;
-    expect(callArgs).toHaveLength(4);
+    expect(callArgs).toHaveLength(5);
     const toolNames = callArgs.map((t) => t.name);
     expect(toolNames).toContain("qualify_lead");
     expect(toolNames).toContain("pause_session");
     expect(toolNames).toContain("finish_conversation");
+    expect(toolNames).toContain("search_knowledge"); // D-01 (Phase 23): RAG-02/RAG-03
     expect(toolNames).toContain("respond");
   });
 
-  test("sdrBrain.tools[] permanece com 1 tool qualify_lead (D-05 — tools[] é campo estático)", async () => {
+  test("sdrBrain.tools[] tem 2 tools: qualify_lead e search_knowledge (D-02, D-03 Phase 23)", async () => {
     const mod = await import("../../brain.js");
-    // D-05: standard tools NÃO entram em sdrBrain.tools[] — são bound diretamente no buildGraph()
-    expect(mod.sdrBrain.tools).toHaveLength(1);
-    expect(mod.sdrBrain.tools[0].name).toBe("qualify_lead");
+    // D-02 (Phase 23): search_knowledge entra em sdrBrain.tools[] como schema estático declarativo
+    // para manter o contrato IBrain completo e auto-documentado
+    expect(mod.sdrBrain.tools).toHaveLength(2);
+    const toolNames = mod.sdrBrain.tools.map((t: any) => t.name);
+    expect(toolNames).toContain("qualify_lead");
+    expect(toolNames).toContain("search_knowledge");
   });
 });
 
@@ -148,7 +154,7 @@ describe("BrainSDR — nó llm seta brainOutput (D-09, D-10, PARSER-03)", () => 
 });
 
 describe("BrainSDR — MCP tools integration (MCP-02, D-03)", () => {
-  test("buildGraph(ctx) com ctx.mcpTools=[mockTool] chama bindTools com 5 tools (3 nativas + respond + 1 MCP)", async () => {
+  test("buildGraph(ctx) com ctx.mcpTools=[mockTool] chama bindTools com 6 tools (4 nativas + respond + search_knowledge + 1 MCP)", async () => {
     const mod = await import("../../brain.js");
     const bindToolsMock = mock(() => ({
       invoke: mock(async () => ({ content: "resposta", tool_calls: [] })),
@@ -163,16 +169,17 @@ describe("BrainSDR — MCP tools integration (MCP-02, D-03)", () => {
       prompts: { system: "s", qualification: "q" },
       tools: [],
       sql: {} as any,
-      mcpTools: [fakeMcpTool], // MCP-02: 1 tool MCP → bindTools deve receber 5 no total (Fase 16: +respond)
+      mcpTools: [fakeMcpTool], // MCP-02: 1 tool MCP → bindTools deve receber 6 no total (Phase 23: +search_knowledge)
     };
     (mod.sdrBrain as any).buildGraph(ctx as any);
     const callArgs = (bindToolsMock as any).mock.calls[0][0] as Array<{ name: string }>;
-    expect(callArgs).toHaveLength(5);
+    expect(callArgs).toHaveLength(6); // Phase 23: 5 nativas + 1 MCP
     const toolNames = callArgs.map((t: any) => t.name);
     expect(toolNames).toContain("mcp_fake_tool");
     expect(toolNames).toContain("qualify_lead");
     expect(toolNames).toContain("pause_session");
     expect(toolNames).toContain("finish_conversation");
+    expect(toolNames).toContain("search_knowledge"); // D-01 (Phase 23): RAG-02/RAG-03
     expect(toolNames).toContain("respond");
   });
 });
