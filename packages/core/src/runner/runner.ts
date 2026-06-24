@@ -88,6 +88,10 @@ export class BrainRunner {
   private readonly mcpSessionTtlMs =
     parseInt(process.env.MCP_SESSION_TTL_MS ?? "240000", 10);
 
+  // WR-03: Salvo como campo para remoção em close() — evita acúmulo de listeners em
+  // chamadas múltiplas de init() (ex: testes ou reinicializações).
+  private _sigtermHandler: (() => Promise<void>) | null = null;
+
   constructor(options: BrainRunnerOptions) {
     this.brain = options.brain;
     this.sql = options.sql;
@@ -174,16 +178,25 @@ export class BrainRunner {
         { brainId: this.brain.id, brainType: this.brain.brainType, hasFupUrl: true },
         "FupScheduler started"
       );
+    } else if (fupWebhookUrl && !this.checkpointer) {
+      // WR-01: Visibilidade operacional — checkpointer null impede FupScheduler de iniciar.
+      // Sem esse log, operador configura FUP_WEBHOOK_URL e não recebe nenhum feedback.
+      this.logger.warn(
+        { brainType: this.brain.brainType, hasFupUrl: true },
+        "FupScheduler not started — checkpointer unavailable"
+      );
     }
 
     // D-05, MCP-05: Auto-registrar SIGTERM handler — SDK cuida do shutdown transparentemente.
     // Registrado APÓS _compileGraph() para garantir que mcpClient está pronto quando SIGTERM chegar.
     // Apps (index.ts) NÃO precisam adicionar SIGTERM handlers.
-    process.on('SIGTERM', async () => {
+    // WR-03: handler salvo como campo para remoção em close() — evita acúmulo de listeners
+    this._sigtermHandler = async () => {
       this.logger.info({ brainId: this.brain.id }, 'SIGTERM received — shutting down cleanly');
       await this.close();
       process.exit(0);
-    });
+    };
+    process.on('SIGTERM', this._sigtermHandler);
 
     this.logger.info({ brainId: this.brain.id }, "BrainRunner initialized");
   }
@@ -381,6 +394,11 @@ export class BrainRunner {
    * Chamado pelo handler SIGTERM registrado em init().
    */
   async close(): Promise<void> {
+    // WR-03: Remover SIGTERM handler — evita acúmulo de listeners em reinicializações
+    if (this._sigtermHandler) {
+      process.off('SIGTERM', this._sigtermHandler);
+      this._sigtermHandler = null;
+    }
     if (this.mcpClient) {
       await this.mcpClient.close();
       this.mcpClient = null;
