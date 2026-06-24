@@ -93,7 +93,7 @@ Uma infraestrutura de agentes modular onde novos Brains são criados definindo a
 
 ## Context
 
-**v1.4 (in progress):** Phase 21 complete (2026-06-24) — RAG implementado: POST /api/v1/ingest (chunker recursivo + pgvector batch), cosine search multi-coleção, `createSearchKnowledgeTool` factory, brain-sdr integrado. 4 requirement IDs (RAG-01..04) validados. Phase 22 (FUP Automático) em andamento.
+**v1.4 (in progress):** Phase 24 complete (2026-06-24) — Tech debt cleanup: WR-01 (warning checkpointer null), WR-02 (updatedAt em resetFup), WR-03 (SIGTERM listener cleanup), WR-04 (delay 1s entre retries FupScheduler), SC-5 (TypeScript zero-error). REQUIREMENTS.md: RAG-02/03 marcados Complete. Phase 25 (fup-activation) é próxima.
 
 **v1.3 (shipped 2026-06-16):** 4 fases (14-17), 9 planos, 92 commits, 145 arquivos (+14.132 / -1.051 linhas), 2 dias. MCP Integration via `@langchain/mcp-adapters`; schema-as-tool pattern para responseMode dinâmico; token usage acumulado via BrainStateAnnotation (sum reducer) e exposto em HTTP + RabbitMQ log.
 
