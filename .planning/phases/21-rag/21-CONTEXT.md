@@ -19,7 +19,9 @@ Não inclui: HNSW index (criado manualmente pós-ingestão), re-indexação por 
 
 - **D-01:** Tamanho de chunk: 1000 chars, overlap de 200 chars — hardcoded, sem ENV configurável (YAGNI).
 - **D-02:** Método de split: recursivo — divide primeiro por `\n\n` (parágrafo), depois `\n` (linha), depois espaço/chars. Preserva unidades de significado sem cortar sentenças no meio. Padrão do LangChain `RecursiveCharacterTextSplitter`.
-- **D-03:** Re-ingestão da mesma coleção = DELETE WHERE collection + re-insert todos os chunks (decisão D-07 da Phase 19 — confirmada).
+- **D-03:** Re-ingestão da mesma coleção = `DELETE WHERE collection AND embedding_model = current_model` + re-insert. Chunks de modelos diferentes na mesma coleção são preservados no banco — não são apagados ao trocar de modelo.
+- **D-03a:** `search_knowledge` filtra `WHERE embedding_model = current_model` (lido do ENV `EMBEDDING_MODEL`) antes de calcular similaridade. Ao trocar de modelo, chunks antigos ficam no banco mas são automaticamente excluídos dos resultados de busca — sem necessidade de apagar manualmente.
+- **D-03b:** Tradeoff aceito: chunks de modelos antigos acumulam storage. Para o volume de RAG de um Brain SDR isso é aceitável. Limpeza manual é opcional via RAG-F02 (futuro).
 
 ### Localização da Arquitetura
 
