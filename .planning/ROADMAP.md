@@ -132,7 +132,10 @@ Plans:
   1. `buildGraph()` em `apps/brain-sdr/src/brain.ts` instancia `createSearchKnowledgeTool(ctx.sql!)` e adiciona ao `bindTools()` e ao `ToolNode`
   2. O LLM pode chamar `search_knowledge` e receber trechos ordenados por similaridade — fluxo RAG end-to-end funcional
   3. Teste de integração confirma que o LLM recebe chunks relevantes ao consultar uma coleção previamente ingerida
-**Plans**: TBD
+**Plans**: 1 plan
+
+Plans:
+- [ ] 23-01-PLAN.md — Wiring de createSearchKnowledgeTool em buildGraph() + testes unitários atualizados
 
 ### Phase 24: Tech Debt & Tracker Cleanup
 **Goal**: Corrigir debt técnico acumulado de v1.4 — WR-01..WR-04 no FupScheduler, 4 erros TypeScript pré-existentes em packages/core, e atualizar REQUIREMENTS.md tracker para refletir estado real do código
@@ -187,7 +190,7 @@ Plans:
 | 20. Tool Events | v1.4 | 2/1 | Complete   | 2026-06-23 |
 | 21. RAG | v1.4 | 3/3 | Complete    | 2026-06-24 |
 | 22. FUP Automático | v1.4 | 3/2 | Complete   | 2026-06-24 |
-| 23. RAG Wiring Fix | v1.4 | 0/TBD | Planned | — |
+| 23. RAG Wiring Fix | v1.4 | 0/1 | Planned | — |
 | 24. Tech Debt & Tracker Cleanup | v1.4 | 0/TBD | Planned | — |
 | 25. FUP Activation Trigger | v1.4 | 0/TBD | Planned | — |
 
