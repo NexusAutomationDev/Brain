@@ -57,6 +57,8 @@ describe("LeadService.resetFup()", () => {
     expect("fupEnabled" in setPayload!).toBe(false);
     // iaAtivada NÃO deve estar presente
     expect("iaAtivada" in setPayload!).toBe(false);
+    // WR-02: updatedAt deve estar presente e ser Date
+    expect(setPayload!.updatedAt).toBeInstanceOf(Date);
   });
 
   test("FUP-06: resetFup com uniqueId inexistente não lança erro (update sem rows é noop no Drizzle)", async () => {

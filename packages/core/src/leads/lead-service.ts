@@ -132,7 +132,9 @@ export class LeadService {
   async resetFup(uniqueId: string): Promise<void> {
     await this.db
       .update(leads)
-      .set({ fupNextAt: null, fupStep: 0 })  // D-19: fupEnabled intencionalmente ausente
+      // WR-02: updatedAt incluído para consistência com setFullpp() e setIaAtivada().
+      // fupEnabled intencionalmente ausente — D-19: lead permanece elegível para novo ciclo.
+      .set({ fupNextAt: null, fupStep: 0, updatedAt: new Date() })
       .where(eq(leads.uniqueId, uniqueId));
   }
 }
