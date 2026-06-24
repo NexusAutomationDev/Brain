@@ -58,7 +58,7 @@
 - [x] **Phase 19: Database Foundation** - Migration única com todas as tabelas e colunas necessárias para RAG, Tool Events e FUP (completed 2026-06-23)
 - [x] **Phase 20: Tool Events** - Canal de saída separado publicando resultado de cada tool via webhook ou RabbitMQ (completed 2026-06-23)
 - [ ] **Phase 21: RAG** - Base de conhecimento semântica com ingest endpoint e tool search_knowledge
-- [ ] **Phase 22: FUP Automático** - Scheduler que detecta leads silenciosos e envia follow-ups personalizados
+- [x] **Phase 22: FUP Automático** - Scheduler que detecta leads silenciosos e envia follow-ups personalizados (completed 2026-06-24)
 
 ## Phase Details
 
@@ -111,9 +111,9 @@
 **Plans**: 3 plans
 
 Plans:
-- [ ] 22-01-PLAN.md — Migration 0008 + schema Drizzle para fup_failure_count
-- [ ] 22-02-PLAN.md — FupScheduler (classe + lógica de negócio + testes unitários)
-- [ ] 22-03-PLAN.md — Integração BrainRunner + LeadService.resetFup() + barrel export + schema push
+- [x] 22-01-PLAN.md — Migration 0008 + schema Drizzle para fup_failure_count
+- [x] 22-02-PLAN.md — FupScheduler (classe + lógica de negócio + testes unitários)
+- [x] 22-03-PLAN.md — Integração BrainRunner + LeadService.resetFup() + barrel export + schema push
 
 ## Progress
 
@@ -142,7 +142,7 @@ Plans:
 | 19. Database Foundation | v1.4 | 2/2 | Complete    | 2026-06-23 |
 | 20. Tool Events | v1.4 | 2/1 | Complete   | 2026-06-23 |
 | 21. RAG | v1.4 | 0/? | Not started | — |
-| 22. FUP Automático | v1.4 | 0/3 | Not started | — |
+| 22. FUP Automático | v1.4 | 3/2 | Complete   | 2026-06-24 |
 
 ## Backlog
 
@@ -153,7 +153,7 @@ Plans:
 **Context:** Hoje o brain-sdr sempre retorna `responseMode: "text"`. O system prompt contém o bloco `<response_format>` como referência comportamental (o LLM conhece os modos), mas sem um mecanismo de saída estruturada o LLM não consegue sinalizar `"audio"` quando o usuário pede. A solução correta é usar `response_format` (OpenAI) ou `generationConfig.responseMimeType` (Google) no nível da API — não instrução de prompt.
 
 **Requirements:** TBD
-**Plans:** 2/1 plans complete
+**Plans:** 3/2 plans complete
 
 Plans:
 - [ ] TBD (promote with /gsd-review-backlog when ready)
