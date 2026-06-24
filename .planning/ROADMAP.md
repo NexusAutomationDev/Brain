@@ -59,7 +59,7 @@
 - [x] **Phase 20: Tool Events** - Canal de saída separado publicando resultado de cada tool via webhook ou RabbitMQ (completed 2026-06-23)
 - [x] **Phase 21: RAG** - Base de conhecimento semântica com ingest endpoint e tool search_knowledge (completed 2026-06-24)
 - [x] **Phase 22: FUP Automático** - Scheduler que detecta leads silenciosos e envia follow-ups personalizados (completed 2026-06-24)
-- [ ] **Phase 23: RAG Wiring Fix** - Vincular createSearchKnowledgeTool ao LLM em brain-sdr/brain.ts — fecha RAG-02, RAG-03
+- [x] **Phase 23: RAG Wiring Fix** - Vincular createSearchKnowledgeTool ao LLM em brain-sdr/brain.ts — fecha RAG-02, RAG-03 (completed 2026-06-24)
 - [ ] **Phase 24: Tech Debt & Tracker Cleanup** - Corrigir WR-01..WR-04, 4 erros TypeScript, atualizar REQUIREMENTS.md tracker
 - [ ] **Phase 25: FUP Activation Trigger** - Ativar fup_enabled automaticamente ao criar/configurar lead para FUP disparar sem intervenção manual
 
@@ -135,7 +135,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 23-01-PLAN.md — Wiring de createSearchKnowledgeTool em buildGraph() + testes unitários atualizados
+- [x] 23-01-PLAN.md — Wiring de createSearchKnowledgeTool em buildGraph() + testes unitários atualizados
 
 ### Phase 24: Tech Debt & Tracker Cleanup
 **Goal**: Corrigir debt técnico acumulado de v1.4 — WR-01..WR-04 no FupScheduler, 4 erros TypeScript pré-existentes em packages/core, e atualizar REQUIREMENTS.md tracker para refletir estado real do código
@@ -190,7 +190,7 @@ Plans:
 | 20. Tool Events | v1.4 | 2/1 | Complete   | 2026-06-23 |
 | 21. RAG | v1.4 | 3/3 | Complete    | 2026-06-24 |
 | 22. FUP Automático | v1.4 | 3/2 | Complete   | 2026-06-24 |
-| 23. RAG Wiring Fix | v1.4 | 0/1 | Planned | — |
+| 23. RAG Wiring Fix | v1.4 | 1/1 | Complete    | 2026-06-24 |
 | 24. Tech Debt & Tracker Cleanup | v1.4 | 0/TBD | Planned | — |
 | 25. FUP Activation Trigger | v1.4 | 0/TBD | Planned | — |
 
@@ -203,7 +203,7 @@ Plans:
 **Context:** Hoje o brain-sdr sempre retorna `responseMode: "text"`. O system prompt contém o bloco `<response_format>` como referência comportamental (o LLM conhece os modos), mas sem um mecanismo de saída estruturada o LLM não consegue sinalizar `"audio"` quando o usuário pede. A solução correta é usar `response_format` (OpenAI) ou `generationConfig.responseMimeType` (Google) no nível da API — não instrução de prompt.
 
 **Requirements:** TBD
-**Plans:** 3/3 plans complete
+**Plans:** 1/1 plans complete
 
 Plans:
 - [ ] TBD (promote with /gsd-review-backlog when ready)
