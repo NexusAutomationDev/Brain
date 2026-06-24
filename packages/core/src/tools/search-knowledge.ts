@@ -57,8 +57,12 @@ function formatResults(results: ChunkResult[]): string {
  * Anti-pattern evitado: embedding da query ocorre AQUI (não em search.ts) — separação de concerns.
  *
  * @param sql - postgres.js Sql instance do tenant (de BrainBuildContext.sql)
+ * @param searchFn - override de searchKnowledge para testes (opcional)
  */
-export function createSearchKnowledgeTool(sql: Sql) {
+export function createSearchKnowledgeTool(
+  sql: Sql,
+  searchFn: typeof searchKnowledge = searchKnowledge
+) {
   const db = drizzle(sql);
   return tool(
     async (args: { query: string; collections: string[] }) => {
@@ -75,7 +79,7 @@ export function createSearchKnowledgeTool(sql: Sql) {
       const queryVector = await embedder.embedQuery(args.query);
 
       // D-07/D-08/D-09: topK=5 e threshold=0.5 hardcoded — LLM não controla
-      const results = await searchKnowledge(
+      const results = await searchFn(
         db,
         queryVector,
         args.collections,

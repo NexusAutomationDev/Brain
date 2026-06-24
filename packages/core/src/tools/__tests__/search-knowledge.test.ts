@@ -39,15 +39,11 @@ mock.module("@brain-pkg/ai", () => ({
   createEmbeddings: mock(async () => mockEmbedder),
 }));
 
-// Mock de searchKnowledge — controla os resultados retornados
+// Mock de searchKnowledge via DI — evita mock.module que contamina cache entre arquivos
 const mockSearchKnowledge = mock(async () => [
   { id: "c1", content: "Conteúdo sobre FAQ item 1.", collection: "faq", chunkIndex: 1, totalChunks: 3, similarity: 0.9 },
   { id: "c2", content: "Manual de uso do produto.", collection: "manual", chunkIndex: 2, totalChunks: 5, similarity: 0.75 },
 ]);
-
-mock.module("../../rag/search.js", () => ({
-  searchKnowledge: mockSearchKnowledge,
-}));
 
 // WAVE 0: Import falhará com "Cannot find module" — estado RED esperado
 import { createSearchKnowledgeTool } from "../../tools/search-knowledge.js";
@@ -60,27 +56,27 @@ describe("createSearchKnowledgeTool (RAG-02, RAG-03, D-11)", () => {
 
   describe("tool.name", () => {
     it("tool.name === 'search_knowledge'", () => {
-      const tool = createSearchKnowledgeTool({} as never);
+      const tool = createSearchKnowledgeTool({} as never, mockSearchKnowledge as never);
       expect(tool.name).toBe("search_knowledge");
     });
   });
 
   describe("RAG-02: retorno formatado [Coleção: X] chunk N/M", () => {
     it("retorna string formatada com [Coleção: X] quando há resultados", async () => {
-      const tool = createSearchKnowledgeTool({} as never);
+      const tool = createSearchKnowledgeTool({} as never, mockSearchKnowledge as never);
       const result = await tool.invoke({ query: "como usar o produto?", collections: ["faq"] }) as string;
       expect(typeof result).toBe("string");
       expect(result).toContain("[Coleção:");
     });
 
     it("retorna string com separador '---' entre chunks", async () => {
-      const tool = createSearchKnowledgeTool({} as never);
+      const tool = createSearchKnowledgeTool({} as never, mockSearchKnowledge as never);
       const result = await tool.invoke({ query: "informações sobre produto", collections: ["faq", "manual"] }) as string;
       expect(result).toContain("---");
     });
 
     it("inclui conteúdo do chunk na string retornada", async () => {
-      const tool = createSearchKnowledgeTool({} as never);
+      const tool = createSearchKnowledgeTool({} as never, mockSearchKnowledge as never);
       const result = await tool.invoke({ query: "FAQ", collections: ["faq"] }) as string;
       expect(result).toContain("Conteúdo sobre FAQ item 1.");
     });
@@ -89,14 +85,14 @@ describe("createSearchKnowledgeTool (RAG-02, RAG-03, D-11)", () => {
   describe("D-11: string quando array vazio", () => {
     it("retorna string 'Nenhum resultado encontrado...' quando array vazio (D-11)", async () => {
       mockSearchKnowledge.mockImplementationOnce(async () => []);
-      const tool = createSearchKnowledgeTool({} as never);
+      const tool = createSearchKnowledgeTool({} as never, mockSearchKnowledge as never);
       const result = await tool.invoke({ query: "pergunta sem resultado", collections: ["faq"] }) as string;
       expect(result).toContain("Nenhum resultado encontrado");
     });
 
     it("não lança exception quando não há resultados (D-11)", async () => {
       mockSearchKnowledge.mockImplementationOnce(async () => []);
-      const tool = createSearchKnowledgeTool({} as never);
+      const tool = createSearchKnowledgeTool({} as never, mockSearchKnowledge as never);
       await expect(
         tool.invoke({ query: "sem resultados", collections: ["faq"] })
       ).resolves.toBeDefined();
@@ -105,14 +101,14 @@ describe("createSearchKnowledgeTool (RAG-02, RAG-03, D-11)", () => {
 
   describe("RAG-03: aceita múltiplas collections", () => {
     it("tool aceita collections array com múltiplos elementos", async () => {
-      const tool = createSearchKnowledgeTool({} as never);
+      const tool = createSearchKnowledgeTool({} as never, mockSearchKnowledge as never);
       await expect(
         tool.invoke({ query: "busca ampla", collections: ["faq", "manual", "produtos"] })
       ).resolves.toBeDefined();
     });
 
     it("passa todas as collections para searchKnowledge", async () => {
-      const tool = createSearchKnowledgeTool({} as never);
+      const tool = createSearchKnowledgeTool({} as never, mockSearchKnowledge as never);
       await tool.invoke({ query: "busca", collections: ["col-a", "col-b"] });
       expect(mockSearchKnowledge).toHaveBeenCalled();
       const callArgs = mockSearchKnowledge.mock.calls[0] as [unknown, unknown, string[], string];
@@ -124,14 +120,14 @@ describe("createSearchKnowledgeTool (RAG-02, RAG-03, D-11)", () => {
 
   describe("Zod: validação de schema", () => {
     it("tool rejeita collections: [] (min(1))", async () => {
-      const tool = createSearchKnowledgeTool({} as never);
+      const tool = createSearchKnowledgeTool({} as never, mockSearchKnowledge as never);
       await expect(
         tool.invoke({ query: "busca", collections: [] })
       ).rejects.toBeDefined();
     });
 
     it("tool rejeita chamada sem query", async () => {
-      const tool = createSearchKnowledgeTool({} as never);
+      const tool = createSearchKnowledgeTool({} as never, mockSearchKnowledge as never);
       await expect(
         // @ts-expect-error — testando schema inválido
         tool.invoke({ collections: ["faq"] })

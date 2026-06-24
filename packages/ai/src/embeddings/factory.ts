@@ -11,6 +11,26 @@ const DEFAULT_MODELS: Record<string, string> = {
 };
 
 /**
+ * D-14/D-17: Resolve o modelo de embedding pelo provider e env vars.
+ * Exportado para testes de unidade da lógica de seleção de modelo.
+ */
+export function resolveEmbeddingModel(provider?: string): string {
+  if (process.env.EMBEDDING_MODEL) return process.env.EMBEDDING_MODEL;
+  const p = provider ?? process.env.LLM_PROVIDER ?? "openai";
+  return DEFAULT_MODELS[p] ?? "text-embedding-3-small";
+}
+
+/**
+ * D-06: Parse EMBEDDING_DIMENSIONS env var (sem hardcode).
+ * Exportado para testes de unidade — garante que não há 1536 hardcoded.
+ */
+export function parseDimensions(): number | undefined {
+  return process.env.EMBEDDING_DIMENSIONS
+    ? parseInt(process.env.EMBEDDING_DIMENSIONS, 10)
+    : undefined;
+}
+
+/**
  * AI-04, D-14, D-17: Creates an Embeddings instance configured from env vars.
  *
  * Optional env vars:
@@ -30,10 +50,8 @@ const DEFAULT_MODELS: Record<string, string> = {
 export async function createEmbeddings(): Promise<Embeddings> {
   // D-14: EMBEDDING_MODEL opcional — resolve default por provider se ausente
   const provider = process.env.LLM_PROVIDER || "openai";
-  const model = process.env.EMBEDDING_MODEL ?? DEFAULT_MODELS[provider] ?? "text-embedding-3-small";
-  const dimensions = process.env.EMBEDDING_DIMENSIONS
-    ? parseInt(process.env.EMBEDDING_DIMENSIONS, 10)
-    : undefined;
+  const model = resolveEmbeddingModel(provider);
+  const dimensions = parseDimensions();
   // T-2-03: API_KEY never logged
   const apiKey = process.env.API_KEY;
 
