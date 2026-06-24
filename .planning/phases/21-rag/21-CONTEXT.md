@@ -20,7 +20,7 @@ Não inclui: HNSW index (criado manualmente pós-ingestão), re-indexação por 
 - **D-01:** Tamanho de chunk: 1000 chars, overlap de 200 chars — hardcoded, sem ENV configurável (YAGNI).
 - **D-02:** Método de split: recursivo — divide primeiro por `\n\n` (parágrafo), depois `\n` (linha), depois espaço/chars. Preserva unidades de significado sem cortar sentenças no meio. Padrão do LangChain `RecursiveCharacterTextSplitter`.
 - **D-03:** Re-ingestão da mesma coleção = `DELETE WHERE collection AND embedding_model = current_model` + re-insert. Chunks de modelos diferentes na mesma coleção são preservados no banco — não são apagados ao trocar de modelo.
-- **D-03a:** `search_knowledge` filtra `WHERE embedding_model = current_model` (lido do ENV `EMBEDDING_MODEL`) antes de calcular similaridade. Ao trocar de modelo, chunks antigos ficam no banco mas são automaticamente excluídos dos resultados de busca — sem necessidade de apagar manualmente.
+- **D-03a:** `search_knowledge` filtra `WHERE embedding_model = current_model` (modelo resolvido automaticamente por provider — veja D-14) antes de calcular similaridade. Ao trocar de provedor, chunks antigos ficam no banco mas são automaticamente excluídos dos resultados de busca — sem necessidade de apagar manualmente.
 - **D-03b:** Tradeoff aceito: chunks de modelos antigos acumulam storage. Para o volume de RAG de um Brain SDR isso é aceitável. Limpeza manual é opcional via RAG-F02 (futuro).
 
 ### Localização da Arquitetura
@@ -43,6 +43,16 @@ Não inclui: HNSW index (criado manualmente pós-ingestão), re-indexação por 
   Conteúdo do outro chunk...
   ```
 - **D-11:** Quando sem resultados (coleção vazia ou threshold não atingido): retornar string `"Nenhum resultado encontrado para a consulta nas coleções informadas."` — sem erro/exception.
+
+### Modelo de Embedding por Provedor (Auto-resolução)
+
+- **D-14:** `EMBEDDING_MODEL` ENV é **opcional**. Quando ausente, o sistema resolve o modelo padrão com base no `LLM_PROVIDER`:
+  - `openai` ou `openrouter` → `text-embedding-3-small`
+  - `gemini` → `text-embedding-004`
+  Operador pode sobrescrever com `EMBEDDING_MODEL` se quiser outro modelo.
+- **D-15:** O nome do modelo resolvido (ex: `text-embedding-3-small`) é gravado em `knowledge_chunks.embedding_model` a cada ingestão — rastreia qual modelo gerou cada chunk (RAG-04).
+- **D-16:** **Compatibilidade de dimensão entre provedores:** `text-embedding-3-small` (OpenAI) suporta output de 768 dims via parâmetro; `text-embedding-004` (Google) usa 768 dims por padrão. Para troca de provedor sem re-migrar a coluna de vetor, configurar `EMBEDDING_DIMENSIONS=768`. Com 768, ambos os provedores são compatíveis com a mesma coluna pgvector. Operadores que usam apenas OpenAI podem manter 1536 (default atual).
+- **D-17:** `createEmbeddings()` em `packages/ai/src/embeddings/factory.ts` precisa ser atualizada: remover o `throw` quando `EMBEDDING_MODEL` é ausente e usar os defaults de D-14. **Esta é uma mudança na factory existente**, não um arquivo novo.
 
 ### Ativação da Tool nos Brains
 
