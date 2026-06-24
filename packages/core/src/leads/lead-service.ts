@@ -119,4 +119,20 @@ export class LeadService {
       .set({ lastMessageAt: new Date() })
       .where(eq(leads.uniqueId, uniqueId));
   }
+
+  /**
+   * FUP-06 / D-19: Reseta o estado de FUP quando o lead responde.
+   * Seta fup_next_at = NULL e fup_step = 0.
+   * fup_enabled permanece true — lead continua elegível para novo ciclo se silenciar novamente.
+   *
+   * Chamado por BrainRunner.run() após touchLastMessage(), antes do gate ia_ativada.
+   *
+   * @param uniqueId - lead.uniqueId (IDLead canonical)
+   */
+  async resetFup(uniqueId: string): Promise<void> {
+    await this.db
+      .update(leads)
+      .set({ fupNextAt: null, fupStep: 0 })  // D-19: fupEnabled intencionalmente ausente
+      .where(eq(leads.uniqueId, uniqueId));
+  }
 }
