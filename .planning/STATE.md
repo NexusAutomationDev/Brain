@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: RAG + Eventos de Tools + FUP Automático
 status: planning
-stopped_at: "Roadmap v1.4 criado — próximo passo: `/gsd-plan-phase 19`"
-last_updated: "2026-06-23T22:10:23.075Z"
+stopped_at: "Phase 20 completa — discuss-phase 22 concluído — próximo passo: `/gsd-plan-phase 21` ou `/gsd-plan-phase 22`"
+last_updated: "2026-06-23T00:00:00.000Z"
 last_activity: 2026-06-23
 progress:
-  total_phases: 6
-  completed_phases: 1
-  total_plans: 2
-  completed_plans: 2
-  percent: 100
+  total_phases: 4
+  completed_phases: 2
+  total_plans: 6
+  completed_plans: 6
+  percent: 50
 ---
 
 # Project State
@@ -22,16 +22,16 @@ See: .planning/PROJECT.md (updated 2026-06-23 — milestone v1.4 roadmap created
 
 **Core value:** Infraestrutura de agentes modular onde novos Brains são criados definindo apenas prompts, tools, embeddings e fluxos — sem reescrever a base
 
-**Current focus:** Phase 19 — Database Foundation
+**Current focus:** Phase 21 — RAG (próxima a planejar) | Phase 22 — CONTEXT.md pronto, aguardando planning
 
 ## Current Position
 
-Phase: 20 of 22 (tool events)
+Phase: 21 of 22 (RAG — próxima)
 Plan: Not started
 Status: Ready to plan
 Last activity: 2026-06-23
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [█████░░░░░] 50% (phases 19 e 20 completas)
 
 ## Milestone v1.3 Summary
 
