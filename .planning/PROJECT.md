@@ -171,4 +171,4 @@ Este documento evolui nas transições de fase e marcos de milestone.
 4. Atualizar Context com estado atual
 
 ---
-*Last updated: 2026-06-23 — Phase 19 complete: database foundation for v1.4 (knowledge_chunks, fup_config, FUP columns in leads, touchLastMessage)*
+*Last updated: 2026-06-24 — Phase 23 complete: RAG wiring fix — createSearchKnowledgeTool wired into brain-sdr bindTools() and ToolNode, closes RAG-02 and RAG-03*
