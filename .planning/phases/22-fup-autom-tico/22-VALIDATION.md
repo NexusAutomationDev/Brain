@@ -53,9 +53,8 @@ created: 2026-06-23
 
 ## Wave 0 Requirements
 
-- [ ] `packages/core/src/__tests__/unit/fup/fup-scheduler.test.ts` — stubs para FUP-01, FUP-02, FUP-07, FUP-08
+- [ ] `packages/core/src/__tests__/unit/fup/fup-scheduler.test.ts` — stubs para FUP-01, FUP-02, FUP-07, FUP-08 e EVT-03 (D-16, D-17, D-18)
 - [ ] `packages/core/src/__tests__/unit/fup/fup-business-hours.test.ts` — stubs para FUP-07 (timezone/horário comercial)
-- [ ] `packages/core/src/__tests__/unit/fup/fup-scheduler.test.ts` — cobre EVT-03 (D-16, D-17, D-18): publicação fire-and-forget do evento de FUP via IEventPublisher
 
 *Existing bun test infrastructure covers all phase requirements — no new framework install needed.*
 
