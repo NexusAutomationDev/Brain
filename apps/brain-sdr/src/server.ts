@@ -6,7 +6,7 @@
 import { Hono } from "hono";
 import { createHealthApp } from "@brain-pkg/observability";
 import { createWebhookApp } from "@brain-pkg/transport";
-import { createCoreApp, type BrainRunner } from "@brain-pkg/core";
+import { createCoreApp, createIngestApp, type BrainRunner } from "@brain-pkg/core";
 import type { Sql } from "postgres";
 
 /**
@@ -23,6 +23,7 @@ export function createServer(sql: Sql, runner: BrainRunner): Hono {
   app.route("/", createHealthApp(sql));
   app.route("/", createWebhookApp(runner));
   app.route("/", createCoreApp(runner));
+  app.route("/", createIngestApp(sql)); // RAG-01/D-05: ingest endpoint
 
   return app;
 }

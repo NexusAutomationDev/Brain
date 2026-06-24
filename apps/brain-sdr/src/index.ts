@@ -67,6 +67,7 @@ async function main() {
   // NOTA: sdrBrain.tools[] NÃO inclui estas tools (D-05) — o registro aqui é apenas para o ToolsRegistry
   toolsRegistry.enableTool("sdr", "pause_session");
   toolsRegistry.enableTool("sdr", "finish_conversation");
+  toolsRegistry.enableTool("sdr", "search_knowledge"); // D-12/RAG-02: habilita tool RAG para brain-sdr
 
   const runner = new BrainRunner({ brain: sdrBrain, sql, toolsRegistry });
   await runner.init();
