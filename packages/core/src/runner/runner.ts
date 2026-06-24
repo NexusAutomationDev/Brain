@@ -27,6 +27,8 @@ import type { Lead } from "../leads/lead-service.js";
 import { BrainOutputSchema } from "../output/schema.js";
 import type { IEventPublisher, ToolEvent } from "../events/event-publisher.js";
 import { EventPublisher } from "../events/event-publisher.js";
+import type { IFupScheduler } from "../fup/fup-scheduler.js";
+import { FupScheduler } from "../fup/fup-scheduler.js";
 
 // EVT-02: Whitelist hardcoded como constante de módulo — LLM não pode injetar novo nome via prompt injection (T-20-07)
 const TOOL_EVENTS_WHITELIST = new Set([
@@ -75,6 +77,10 @@ export class BrainRunner {
   private memoryManager: MemoryManager | null = null;
   private mcpClient: MultiServerMCPClient | null = null;
   private eventPublisher: IEventPublisher | null = null;
+  private fupScheduler: IFupScheduler | null = null;
+  // FUP-03/D-12: checkpointer salvo como campo para injeção no FupScheduler
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private checkpointer: any | null = null;
   private leadService!: LeadService; // inicializado no construtor
   // MCP session TTL: n8n fecha a sessão após inatividade; recompilamos antes de expirar.
   // Configurável via MCP_SESSION_TTL_MS ENV (default: 4 min).
@@ -152,6 +158,24 @@ export class BrainRunner {
       }
     }
 
+    // FUP-01 a FUP-08: Inicializar FupScheduler se FUP_WEBHOOK_URL configurado (D-02, D-04)
+    const fupWebhookUrl = process.env.FUP_WEBHOOK_URL?.trim();
+    if (fupWebhookUrl && this.checkpointer) {
+      this.fupScheduler = new FupScheduler({
+        sql: this.sql,
+        brainType: this.brain.brainType,
+        checkpointer: this.checkpointer,
+        eventPublisher: this.eventPublisher,
+        fupWebhookUrl,
+      });
+      await this.fupScheduler.start();
+      // T-22-04: logar apenas presença (hasFupUrl: true), nunca a URL
+      this.logger.info(
+        { brainId: this.brain.id, brainType: this.brain.brainType, hasFupUrl: true },
+        "FupScheduler started"
+      );
+    }
+
     // D-05, MCP-05: Auto-registrar SIGTERM handler — SDK cuida do shutdown transparentemente.
     // Registrado APÓS _compileGraph() para garantir que mcpClient está pronto quando SIGTERM chegar.
     // Apps (index.ts) NÃO precisam adicionar SIGTERM handlers.
@@ -218,6 +242,10 @@ export class BrainRunner {
     // FUP-06 exige que last_message_at seja atualizado a cada mensagem recebida,
     // inclusive quando ia_ativada=false (scheduler de FUP precisa saber o último contato).
     await this.leadService.touchLastMessage(lead.uniqueId);
+
+    // FUP-06 / D-19: Cancelar FUPs pendentes quando lead responde.
+    // Seta fup_next_at=NULL e fup_step=0. fup_enabled permanece true.
+    await this.leadService.resetFup(lead.uniqueId);
 
     // D-04/D-05: Gate ia_ativada — retorna null silenciosamente (LEAD-03)
     // Segurança: iaAtivada vem do banco (upsert), nunca do payload externo
@@ -362,6 +390,11 @@ export class BrainRunner {
       await this.eventPublisher.close();
       this.eventPublisher = null;
     }
+    // FUP-04/D-04: Parar FupScheduler no shutdown
+    if (this.fupScheduler) {
+      await this.fupScheduler.stop();
+      this.fupScheduler = null;
+    }
   }
 
   /** Internal: compile the graph with checkpointer and inject context */
@@ -378,6 +411,8 @@ export class BrainRunner {
       // PostgresSaver needs a connection string — derive from env.
       dbUrl
     );
+    // D-12/Pitfall 6: salvar instância para injetar no FupScheduler em init()
+    this.checkpointer = checkpointer;
 
     // Drizzle db for MemoryManager — uses same postgres.js Sql instance
     const { drizzle } = await import("drizzle-orm/postgres-js");

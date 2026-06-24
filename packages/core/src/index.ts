@@ -35,3 +35,7 @@ export { createRespondTool } from "./tools/respond.js";
 // EVT-01: EventPublisher — canal de saída para eventos de tools
 export type { IEventPublisher, ToolEvent } from "./events/event-publisher.js";
 export { EventPublisher, NoopEventPublisher } from "./events/event-publisher.js";
+
+// FUP-01 a FUP-08: FupScheduler — scheduler background de follow-ups automáticos
+export type { IFupScheduler } from "./fup/fup-scheduler.js";
+export { FupScheduler, getNextValidSlot } from "./fup/fup-scheduler.js";
