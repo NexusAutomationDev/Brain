@@ -149,7 +149,12 @@ Plans:
   4. FupScheduler adiciona delay entre retries — sem 30 calls simultâneos ao LLM em cenário de falha (WR-04)
   5. `bun tsc --noEmit` em packages/core retorna 0 erros (4 erros TypeScript eliminados)
   6. REQUIREMENTS.md com checkboxes e traceability refletindo estado real do código implementado
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 24-01-PLAN.md — WR-01 (warning checkpointer null) + WR-02 (updatedAt em resetFup) + WR-03 (SIGTERM handler cleanup)
+- [ ] 24-02-PLAN.md — WR-04 (delay entre retries no FupScheduler)
+- [ ] 24-03-PLAN.md — SC-5 verificação TypeScript + atualização REQUIREMENTS.md tracker
 
 ### Phase 25: FUP Activation Trigger
 **Goal**: Leads recém-criados ou configurados para FUP têm `fup_enabled` ativado automaticamente — sem necessidade de intervenção manual no banco, tornando o FUP operacional em produção sem setup adicional por lead
@@ -191,7 +196,7 @@ Plans:
 | 21. RAG | v1.4 | 3/3 | Complete    | 2026-06-24 |
 | 22. FUP Automático | v1.4 | 3/2 | Complete   | 2026-06-24 |
 | 23. RAG Wiring Fix | v1.4 | 1/1 | Complete    | 2026-06-24 |
-| 24. Tech Debt & Tracker Cleanup | v1.4 | 0/TBD | Planned | — |
+| 24. Tech Debt & Tracker Cleanup | v1.4 | 0/3 | Planned | — |
 | 25. FUP Activation Trigger | v1.4 | 0/TBD | Planned | — |
 
 ## Backlog
