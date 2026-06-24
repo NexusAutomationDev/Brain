@@ -93,6 +93,8 @@ Uma infraestrutura de agentes modular onde novos Brains são criados definindo a
 
 ## Context
 
+**v1.4 (in progress):** Phase 21 complete (2026-06-24) — RAG implementado: POST /api/v1/ingest (chunker recursivo + pgvector batch), cosine search multi-coleção, `createSearchKnowledgeTool` factory, brain-sdr integrado. 4 requirement IDs (RAG-01..04) validados. Phase 22 (FUP Automático) em andamento.
+
 **v1.3 (shipped 2026-06-16):** 4 fases (14-17), 9 planos, 92 commits, 145 arquivos (+14.132 / -1.051 linhas), 2 dias. MCP Integration via `@langchain/mcp-adapters`; schema-as-tool pattern para responseMode dinâmico; token usage acumulado via BrainStateAnnotation (sum reducer) e exposto em HTTP + RabbitMQ log.
 
 **v1.2 (shipped 2026-06-15):** 4 fases (10-13), 11 planos, 122 commits, 163 arquivos alterados (+13.153 linhas), 2 dias de desenvolvimento. Contrato de saída estruturado entregue em todos os Brains; PgBouncer-compatible desde Phase 13.
