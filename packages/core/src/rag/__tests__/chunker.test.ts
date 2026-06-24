@@ -19,39 +19,39 @@ const paragraphText = [
 
 describe("splitText (D-01, D-02)", () => {
   describe("D-01/D-02: texto curto retorna array com 1 elemento", () => {
-    it("splitText com texto curto retorna array com 1 elemento", () => {
-      const result = splitText("texto curto");
+    it("splitText com texto curto retorna array com 1 elemento", async () => {
+      const result = await splitText("texto curto");
       expect(Array.isArray(result)).toBe(true);
       expect(result.length).toBe(1);
     });
 
-    it("splitText com string vazia retorna array com 0 ou 1 elemento", () => {
-      const result = splitText("");
+    it("splitText com string vazia retorna array com 0 ou 1 elemento", async () => {
+      const result = await splitText("");
       expect(Array.isArray(result)).toBe(true);
     });
 
-    it("splitText retorna o texto original para conteúdos pequenos", () => {
+    it("splitText retorna o texto original para conteúdos pequenos", async () => {
       const shortText = "Texto pequeno sem necessidade de chunking.";
-      const result = splitText(shortText);
+      const result = await splitText(shortText);
       expect(result[0]).toContain("Texto pequeno");
     });
   });
 
   describe("D-01/D-02: texto longo retorna múltiplos chunks", () => {
-    it("splitText de texto longo (>1000 chars) retorna múltiplos chunks", () => {
-      const result = splitText(longText);
+    it("splitText de texto longo (>1000 chars) retorna múltiplos chunks", async () => {
+      const result = await splitText(longText);
       expect(result.length).toBeGreaterThan(1);
     });
 
-    it("cada chunk tem tamanho <= 1000 chars", () => {
-      const result = splitText(longText);
+    it("cada chunk tem tamanho <= 1000 chars", async () => {
+      const result = await splitText(longText);
       for (const chunk of result) {
         expect(chunk.length).toBeLessThanOrEqual(1000);
       }
     });
 
-    it("cobre todo o conteúdo original (union de chunks contém partes do texto)", () => {
-      const result = splitText(longText);
+    it("cobre todo o conteúdo original (union de chunks contém partes do texto)", async () => {
+      const result = await splitText(longText);
       const joined = result.join(" ");
       // O texto original deve ter cobertura nos chunks
       expect(joined.length).toBeGreaterThanOrEqual(longText.length * 0.8);
@@ -59,8 +59,8 @@ describe("splitText (D-01, D-02)", () => {
   });
 
   describe("D-02: overlap entre chunks consecutivos", () => {
-    it("há sobreposição de conteúdo entre chunks consecutivos (overlap ~200 chars)", () => {
-      const result = splitText(longText);
+    it("há sobreposição de conteúdo entre chunks consecutivos (overlap ~200 chars)", async () => {
+      const result = await splitText(longText);
       if (result.length >= 2) {
         // Pegar o final do chunk 0 e o início do chunk 1
         const endOfFirst = result[0].slice(-200);
@@ -73,8 +73,8 @@ describe("splitText (D-01, D-02)", () => {
       }
     });
 
-    it("splitText preserva texto por parágrafo quando possível", () => {
-      const result = splitText(paragraphText);
+    it("splitText preserva texto por parágrafo quando possível", async () => {
+      const result = await splitText(paragraphText);
       expect(Array.isArray(result)).toBe(true);
       expect(result.length).toBeGreaterThan(0);
     });
