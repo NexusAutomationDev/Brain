@@ -23,12 +23,12 @@ Requirements para o milestone v1.4. Cada um mapeia para fases do roadmap.
 
 ### FUP — Follow-up Automático
 
-- [ ] **FUP-01**: Configuração de FUP (intervalos em segundos, hora mínima, hora máxima, dias permitidos, fuso horário IANA) é armazenada em tabela `fup_config` no banco — não em ENV
-- [ ] **FUP-02**: Scheduler background detecta leads silenciosos (last_message_at + limiar via ENV) e processa FUPs usando SELECT FOR UPDATE SKIP LOCKED para segurança em múltiplas instâncias
+- [x] **FUP-01**: Configuração de FUP (intervalos em segundos, hora mínima, hora máxima, dias permitidos, fuso horário IANA) é armazenada em tabela `fup_config` no banco — não em ENV
+- [x] **FUP-02**: Scheduler background detecta leads silenciosos (last_message_at + limiar via ENV) e processa FUPs usando SELECT FOR UPDATE SKIP LOCKED para segurança em múltiplas instâncias
 - [ ] **FUP-03**: Conteúdo de cada FUP é gerado por chamada LLM one-shot usando o histórico da conversa (via PostgresSaver.getTuple) e o prompt "fup" do banco — sem invocar o grafo completo
 - [ ] **FUP-04**: Estado de FUP de cada lead é persistido no banco com colunas fup_step, fup_next_at e fup_enabled na tabela leads — sem estado em memória
 - [ ] **FUP-05**: Ao enviar o último FUP da sequência configurada, o sistema seta ia_ativada = false e fup_enabled = false automaticamente
-- [ ] **FUP-06**: BrainRunner.run() cancela todos os FUPs pendentes e atualiza last_message_at do lead a cada mensagem recebida
+- [x] **FUP-06**: BrainRunner.run() cancela todos os FUPs pendentes e atualiza last_message_at do lead a cada mensagem recebida
 - [ ] **FUP-07**: Se a janela de horário ou dias não permitir envio no momento calculado, o scheduler agenda para o próximo slot válido em vez de descartar
 - [ ] **FUP-08**: Se LLM ou transport falhar ao enviar FUP, o sistema re-tenta até 3 vezes (failure_count) antes de marcar a etapa como falha e logar alerta
 
@@ -80,12 +80,12 @@ Preenchido pelo roadmapper após criação do roadmap.
 | EVT-02 | Phase 20 | Pending |
 | EVT-03 | Phase 20 | Pending |
 | EVT-04 | Phase 20 | Pending |
-| FUP-01 | Phase 22 | Pending |
-| FUP-02 | Phase 22 | Pending |
+| FUP-01 | Phase 22 | Complete |
+| FUP-02 | Phase 22 | Complete |
 | FUP-03 | Phase 22 | Pending |
 | FUP-04 | Phase 19 | Pending |
 | FUP-05 | Phase 22 | Pending |
-| FUP-06 | Phase 19 | Pending |
+| FUP-06 | Phase 19 | Complete |
 | FUP-07 | Phase 22 | Pending |
 | FUP-08 | Phase 22 | Pending |
 
