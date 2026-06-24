@@ -13,21 +13,40 @@ import { StateGraph, END } from "@langchain/langgraph";
 import { ToolNode } from "@langchain/langgraph/prebuilt";
 import { BrainStateAnnotation, extractTokenUsage } from "@brain-pkg/ai";
 import type { IBrain, BrainBuildContext } from "@brain-pkg/core";
-import { createPauseSessionTool, createFinishConversationTool, createRespondTool } from "@brain-pkg/core";
+import { createPauseSessionTool, createFinishConversationTool, createRespondTool, createSearchKnowledgeTool } from "@brain-pkg/core";
 import { qualifyLeadTool, runQualificationAgent } from "./qualifier.js";
 import { createLogger } from "@brain-pkg/observability";
 
 const logger = createLogger();
+
+// Schema estático para sdrBrain.tools[] — campo declarativo IBrain (D-02 Phase 23)
+// NÃO é executado em produção; createSearchKnowledgeTool(ctx.sql!) é a versão bound.
+// Segue o padrão de qualifyLeadTool em qualifier.ts.
+const searchKnowledgeToolSchema = tool(
+  async () => "schema placeholder — não executado diretamente",
+  {
+    name: "search_knowledge",
+    description:
+      "Busca contexto relevante na base de conhecimento. Use quando precisar de informações sobre produtos, FAQs, manuais ou qualquer conteúdo ingerido nas coleções disponíveis.",
+    schema: z.object({
+      query: z.string().min(1).describe("Texto da busca semântica"),
+      collections: z
+        .array(z.string().min(1))
+        .min(1)
+        .describe("Lista de coleções para buscar (mínimo 1)"),
+    }),
+  }
+);
 
 export const sdrBrain: IBrain = {
   id: "brain-sdr",
   brainType: "sdr",
   // D-08: promptKeys obrigatórios — BrainRunner.init() faz process.exit(1) se algum faltar no banco
   promptKeys: ["system", "qualification"],
-  // D-03: Apenas qualify_lead em v1.1 — campo estático para BrainRunner/ToolsRegistry
+  // D-03 (Phase 23): qualify_lead + search_knowledge — campo estático para BrainRunner/ToolsRegistry
   // NOTA: tools[] lista as tools disponíveis para o IBrain.
-  //       Em execução, buildGraph() cria boundQualifyTool com o prompt real do banco.
-  tools: [qualifyLeadTool],
+  //       Em execução, buildGraph() cria boundQualifyTool e boundSearchKnowledgeTool com closures reais.
+  tools: [qualifyLeadTool, searchKnowledgeToolSchema],
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   buildGraph(ctx: BrainBuildContext): any {
     // D-04: boundQualifyTool — closure sobre ctx.prompts["qualification"] (SDR-04)
@@ -64,6 +83,9 @@ export const sdrBrain: IBrain = {
     const boundPauseSessionTool = createPauseSessionTool(ctx.sql!);
     const boundFinishConversationTool = createFinishConversationTool(ctx.sql!);
 
+    // D-01 (Phase 23): search_knowledge bound com closure sobre ctx.sql — RAG-02/RAG-03
+    const boundSearchKnowledgeTool = createSearchKnowledgeTool(ctx.sql!);
+
     // D-09 (Fase 16): respond tool para responseMode dinâmico (schema-as-tool)
     const respondTool = createRespondTool();
 
@@ -74,13 +96,15 @@ export const sdrBrain: IBrain = {
     if (!ctx.llm.bindTools) {
       throw new Error("LLM provider não suporta tool calling — configure um provider compatível (ex: OpenAI, Anthropic, Gemini)");
     }
-    // D-08 (Fase 12): bind com 4 tools nativas + MCP tools injetadas (MCP-02, D-03)
+    // D-08 (Fase 12): bind com tools nativas + MCP tools injetadas (MCP-02, D-03)
     // Fase 16: respondTool adicionada (D-09) — LLM escolhe responseMode dinamicamente
+    // Phase 23: boundSearchKnowledgeTool adicionada (D-01) — RAG-02/RAG-03
     // ctx.mcpTools é sempre array (D-02) — [] quando MCP_URL ausente (sem impacto no comportamento)
     const llmWithTools = ctx.llm.bindTools([
       boundQualifyTool,
       boundPauseSessionTool,
       boundFinishConversationTool,
+      boundSearchKnowledgeTool,  // D-01 (Phase 23): RAG-02/RAG-03
       respondTool,         // D-09 (Fase 16): respond tool para responseMode dinâmico
       ...ctx.mcpTools,    // D-03: MCP tools injetadas pelo BrainRunner; [] quando MCP_URL ausente (D-02)
     ]);
@@ -181,11 +205,12 @@ export const sdrBrain: IBrain = {
           tokenUsage: extractTokenUsage(response),
         };
       })
-      // D-07 (Fase 12): ToolNode com 3 tools nativas + MCP tools (MCP-02, D-03)
+      // D-07 (Fase 12): ToolNode com tools nativas + MCP tools (MCP-02, D-03)
       // Fase 16: respondTool excluída do ToolNode de tools — tem seu próprio nó "respond"
+      // Phase 23: boundSearchKnowledgeTool adicionada ao ToolNode (D-01) — RAG-02/RAG-03
       // D-11, MCP-04: handleToolErrors: true — captura erro de MCP tool, injeta ToolMessage — evita thread corrompido (PITFALL-2)
       .addNode("tools", new ToolNode(
-        [boundQualifyTool, boundPauseSessionTool, boundFinishConversationTool, ...ctx.mcpTools],
+        [boundQualifyTool, boundPauseSessionTool, boundFinishConversationTool, boundSearchKnowledgeTool, ...ctx.mcpTools],
         { handleToolErrors: true }
       ))
       // D-02 (Fase 16): nó respond como nó regular (não ToolNode) — pode setar brainOutput + messages
