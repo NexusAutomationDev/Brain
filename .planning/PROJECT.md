@@ -4,24 +4,15 @@
 
 Plataforma monorepo para construção de agentes de IA especializados (Brains). Cada Brain — SDR, Suporte, Customer Success, etc. — é empacotado como uma imagem Docker independente, mas compartilha o mesmo núcleo de infraestrutura: transport, memória, embeddings, Tools Registry e Brain SDK. O produto é vendido/distribuído para clientes que contratam o Brain adequado ao seu caso de uso.
 
-O primeiro Brain real (SDR) foi entregue no v1.1 — atende leads no WhatsApp com histórico de conversa persistente, gate ia_ativada, sub-agente de qualificação e zero prompts hardcoded.
+O primeiro Brain real (SDR) foi entregue no v1.1 — atende leads no WhatsApp com histórico de conversa persistente, gate ia_ativada, sub-agente de qualificação e zero prompts hardcoded. No v1.4, os Brains ganharam base de conhecimento semântica via RAG (pgvector), canal de saída para eventos de tools (webhook/RabbitMQ) e scheduler de follow-up automático para leads silenciosos.
 
 ## Core Value
 
 Uma infraestrutura de agentes modular onde novos Brains são criados definindo apenas prompts, tools, embeddings e fluxos — sem reescrever a base.
 
-## Current Milestone: v1.4 RAG + Eventos de Tools + FUP Automático
+## Last Milestone: v1.4 RAG + Eventos de Tools + FUP Automático — SHIPPED 2026-06-25
 
-**Goal:** Dar aos Brains base de conhecimento semântica, expor resultados de tools para sistemas externos via canal dedicado, e enviar follow-ups automáticos para leads que param de responder.
-
-**Target features:**
-- RAG: POST /api/v1/ingest (texto → embedding → pgvector por coleção) + tool `search_knowledge` para todos os Brains
-- Eventos de tools: canal de saída separado (webhook ou RabbitMQ via ENV) publicando resultado de cada tool com `{ action, lead, result }`
-- FUP Automático: scheduler que detecta leads silenciosos e envia follow-ups em intervalos configuráveis (segundos), respeitando horário/dias/fuso — com controle de etapa no DB e desativação automática no último FUP
-
-## Previous Milestone: v1.3 MCP Integration + Dynamic responseMode — SHIPPED 2026-06-16
-
-4 fases (14-17), 9 planos, 92 commits, 145 arquivos, +14.132 linhas. MCP Integration + Dynamic responseMode + Token Usage entregues.
+8 fases (19-26), 18 planos, 157 commits, 181 arquivos, +24.233 / -12.268 linhas. RAG semântico + Canal de eventos de tools + FUP Automático com scheduler e geração LLM entregues.
 
 ## Requirements
 
@@ -71,15 +62,35 @@ Uma infraestrutura de agentes modular onde novos Brains são criados definindo a
 - ✓ `routeAfterLlm` + nó `respond`: multi-provider OpenAI + Anthropic sem branching de código (RESP-01, RESP-02, RESP-03) — v1.3
 - ✓ Token Usage Exposure: `tokenUsage` acumulado via `BrainStateAnnotation` (sum reducer), exposto em HTTP response e logado no RabbitMQ consumer — v1.3
 
+**v1.4 — RAG + Eventos de Tools + FUP Automático**
+
+- ✓ RAG-01: POST /api/v1/ingest — chunka, embede (provider configurável) e armazena no pgvector com metadados obrigatórios — v1.4
+- ✓ RAG-02: LLM chama `search_knowledge(query, collections[])` e recebe trechos ordenados por similaridade cosine — v1.4
+- ✓ RAG-03: `search_knowledge` aceita array de coleções e busca em múltiplas simultaneamente em único response — v1.4
+- ✓ RAG-04: Cada chunk registra collection_name, embedding_model, chunk_index e total_chunks como metadados não-nulos — v1.4
+- ✓ EVT-01: Brain publica eventos de tools em canal separado (webhook/RabbitMQ via ENV) sem bloquear o fluxo principal — v1.4
+- ✓ EVT-02: qualify_lead, pause_session e finish_conversation publicam evento `{ action, lead, result }` automaticamente — v1.4
+- ✓ EVT-03: FUP publica evento `{ action: "fup", lead, result: { step, message } }` no canal de saída — v1.4
+- ✓ EVT-04: event_id = `thread_id:tool_call_id` (exceção FUP: `uniqueId:fup:step` — decisão intencional D-17) — v1.4
+- ✓ FUP-01: Configuração de FUP (intervalos, min/max hora, dias, timezone IANA) em tabela `fup_config` no banco — v1.4
+- ~ FUP-02: Scheduler SELECT FOR UPDATE SKIP LOCKED; `fupNextAt` setado no INSERT via `getNextValidSlot()` — v1.4 (código implementado; E2E human verification pendente)
+- ✓ FUP-03: Conteúdo de FUP gerado por LLM one-shot via PostgresSaver.getTuple() usando histórico da conversa — v1.4
+- ✓ FUP-04: Estado FUP persistido em leads: fup_step, fup_next_at, fup_enabled — v1.4
+- ✓ FUP-05: Último FUP seta ia_ativada=false e fup_enabled=false automaticamente — v1.4
+- ✓ FUP-06: BrainRunner.run() cancela FUPs pendentes e atualiza last_message_at a cada mensagem — v1.4
+- ✓ FUP-07: Janela de horário/dias → slot IANA válido calculado por `getNextValidSlot()` — v1.4
+- ✓ FUP-08: Retry até 3x com fup_failure_count; logar alerta após falha — v1.4
+
 ### Active
 
-**Backlog (pós v1.3)**
+**Backlog (pós v1.4)**
 
-- [ ] Arquitetura de memória semântica (embeddings + RAG): busca por similaridade em produção
 - [ ] Outros Brains: Suporte, Customer Success
 - [ ] Sub-agente de qualificação avançada com SPIN/BANT completo
 - [ ] Brain SDR publicando respostas de volta ao RabbitMQ (canal de resposta async)
 - [ ] Resolver TD-03: `BRAIN_TOOLS` whitelist não cobre tools bound diretamente em buildGraph()
+- [ ] responseMode dinâmico via structured output multi-provider (OpenAI + Google) — hoje hardcoded "text" em brain.ts
+- [ ] CI/CD: build + publish imagem Docker do brain-sdr via DockGate (Phase 18 backlog)
 
 ### Out of Scope
 
@@ -93,9 +104,7 @@ Uma infraestrutura de agentes modular onde novos Brains são criados definindo a
 
 ## Context
 
-**v1.4 (in progress):** Phase 26 complete (2026-06-25) — FUP Next-At Init Fix: `upsertLead()` calcula e persiste `fupNextAt = getNextValidSlot(NOW() + intervals_seconds[0], ...)` no INSERT quando `fupEnabled=true`; FupScheduler processa leads novos sem intervenção manual; 4 novos testes unitários; EVT-04 documentado com exceção FUP events. E2E verificado contra brain_test. FUP-02 gap bloqueador fechado.
-
-**v1.4 (in progress):** Phase 25 complete (2026-06-24) — FUP Activation Trigger: `upsertLead()` aceita `brainType?`, consulta `fup_config` em INSERT, ativa `fup_enabled=true` automaticamente; `BrainRunner.run()` passa `this.brain.brainType`; 13 testes unitários (5 novos FUP). Pipeline end-to-end: Brain → BrainRunner → LeadService → fup_config → fup_enabled automático. FUP-01/FUP-02 satisfeitos.
+**v1.4 (shipped 2026-06-25):** 8 fases (19-26), 18 planos, 157 commits, 181 arquivos (+24.233 / -12.268 linhas), 3 dias. RAG com pgvector (POST /api/v1/ingest + search_knowledge tool); canal de eventos de tools (IEventPublisher webhook+RabbitMQ fire-and-forget); FupScheduler background com SELECT FOR UPDATE SKIP LOCKED, geração LLM one-shot via PostgresSaver.getTuple(), IANA timezone slot calculation e retry até 3x. upsertLead() ativa fup_enabled automaticamente via fup_config e calcula fupNextAt no INSERT.
 
 **v1.3 (shipped 2026-06-16):** 4 fases (14-17), 9 planos, 92 commits, 145 arquivos (+14.132 / -1.051 linhas), 2 dias. MCP Integration via `@langchain/mcp-adapters`; schema-as-tool pattern para responseMode dinâmico; token usage acumulado via BrainStateAnnotation (sum reducer) e exposto em HTTP + RabbitMQ log.
 
@@ -107,18 +116,18 @@ Uma infraestrutura de agentes modular onde novos Brains são criados definindo a
 
 Stack validado: Bun + Hono + Drizzle (postgres.js driver) + LangGraph + PostgresSaver + pgvector + Pino + Langfuse + `@langchain/mcp-adapters`.
 
-O Brain SDR tem uma arquitetura com sub-agente de qualificação stateless: o Brain principal conversa com leads e aciona o sub-agente quando chega o momento de qualificar. O sub-agente lê o histórico via PostgresSaver.getTuple() e retorna {qualificado, motivo, proximo_passo}. Toda comunicação de transport é via webhook (TRANSPORT=webhook) ou RabbitMQ (TRANSPORT=rabbitmq), selecionável via ENV. Desde v1.2, toda resposta é `BrainOutput` estruturado. Desde v1.3, Brains conectam a ferramentas externas via MCP e o LLM controla responseMode dinamicamente.
+O Brain SDR tem uma arquitetura com sub-agente de qualificação stateless: o Brain principal conversa com leads e aciona o sub-agente quando chega o momento de qualificar. O sub-agente lê o histórico via PostgresSaver.getTuple() e retorna {qualificado, motivo, proximo_passo}. Toda comunicação de transport é via webhook (TRANSPORT=webhook) ou RabbitMQ (TRANSPORT=rabbitmq), selecionável via ENV. Desde v1.2, toda resposta é `BrainOutput` estruturado. Desde v1.3, Brains conectam a ferramentas externas via MCP e o LLM controla responseMode dinamicamente. Desde v1.4, Brains têm base de conhecimento semântica (RAG), publicam eventos de tools em canal externo e enviam follow-ups automáticos para leads silenciosos.
 
 Brains planejados para o futuro: Suporte, Customer Success, Cobrança, RH, Jurídico, E-commerce, Agendamento.
 
-**Tech debt acumulado (carry-over para v1.4+):**
-- ~~TD-01~~ — resolvido em v1.3 Phase 14
+**Tech debt acumulado (carry-over para v1.5+):**
 - TD-03: `BRAIN_TOOLS` whitelist inerte para tools bound diretamente em `buildGraph()`
 - TD-04: `LeadService.setFullpp()` / `setIaAtivada()` sem callers de produção
 - MEM-03: semantic write path (dead code) — createEmbeddings() nunca chamado
 - OBS-02: transport status ausente no GET /health
-- brain-echo `hasOtherToolCall` guard ausente no nó LLM — non-fatal (last-write-wins reducer mitiga), mas alinha com brain-sdr
-- Phase 15 VALIDATION.md em draft (doc debt)
+- brain-echo `hasOtherToolCall` guard ausente no nó LLM — non-fatal
+- D-16: `vector(1536)` hardcoded na migration 0007 — mismatch se EMBEDDING_DIMENSIONS ENV alterado sem re-migrar
+- FUP-02 human verification pendente: E2E runtime com banco real (código implementado)
 
 ## Constraints
 
@@ -154,6 +163,12 @@ Brains planejados para o futuro: Suporte, Customer Success, Cobrança, RH, Jurí
 | MCP client lifecycle em `_compileGraph()` (v1.3) | Inicializado uma vez por processo, não por request — evita N conexões simultâneas | ✓ Good — SIGTERM limpo em 511ms verificado manualmente |
 | ResponseMode `"undefined"` como valor sentinela (v1.3) | LLM precisa de valor de saída antes de conhecer o responseMode correto — `"undefined"` comunica "não determinado ainda" | ✓ Good — BrainOutputSchema aceita "undefined" como válido; fallback D-10 restaurado em 039330d |
 | BrainStateAnnotation.tokenUsage com sum reducer (v1.3) | ReAct faz múltiplos LLM calls por turno — reducer acumula tokens de todos os nós llm automaticamente | ✓ Good — tokenUsage reflete turno completo, não apenas último call |
+| IEventPublisher como interface + NoopEventPublisher (v1.4) | Brains não devem saber se eventos estão configurados — injeção via BrainRunner.init() mantém zero config no Brain | ✓ Good — Brain SDR não tem nenhuma referência a ENVs de eventos |
+| EVT-03 ownership → Phase 22 (não Phase 20) (v1.4) | FUP events não têm tool_call_id — o campo event_id foi redefinido como exceção documentada (D-17) | ✓ Good — traceability corrigida em Phase 24; gap fechado sem regressão |
+| fupNextAt calculado no INSERT em lead-service (v1.4) | Alternativa era calcular no scheduler tick — inserir no INSERT garante que o lead é elegível imediatamente sem race condition | ✓ Good — Phase 26 fechou gap FUP-02; getNextValidSlot() importado diretamente de fup-scheduler.ts |
+| getNextValidSlot compartilhado via import direto (v1.4) | Evita duplicação de lógica de slot entre FupScheduler e LeadService — mesma função, mesmo comportamento | ✓ Good — D-05 Opção A validada em Phase 26 |
+| resetFup() preserva fupEnabled (v1.4) | Ao receber mensagem, apenas fupNextAt e fupStep são zerados — fup_enabled permanece true para futuros FUPs | ✓ Good — D-19 da Phase 22; lead que responde continua elegível para próximos FUPs |
+| brainType como 4° parâmetro opcional em upsertLead (v1.4) | Backward compatible com callers existentes — brainType só é necessário para ativar FUP automaticamente | ✓ Good — Phase 25 integrou sem quebrar callers anteriores |
 
 ## Evolution
 
@@ -173,4 +188,4 @@ Este documento evolui nas transições de fase e marcos de milestone.
 4. Atualizar Context com estado atual
 
 ---
-*Last updated: 2026-06-25 — Phase 26 complete: FUP next-at init fix — fupNextAt calculado e persistido no INSERT via getNextValidSlot(); gap bloqueador FUP-02 fechado; E2E verificado contra brain_test*
+*Last updated: 2026-06-25 after v1.4 milestone — RAG + Eventos de Tools + FUP Automático shipped*

@@ -206,6 +206,61 @@
 
 ---
 
+## Milestone: v1.4 — RAG + Eventos de Tools + FUP Automático
+
+**Shipped:** 2026-06-25
+**Phases:** 8 (19-26) | **Plans:** 18 | **Timeline:** 3 dias (2026-06-23 → 2026-06-25)
+**Commits:** 157 | **Files changed:** 181 | **Lines:** +24.233 / -12.268
+
+### What Was Built
+
+- Database Foundation (Phase 19): migration 0007 com `knowledge_chunks` (pgvector), `fup_config` (IANA timezone, business hours), colunas FUP em `leads` + `touchLastMessage()` integrado ao BrainRunner
+- Tool Events (Phase 20): `IEventPublisher` com adapters webhook fire-and-forget (AbortSignal 5s) e RabbitMQ confirm; `NoopEventPublisher` como fallback sem config; event_id = `threadId:tool_call_id`
+- RAG (Phase 21): POST /api/v1/ingest com chunker próprio (sem deps) + cosine similarity pgvector + `createSearchKnowledgeTool(sql)` disponível em todos os Brains; 16 testes TDD
+- FUP Automático (Phase 22): `FupScheduler` background com SELECT FOR UPDATE SKIP LOCKED, geração LLM one-shot via `PostgresSaver.getTuple()`, slot IANA via `Intl.DateTimeFormat`, retry 3x com `fup_failure_count`, EVT-03 fire-and-forget
+- RAG Wiring Fix (Phase 23): `createSearchKnowledgeTool(ctx.sql!)` vinculada no Brain SDR `buildGraph()` — RAG end-to-end funcional
+- Tech Debt Cleanup (Phase 24): WR-01..WR-04 corrigidos, 4 erros TypeScript eliminados em packages/core, REQUIREMENTS.md tracker atualizado
+- FUP Activation Trigger (Phase 25): `upsertLead()` ativa `fup_enabled=true` automaticamente via `fup_config` para o `brainType` do Brain; BrainRunner passa `brainType` como 4° parâmetro (backward compatible)
+- FUP Next-At Init Fix (Phase 26): `fupNextAt = getNextValidSlot(NOW() + intervals_seconds[0], config)` calculado e persistido no INSERT — fecha gap bloqueador FUP-02; leads criados com FUP são imediatamente elegíveis
+
+### What Worked
+
+- **Audit v1.4 identificou gaps antes do planejamento terminar**: Phase 23 (RAG Wiring Fix) e Phase 25-26 (FUP Activation + Next-At Fix) foram planejadas como resposta direta ao audit — o loop audit→gap closure→re-audit convergiu em 3 ciclos
+- **Nyquist 8/8 pela primeira vez**: todos os 8 phases com `nyquist_compliant: true` — Wave 0 (test stubs) antes de implementação virou padrão real, não exceção
+- **SELECT FOR UPDATE SKIP LOCKED como solução de multi-instância**: elegante, sem infrastructure adicional (Redis, etc.) — a segurança multi-instância do FupScheduler emergiu diretamente do PostgreSQL já em uso
+- **getNextValidSlot compartilhado por import direto** (não duplicação): Phase 26 reutilizou a função do FupScheduler sem criar abstração desnecessária — pragmatismo > over-engineering
+- **REQUIREMENTS.md tracker atualizado em Phase 24**: pela primeira vez num milestone, os checkboxes foram atualizados sistematicamente durante a execução (Phase 24 tinha o tech debt cleanup explícito como goal)
+- **Chunker próprio sem @langchain/textsplitters**: sem dependência adicional; a implementação de recursive character split foi trivial e mais controlável
+
+### What Was Inefficient
+
+- **8 phases vs 4 planejadas**: o milestone começou com Phases 19-22; acabou com 19-26. Phases 23-26 emergiram de gaps reais encontrados pelo audit — isso é correto (não é scope creep), mas indica que o audit deveria ser planejado como parte do milestone, não uma surpresa após execução
+- **EVT-03 ownership errado na primeira versão do roadmap**: EVT-03 foi mapeado para Phase 20 mas implementado em Phase 22 — a traceability ficou errada até Phase 24 corrigir. O audit v4 encontrou o "gap" que não era gap — ruído desnecessário que custou 1 ciclo extra
+- **fup_failure_count em migration separada (0008)**: deveria ter sido incluído em 0007 desde o início — o FupScheduler claramente precisaria de retry tracking; a migration extra foi tech debt que entrou 1 phase depois do necessário
+- **FUP-02 checkbox nunca fechado** (pela 5ª vez consecutiva): o checkbox de REQUIREMENTS.md foi adicionado como Pending em Phase 24 mas a verification E2E humana nunca aconteceu — a pendência carregou para o archive como tech debt
+
+### Patterns Established
+
+- **Gap closure phases como cidadãos de primeira classe**: Phases 23, 25, 26 foram gap closure phases explícitas — não patches silenciosos. O pattern de nomear e rastrear gap closure phases é correto e deve continuar
+- **IEventPublisher + NoopEventPublisher como padrão de feature opcional**: quando uma feature (eventos, futuramente métricas) é opcional via ENV, o pattern é interface + Noop + injeção no BrainRunner.init() — sem `if (envConfigured)` espalhados pelo código
+- **LeadService como ponto único de mutação de estado de lead**: touchLastMessage, resetFup, upsertLead com fupNextAt — toda lógica de lead state vai para LeadService; BrainRunner apenas delega. Pattern maduro.
+- **Factory + closure para tools que precisam de sql**: padrão `createSearchKnowledgeTool(sql)` = mesmo padrão de v1.2; consistência total em todas as tools do core
+
+### Key Lessons
+
+1. **Audit deve ser planejado como fase do milestone, não descoberta após**: as 4 gap closure phases de v1.4 foram necessárias e corretas, mas o planejamento inicial não previa audit time. Para v1.5, incluir "Phase N: Audit + Gap Closure" explicitamente no roadmap com buffer de 2-3 phases
+2. **E2E human verification precisa de ambiente real configurado antes do milestone terminar**: FUP-02 carregou como tech debt por 2 milestones porque nunca houve momento definido para fazer a verificação com banco real + FupScheduler. Para v1.5, criar task explícita de human verification durante a phase, não depois
+3. **REQUIREMENTS.md checkbox problem resolveu parcialmente em v1.4**: Phase 24 atualizou os checkboxes como goal explícito — funciona quando o tech debt cleanup é uma phase. Para sistematizar, incluir "atualizar REQUIREMENTS.md traceability" como task padrão na conclusão de cada phase (não apenas milestone)
+4. **Migration consolidada antes de múltiplas features é o caminho certo**: Phase 19 entregou 1 migration para 3 features (RAG + EVT + FUP) — sem merge conflicts de schema, sem dependências de ordem de migration entre fases. Padrão a seguir: Database Foundation antes de feature phases
+
+### Cost Observations
+
+- 3 dias para 8 phases foi intenso — as últimas 4 phases (23-26) foram gap closure < 1 phase/dia cada, o que explica a velocidade
+- Sem substituições de library: stack de v1.0 continua 100% válido após v1.4
+- Phase 24 (Tech Debt Cleanup) foi a primeira phase dedicada exclusivamente a corrigir debt acumulado — rendimento alto: WR-01..WR-04 + 4 TS errors + tracker em 3 planos
+
+---
+
 ## Cross-Milestone Trends
 
 | Milestone | Phases | Plans | Timeline | Requirements | E2E |
@@ -214,10 +269,12 @@
 | v1.1 SDR | 5 | 12 | 2 dias | 17/20 satisfied + 3 partial (85%) | 1/2 ✅ (Flow 2 ativado pós-audit) |
 | v1.2 Output Parser | 4 | 11 | 2 dias | 8/8 (100%) | 2/2 ✅ |
 | v1.3 MCP + responseMode | 4 | 9 | 2 dias | 9/9 (100%) | 4/5 ✅ (1 flow com intermediate state pollution não-fatal) |
+| v1.4 RAG + EVT + FUP | 8 (4 planejadas + 4 gap closure) | 18 | 3 dias | 15/16 checkboxes (16/16 código) | 5/5 ✅ (Flow C E2E runtime pendente — human) |
 
 **Trends:**
-- Velocidade estabilizou em ~2 dias por milestone após v1.0; esperado para scopes bem-definidos
-- Cobertura de requisitos: 93% → 85% (v1.1) → 100% (v1.2) → 100% (v1.3) — baseline de 100% estabelecida
-- REQUIREMENTS.md como artefato de tracking: 0/4 milestones com checkboxes atualizados durante execução — padrão consistente de falha; needs systemic fix in v1.4
-- Nyquist compliance: 0% (v1.0) → parcial (v1.1/v1.2) → 3/4 phases compliant (v1.3) — progresso real
-- Tech debt carry-over por milestone: v1.0→v1.1 (TD-01 a TD-04), v1.1→v1.2 (TD-01 resolvido parcialmente), v1.2→v1.3 (TD-01 resolvido), v1.3→v1.4 (TD-03, TD-04, brain-echo guard)
+- Velocidade: 23 dias (v1.0) → ~2 dias/milestone (v1.1-v1.3) → 3 dias (v1.4, +4 gap closure phases não planejadas)
+- Cobertura de requisitos: 93% → 85% → 100% → 100% → 15/16 checkbox (16/16 código) — baseline de 100% implementação mantida
+- REQUIREMENTS.md tracking: 0/4 milestones (v1.0-v1.3) com checkboxes atualizados durante execução → v1.4 resolveu via Phase 24 dedicada; ainda não sistematizado por phase
+- Nyquist compliance: 0% (v1.0) → parcial (v1.1/v1.2) → 3/4 (v1.3) → **8/8 (v1.4)** — maturidade atingida
+- Gap closure phases: orgânicas mas não planejadas — 4/8 phases de v1.4 foram gap closure; necessita de buffer explícito no roadmap de v1.5
+- Tech debt carry-over: v1.3→v1.4 (TD-03, TD-04, brain-echo guard) → v1.4→v1.5 (TD-03, TD-04, D-16, FUP-02 human verify)

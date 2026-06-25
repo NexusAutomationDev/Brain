@@ -1,5 +1,34 @@
 # Milestones
 
+## v1.4 RAG + Eventos de Tools + FUP Automático (Shipped: 2026-06-25)
+
+**Phases completed:** 8 phases (19-26), 18 plans, 157 commits
+**Timeline:** 2026-06-23 → 2026-06-25 (3 days)
+**Files changed:** 181 files, +24.233 / -12.268 linhas
+
+**Key accomplishments:**
+
+1. **Database Foundation** (Phase 19): Migration 0007 com schema completo de v1.4 — tabelas `knowledge_chunks` (pgvector 1536d), `fup_config` (intervalos, timezone IANA, janela horária) e colunas FUP em `leads` (fup_enabled, fup_step, fup_next_at, last_message_at); `LeadService.touchLastMessage()` integrado ao BrainRunner antes do gate ia_ativada (FUP-04, FUP-06)
+2. **Tool Events Canal de Saída** (Phase 20): `IEventPublisher` com dois adapters (webhook fire-and-forget via AbortSignal 5s + RabbitMQ confirm via rabbitmq-client) e `NoopEventPublisher` como fallback — BrainRunner publica ToolMessages da whitelist (qualify_lead, pause_session, finish_conversation) com `event_id = threadId:tool_call_id` (EVT-01..EVT-04)
+3. **RAG — Base de Conhecimento Semântica** (Phase 21): `POST /api/v1/ingest` chunka texto, gera embeddings via provider configurável e armazena em pgvector com metadados (collection_name, embedding_model, chunk_index, total_chunks); `createSearchKnowledgeTool(sql)` faz cosine similarity search em múltiplas coleções — 16 testes TDD (RAG-01..RAG-04)
+4. **FUP Automático** (Phase 22): `FupScheduler` background com SELECT FOR UPDATE SKIP LOCKED (multi-instância safe), geração LLM one-shot via `PostgresSaver.getTuple()`, slot calculation IANA timezone com `Intl.DateTimeFormat`, retry até 3x com `fup_failure_count`, desativação automática no último FUP e EVT-03 fire-and-forget (FUP-01..FUP-08)
+5. **RAG Wiring Fix** (Phase 23): `createSearchKnowledgeTool(ctx.sql!)` vinculado no `buildGraph()` do Brain SDR — `bindTools()` e `ToolNode` com search_knowledge; RAG end-to-end funcional (RAG-02, RAG-03)
+6. **Tech Debt Cleanup** (Phase 24): WR-01..WR-04 corrigidos no FupScheduler (warning null checkpointer, updatedAt em resetFup, SIGTERM handler cleanup, delay 1s entre retries); 4 erros TypeScript eliminados em packages/core; REQUIREMENTS.md tracker atualizado
+7. **FUP Activation Trigger** (Phase 25): `upsertLead()` ativa `fup_enabled = true` automaticamente quando `fup_config` existe no banco para o brainType — FUP opera sem intervenção manual por lead; BrainRunner passa `brainType` como 4° parâmetro (backward compatible)
+8. **FUP Next-At Init Fix** (Phase 26): `upsertLead()` calcula e persiste `fupNextAt = getNextValidSlot(rawNextAt, config)` no INSERT quando fupEnabled=true — fecha gap bloqueador FUP-02; leads criados com FUP são imediatamente elegíveis pelo scheduler
+
+### Known Gaps (Tech Debt)
+
+Documentado no audit `milestones/v1.4-MILESTONE-AUDIT.md` (status: `tech_debt`):
+
+- **FUP-02 checkbox**: `[ ]` em REQUIREMENTS.md — código implementado (Phase 26); E2E runtime com banco real pendente de verificação humana
+- **Human verify (Phase 19)**: Migration 0007 em banco PostgreSQL com leads pré-existentes
+- **Human verify (Phase 22)**: `fup_failure_count` no schema do banco real + FupScheduler startup log com `FUP_WEBHOOK_URL`
+- **Human verify (Phase 26)**: FUP Activation E2E completo com banco real e FupScheduler rodando
+- **D-16** (Baixo): `vector(1536)` hardcoded na migration — mismatch se `EMBEDDING_DIMENSIONS` ENV for alterado sem re-migrar
+
+---
+
 ## v1.3 MCP Integration + Dynamic responseMode (Shipped: 2026-06-16)
 
 **Phases completed:** 4 phases (14-17), 9 plans, 92 commits
