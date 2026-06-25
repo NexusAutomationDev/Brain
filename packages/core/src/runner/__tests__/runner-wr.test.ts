@@ -93,34 +93,6 @@ mock.module("@brain-pkg/database", () => ({
   TenantPoolManager: mock(function () { return {}; }),
 }));
 
-mock.module("../../leads/lead-service.js", () => ({
-  LeadService: mock(function () {
-    return {
-      upsertLead: mock(async () => ({
-        id: "uuid-1",
-        uniqueId: "lead-wr-test",
-        numero: "5511999990001",
-        nome: "Test",
-        iaAtivada: true,
-        fullpp: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      })),
-      touchLastMessage: mock(async () => {}),
-      resetFup: mock(async () => {}),
-    };
-  }),
-}));
-
-// Mock FupScheduler — capture start/stop calls
-const mockFupStart = mock(async () => {});
-const mockFupStop = mock(async () => {});
-mock.module("../../fup/fup-scheduler.js", () => ({
-  FupScheduler: mock(function () {
-    return { start: mockFupStart, stop: mockFupStop };
-  }),
-}));
-
 mock.module("../../events/event-publisher.js", () => ({
   EventPublisher: mock(function () {
     return { init: mock(async () => {}), publish: mock(async () => {}), close: mock(async () => {}) };
@@ -205,10 +177,10 @@ describe("WR-01: BrainRunner.init() warns when FUP_WEBHOOK_URL set but checkpoin
     await runner.close();
   });
 
-  it("init() does NOT call logger.warn about checkpointer when FUP_WEBHOOK_URL is set and checkpointer is available", async () => {
-    // Arrange: checkpointer returns a real saver (default mock — not null)
-    process.env.FUP_WEBHOOK_URL = "https://example.com/fup";
-    // mockCreateCheckpointer returns mockMemorySaver by default — checkpointer is truthy
+  it("init() does NOT call logger.warn about checkpointer when FUP_WEBHOOK_URL is absent (even with checkpointer null)", async () => {
+    // Arrange: no FUP_WEBHOOK_URL — neither branch of the if/else-if fires
+    delete process.env.FUP_WEBHOOK_URL;
+    mockCreateCheckpointer.mockImplementationOnce(async () => null);
 
     const runner = new BrainRunner({
       brain: makeBrain(),
