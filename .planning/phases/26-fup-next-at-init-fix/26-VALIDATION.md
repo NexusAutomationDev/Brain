@@ -1,10 +1,11 @@
 ---
 phase: 26
 slug: fup-next-at-init-fix
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: complete
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-06-25
+audited: 2026-06-25
 ---
 
 # Phase 26 — Validation Strategy
@@ -38,10 +39,10 @@ created: 2026-06-25
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 26-01-01 | 01 | 0 | FUP-02 | — | N/A | unit | `bun test packages/core/src/__tests__/unit/fup/lead-service-fup.test.ts` | ⚠️ W0 (novos testes) | ⬜ pending |
-| 26-01-02 | 01 | 1 | FUP-02 | — | N/A | unit | `bun test packages/core/src/__tests__/unit/fup/lead-service-fup.test.ts` | ✅ (após W0) | ⬜ pending |
-| 26-01-03 | 01 | 1 | FUP-02 | — | N/A | unit | `bun test packages/core/src/__tests__/unit/fup/` | ✅ (após W0) | ⬜ pending |
-| 26-01-04 | 01 | 1 | FUP-02 | — | N/A | manual | — | ✅ linha 222 fup-scheduler.ts | ⬜ pending |
+| 26-01-01 | 01 | 0 | FUP-02 | — | N/A | unit | `bun test packages/core/src/__tests__/unit/fup/lead-service-fup.test.ts` | ✅ | ✅ green |
+| 26-01-02 | 01 | 1 | FUP-02 | — | N/A | unit | `bun test packages/core/src/__tests__/unit/fup/lead-service-fup.test.ts` | ✅ | ✅ green |
+| 26-01-03 | 01 | 1 | FUP-02 | — | N/A | unit | `bun test packages/core/src/__tests__/unit/fup/` | ✅ | ✅ green |
+| 26-01-04 | 01 | 1 | FUP-02 | — | N/A | manual | — | ✅ linha 223 fup-scheduler.ts | ✅ verified |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -49,31 +50,44 @@ created: 2026-06-25
 
 ## Wave 0 Requirements
 
-- [ ] `packages/core/src/__tests__/unit/fup/lead-service-fup.test.ts` — adicionar testes para comportamento de `fupNextAt` no INSERT:
-  - `upsertLead() com fupEnabled=true persiste fupNextAt como Date (não null)`
-  - `upsertLead() com fupEnabled=false mantém fupNextAt=null`
-  - `upsertLead() em UPDATE não altera fupNextAt existente`
-  - `upsertLead() com intervals_seconds=[] mantém fupNextAt=null (guard)`
+- [x] `packages/core/src/__tests__/unit/fup/lead-service-fup.test.ts` — testes para comportamento de `fupNextAt` no INSERT:
+  - [x] `upsertLead() com fupEnabled=true persiste fupNextAt como Date (não null)`
+  - [x] `upsertLead() com fupEnabled=false mantém fupNextAt=null`
+  - [x] `upsertLead() em UPDATE não altera fupNextAt existente`
+  - [x] `upsertLead() com intervals_seconds=[] mantém fupNextAt=null (guard)`
 
-*Arquivo já existe (testa resetFup) — apenas novos casos serão adicionados.*
+*4 testes adicionados em describe "LeadService.upsertLead() — fupNextAt no INSERT".*
 
 ---
 
 ## Manual-Only Verifications
 
-| Behavior | Requirement | Why Manual | Test Instructions |
-|----------|-------------|------------|-------------------|
-| Comment EVT-04 em fup-scheduler.ts documenta divergência de `event_id` | FUP-02 / D-07 | Comment de código não é verificável por suite | Ler linha ~222 de `packages/core/src/fup/fup-scheduler.ts` e confirmar que documenta `event_id = uniqueId:fup:step` como divergência intencional de `thread_id:tool_call_id` |
+| Behavior | Requirement | Why Manual | Test Instructions | Verified |
+|----------|-------------|------------|-------------------|----------|
+| Comment EVT-04 em fup-scheduler.ts documenta divergência de `event_id` | FUP-02 / D-07 | Comment de código não é verificável por suite | Ler linha ~222 de `packages/core/src/fup/fup-scheduler.ts` e confirmar que documenta `event_id = uniqueId:fup:step` como divergência intencional de `thread_id:tool_call_id` | ✅ confirmado (linha 223) |
 
 ---
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 10s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references
+- [x] No watch-mode flags
+- [x] Feedback latency < 10s
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** ✅ APPROVED — 2026-06-25
+
+---
+
+## Validation Audit 2026-06-25
+
+| Metric | Count |
+|--------|-------|
+| Gaps found | 0 |
+| Resolved | 0 |
+| Escalated | 0 |
+| Tasks COVERED | 3 (automated) |
+| Tasks MANUAL | 1 |
+| Test suite result | 24 pass, 0 fail |
