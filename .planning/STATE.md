@@ -4,13 +4,13 @@ milestone: v1.4
 milestone_name: RAG + Eventos de Tools + FUP Automático
 status: executing
 stopped_at: Phase 25 context gathered
-last_updated: "2026-06-25T00:46:09.686Z"
-last_activity: 2026-06-24
+last_updated: "2026-06-25T01:42:58.856Z"
+last_activity: 2026-06-25
 progress:
   total_phases: 9
-  completed_phases: 6
-  total_plans: 12
-  completed_plans: 14
+  completed_phases: 7
+  total_plans: 15
+  completed_plans: 17
   percent: 100
 ---
 
@@ -26,10 +26,10 @@ See: .planning/PROJECT.md (updated 2026-06-23 — milestone v1.4 roadmap created
 
 ## Current Position
 
-Phase: 25 of 22 (fup activation)
+Phase: 999.1 of 22 (responsemode dinâmico via structured output multi provider (backlog))
 Plan: Not started
 Status: Ready to execute
-Last activity: 2026-06-24
+Last activity: 2026-06-25
 
 Progress: [█████░░░░░] 50% (phases 19 e 20 completas)
 

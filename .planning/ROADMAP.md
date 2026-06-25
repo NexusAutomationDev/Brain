@@ -61,7 +61,7 @@
 - [x] **Phase 22: FUP Automático** - Scheduler que detecta leads silenciosos e envia follow-ups personalizados (completed 2026-06-24)
 - [x] **Phase 23: RAG Wiring Fix** - Vincular createSearchKnowledgeTool ao LLM em brain-sdr/brain.ts — fecha RAG-02, RAG-03 (completed 2026-06-24)
 - [x] **Phase 24: Tech Debt & Tracker Cleanup** - Corrigir WR-01..WR-04, 4 erros TypeScript, atualizar REQUIREMENTS.md tracker (completed 2026-06-24)
-- [ ] **Phase 25: FUP Activation Trigger** - Ativar fup_enabled automaticamente ao criar/configurar lead para FUP disparar sem intervenção manual
+- [x] **Phase 25: FUP Activation Trigger** - Ativar fup_enabled automaticamente ao criar/configurar lead para FUP disparar sem intervenção manual (completed 2026-06-25)
 
 ## Phase Details
 
@@ -176,9 +176,9 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 25-01-PLAN.md — Test stubs para FUP activation (Wave 0 / Nyquist)
-- [ ] 25-02-PLAN.md — Modificar LeadService.upsertLead() com lógica de ativação condicional via fup_config
-- [ ] 25-03-PLAN.md — Wiring BrainRunner.run() para passar brainType ao upsertLead()
+- [x] 25-01-PLAN.md — Test stubs para FUP activation (Wave 0 / Nyquist)
+- [x] 25-02-PLAN.md — Modificar LeadService.upsertLead() com lógica de ativação condicional via fup_config
+- [x] 25-03-PLAN.md — Wiring BrainRunner.run() para passar brainType ao upsertLead()
 
 ## Progress
 
@@ -210,7 +210,7 @@ Plans:
 | 22. FUP Automático | v1.4 | 3/3 | Complete   | 2026-06-24 |
 | 23. RAG Wiring Fix | v1.4 | 1/1 | Complete    | 2026-06-24 |
 | 24. Tech Debt & Tracker Cleanup | v1.4 | 3/3 | Complete    | 2026-06-24 |
-| 25. FUP Activation Trigger | v1.4 | 0/3 | Planned | — |
+| 25. FUP Activation Trigger | v1.4 | 3/3 | Complete    | 2026-06-25 |
 
 ## Backlog
 
