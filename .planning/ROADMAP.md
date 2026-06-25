@@ -6,7 +6,7 @@
 - ✅ **v1.1 Brain SDR + Infraestrutura Produção** — Phases 5-9 (shipped 2026-06-14) — [archive](milestones/v1.1-ROADMAP.md)
 - ✅ **v1.2 Output Parser + Tool Contracts** — Phases 10-13 (shipped 2026-06-15) — [archive](milestones/v1.2-ROADMAP.md)
 - ✅ **v1.3 MCP Integration + Dynamic responseMode** — Phases 14-17 (shipped 2026-06-16) — [archive](milestones/v1.3-ROADMAP.md)
-- 🚧 **v1.4 RAG + Eventos de Tools + FUP Automático** — Phases 19-22 (in progress)
+- 🚧 **v1.4 RAG + Eventos de Tools + FUP Automático** — Phases 19-25 (in progress)
 
 ## Phases
 
@@ -75,7 +75,11 @@
   3. Tabela `fup_config` existe com colunas de configuração de intervalos, horários, dias e fuso horário
   4. Tabela `leads` possui colunas `fup_enabled`, `fup_step`, `fup_next_at` e `last_message_at`
   5. `BrainRunner.run()` chama `LeadService.touchLastMessage()` a cada mensagem recebida, atualizando `last_message_at` incondicionalmente
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [x] 19-01-PLAN.md — Migration 0007_v1_4_foundation com todas as tabelas (knowledge_chunks, fup_config) e colunas (leads.fup_*)
+- [x] 19-02-PLAN.md — Integrar LeadService.touchLastMessage() no BrainRunner.run() antes do gate ia_ativada
 
 ### Phase 20: Tool Events
 **Goal**: Brains publicam automaticamente o resultado de cada tool relevante em canal de saída separado (webhook ou RabbitMQ), sem bloquear o fluxo principal
@@ -87,8 +91,12 @@
   3. Cada evento carrega `event_id` derivado de `thread_id:tool_call_id` — dois eventos do mesmo tool call produzem o mesmo `event_id`
   4. Publicação de evento nunca bloqueia nem atrasa a resposta do Brain ao lead
   5. Quando nenhum ENV de Tool Events está configurado, o sistema funciona normalmente sem publicar eventos
-**Plans**: TBD
+**Plans**: 2 plans
 **UI hint**: no
+
+Plans:
+- [x] 20-01-PLAN.md — EventPublisher class com suporte a webhook e RabbitMQ + NoopEventPublisher + testes unitários (EVT-01, EVT-04)
+- [x] 20-02-PLAN.md — Integração EventPublisher no BrainRunner + whitelist de tools + barrel export (EVT-02, EVT-03)
 
 ### Phase 21: RAG
 **Goal**: Operador pode ingerir texto em coleções via API e o LLM pode buscar contexto relevante chamando `search_knowledge` — base de conhecimento semântica disponível para todos os Brains
@@ -165,11 +173,16 @@ Plans:
   1. Quando `fup_config` existe no banco para o Brain, novos leads têm `fup_enabled = true` setado automaticamente via `LeadService.upsert()` ou trigger de startup
   2. O FUP dispara sem intervenção manual no banco para leads que param de responder — fluxo FUP automático completo em produção
   3. Leads que explicitamente têm `fup_enabled = false` (desativado manualmente) não são afetados pela ativação automática
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 25-01-PLAN.md — Test stubs para FUP activation (Wave 0 / Nyquist)
+- [ ] 25-02-PLAN.md — Modificar LeadService.upsertLead() com lógica de ativação condicional via fup_config
+- [ ] 25-03-PLAN.md — Wiring BrainRunner.run() para passar brainType ao upsertLead()
 
 ## Progress
 
-**Execution Order:** Phases execute in numeric order: 19 → 20 → 21 → 22
+**Execution Order:** Phases execute in numeric order: 19 → 20 → 21 → 22 → 23 → 24 → 25
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -192,12 +205,12 @@ Plans:
 | 17. Expor contagem de tokens gastos | v1.3 | 3/3 | Complete | 2026-06-16 |
 | 18. Build and Publish Docker Image via DockGate | — | 0/1 | Planned | — |
 | 19. Database Foundation | v1.4 | 2/2 | Complete    | 2026-06-23 |
-| 20. Tool Events | v1.4 | 2/1 | Complete   | 2026-06-23 |
+| 20. Tool Events | v1.4 | 2/2 | Complete   | 2026-06-23 |
 | 21. RAG | v1.4 | 3/3 | Complete    | 2026-06-24 |
-| 22. FUP Automático | v1.4 | 3/2 | Complete   | 2026-06-24 |
+| 22. FUP Automático | v1.4 | 3/3 | Complete   | 2026-06-24 |
 | 23. RAG Wiring Fix | v1.4 | 1/1 | Complete    | 2026-06-24 |
 | 24. Tech Debt & Tracker Cleanup | v1.4 | 3/3 | Complete    | 2026-06-24 |
-| 25. FUP Activation Trigger | v1.4 | 0/TBD | Planned | — |
+| 25. FUP Activation Trigger | v1.4 | 0/3 | Planned | — |
 
 ## Backlog
 
