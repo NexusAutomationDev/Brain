@@ -78,6 +78,10 @@ Existing infrastructure covers all phase requirements. No new test files require
 
 ---
 
+## Test Isolation Note
+
+`runner-wr.test.ts` does NOT mock `fup-scheduler.js` or `lead-service.js` at module level — those mocks would leak into other test files under bun 1.3.2's module mock isolation. The 12 pre-existing failures in `bun test packages/core/src` (cross-file interference) are unrelated to this phase. Each test file passes in isolation.
+
 ## Validation Sign-Off
 
 - [x] All tasks have `<automated>` verify or Wave 0 dependencies
