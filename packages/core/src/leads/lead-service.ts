@@ -3,7 +3,7 @@
 // D-02: classe com sql injetado no construtor; métodos upsertLead + getByNumero
 import { drizzle } from "drizzle-orm/postgres-js";
 import { eq } from "drizzle-orm";
-import { leads } from "@brain-pkg/database";
+import { leads, fupConfig } from "@brain-pkg/database";
 import type { Sql } from "postgres";
 
 /** Tipo Lead derivado do schema Drizzle — campos da tabela leads */
@@ -25,26 +25,56 @@ export class LeadService {
   }
 
   /**
-   * LEAD-02: Upsert atômico por numero.
+   * LEAD-02 + FUP-02: Upsert atômico por numero.
    * - INSERT se numero não existe — cria lead com uniqueId e nome fornecidos.
    * - UPDATE se numero já existe — atualiza nome e updatedAt; uniqueId NUNCA é sobrescrito.
+   * - Phase 25: Se brainType fornecido E lead novo, consulta fup_config e ativa fup_enabled automaticamente.
    *
    * @param numero - Número do WhatsApp/CRM (chave única de identificação)
    * @param uniqueId - IDLead do payload (gerado pela integração, nunca sobrescrito no update)
    * @param nome - Nome opcional do lead (vem de event.Name)
+   * @param brainType - Brain type para consultar fup_config e ativar FUP automaticamente (opcional)
    */
-  async upsertLead(numero: string, uniqueId: string, nome?: string): Promise<Lead> {
+  async upsertLead(numero: string, uniqueId: string, nome?: string, brainType?: string): Promise<Lead> {
+    // Step 1: Check if lead already exists (D-03: UPDATE never changes fupEnabled)
+    const existing = await this.db
+      .select()
+      .from(leads)
+      .where(eq(leads.numero, numero))
+      .limit(1);
+
+    const isInsert = !existing[0];
+
+    // Step 2: Query fup_config only on INSERT with brainType (D-02, D-04)
+    let fupEnabled = false; // default per leads table schema
+    if (isInsert && brainType) {
+      const configRows = await this.db
+        .select({ enabled: fupConfig.enabled })
+        .from(fupConfig)
+        .where(eq(fupConfig.brainType, brainType))
+        .limit(1);
+
+      // D-02: activate FUP only if config exists AND enabled = true
+      // D-04: silent when config missing — no warning, just default to false
+      if (configRows[0]?.enabled === true) {
+        fupEnabled = true;
+      }
+    }
+
+    // Step 3: Upsert with fupEnabled (only affects INSERT)
     const rows = await this.db
       .insert(leads)
       .values({
         numero,
         uniqueId,
         nome: nome ?? null,
+        fupEnabled, // only used on INSERT; default (false) when UPDATE path
       })
       .onConflictDoUpdate({
         target: leads.numero,
         set: {
           // LEAD-02: uniqueId ausente do set — nunca sobrescrito após primeiro insert
+          // D-03: fupEnabled ausente do set — preserva valor atual no UPDATE
           nome: nome ?? null,
           updatedAt: new Date(),
         },
