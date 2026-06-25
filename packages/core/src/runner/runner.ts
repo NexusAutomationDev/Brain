@@ -245,10 +245,12 @@ export class BrainRunner {
     }
 
     // D-06: Fluxo — upsert lead → gate ia_ativada → LLM (LEAD-02, LEAD-03)
+    // Phase 25: brainType permite ativação automática de fup_enabled quando fup_config existe
     const lead: Lead = await this.leadService.upsertLead(
       event.Numero,
       event.IDLead,
-      event.Name
+      event.Name,
+      this.brain.brainType // ← NOVO: quarto parâmetro para ativação automática de FUP (Phase 25)
     );
 
     // D-13, FUP-06: Atualizar last_message_at INCONDICIONALMENTE — antes do gate ia_ativada.
