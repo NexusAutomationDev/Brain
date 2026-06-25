@@ -76,7 +76,7 @@
   2. `FupScheduler._tick()` processa leads recém-criados com FUP ativado — `fup_next_at <= NOW()` satisfeito dentro do intervalo configurado
   3. Flow FUP Activation E2E completo: novo lead → `fupEnabled=true`, `fupNextAt` setado → scheduler processa → FUP enviado
   4. Spec EVT-04 atualizada documentando que FUP events usam `event_id = uniqueId:fup:step` (divergência intencional de `thread_id:tool_call_id`)
-**Plans**: 0 plans
+**Plans**: 1 plan
 
 Plans:
 - [ ] 26-01-PLAN.md — Modificar `LeadService.upsertLead()` para calcular e setar `fupNextAt` no INSERT + testes + docs EVT-04
