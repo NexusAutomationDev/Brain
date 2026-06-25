@@ -12,6 +12,13 @@ const mockReturning = mock(async () => [
     fullpp: null,
     createdAt: new Date(),
     updatedAt: new Date(),
+    fupEnabled: false,
+    fupStep: 0,
+    fupNextAt: null,
+    lastMessageAt: null,
+    fupFailureCount: 0,
+    idDeal: null,
+    idContato: null,
   },
 ]);
 const mockOnConflictDoUpdate = mock(() => ({ returning: mockReturning }));
@@ -21,6 +28,13 @@ const mockLimit = mock(async () => []);
 const mockWhere = mock(() => ({ limit: mockLimit }));
 const mockFrom = mock(() => ({ where: mockWhere }));
 const mockSelect = mock(() => ({ from: mockFrom }));
+
+// FUP activation: chain separado para SELECT em fup_config (Phase 25)
+const mockLimit4 = mock(async () => []);
+const mockWhere4 = mock(() => ({ limit: mockLimit4 }));
+const mockFrom4 = mock(() => ({ where: mockWhere4 }));
+const mockSelect4 = mock(() => ({ from: mockFrom4 }));
+
 const mockDb = { insert: mockInsert, select: mockSelect };
 
 mock.module("drizzle-orm/postgres-js", () => ({
@@ -32,7 +46,7 @@ mock.module("drizzle-orm", () => ({
   eq: mock((col: unknown, val: unknown) => ({ col, val })),
 }));
 
-// Mock @brain-pkg/database para leads
+// Mock @brain-pkg/database para leads e fupConfig
 mock.module("@brain-pkg/database", () => ({
   leads: {
     numero: "leads.numero",
@@ -48,6 +62,21 @@ mock.module("@brain-pkg/database", () => ({
     fupEnabled: "leads.fup_enabled",
     fupStep: "leads.fup_step",
     fupNextAt: "leads.fup_next_at",
+    fupFailureCount: "leads.fup_failure_count",
+    idDeal: "leads.id_deal",
+    idContato: "leads.id_contato",
+  },
+  // FUP-01: fup_config — configuração de follow-up por brain_type
+  fupConfig: {
+    brainType: "fup_config.brain_type",
+    enabled: "fup_config.enabled",
+    intervalsSeconds: "fup_config.intervals_seconds",
+    minHour: "fup_config.min_hour",
+    maxHour: "fup_config.max_hour",
+    allowedDays: "fup_config.allowed_days",
+    timezone: "fup_config.timezone",
+    createdAt: "fup_config.created_at",
+    updatedAt: "fup_config.updated_at",
   },
 }));
 
@@ -157,5 +186,246 @@ describe("LeadService — touchLastMessage (FUP-06)", () => {
   it("touchLastMessage() chama where com leads.uniqueId (eq chamado com uniqueId correto)", async () => {
     await service3.touchLastMessage("lead-abc");
     expect(mockWhere3).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("LeadService — FUP activation (Phase 25)", () => {
+  // Controla o que o SELECT de leads retorna (para checar se lead é novo ou existente)
+  // e o que o SELECT de fup_config retorna
+  let service5: LeadService;
+
+  beforeEach(() => {
+    mockLimit.mockClear();
+    mockWhere.mockClear();
+    mockFrom.mockClear();
+    mockSelect.mockClear();
+    mockReturning.mockClear();
+    mockOnConflictDoUpdate.mockClear();
+    mockValues.mockClear();
+    mockInsert.mockClear();
+    mockLimit4.mockClear();
+    mockWhere4.mockClear();
+    mockFrom4.mockClear();
+    mockSelect4.mockClear();
+    service5 = new LeadService({} as never);
+  });
+
+  it("INSERT com fup_config enabled=true → lead retornado tem fupEnabled=true (D-02)", async () => {
+    // Lead novo: SELECT de leads retorna vazio
+    mockLimit.mockImplementationOnce(async () => []);
+    // fup_config encontrada e enabled=true
+    mockLimit4.mockImplementationOnce(async () => [{ enabled: true }]);
+
+    // mockReturning retorna lead com fupEnabled=true
+    mockReturning.mockImplementationOnce(async () => [
+      {
+        id: "uuid-1",
+        uniqueId: "lead-new",
+        numero: "5511999990001",
+        nome: "João",
+        iaAtivada: true,
+        fullpp: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        fupEnabled: true,
+        fupStep: 0,
+        fupNextAt: null,
+        lastMessageAt: null,
+        fupFailureCount: 0,
+        idDeal: null,
+        idContato: null,
+      },
+    ]);
+
+    // Configurar mockDb.select para alternar entre SELECT de leads e SELECT de fup_config
+    let selectCallCount = 0;
+    mockSelect.mockImplementation(() => {
+      selectCallCount++;
+      if (selectCallCount === 1) {
+        // Primeiro SELECT: verificar existência do lead
+        return { from: mockFrom };
+      }
+      // Segundo SELECT: consultar fup_config
+      return { from: mockFrom4 };
+    });
+
+    const lead = await service5.upsertLead("5511999990001", "lead-new", "João", "sdr");
+    expect(lead.fupEnabled).toBe(true);
+  });
+
+  it("INSERT com fup_config enabled=false → lead retornado tem fupEnabled=false (D-02)", async () => {
+    // Lead novo: SELECT de leads retorna vazio
+    mockLimit.mockImplementationOnce(async () => []);
+    // fup_config encontrada mas enabled=false
+    mockLimit4.mockImplementationOnce(async () => [{ enabled: false }]);
+
+    mockReturning.mockImplementationOnce(async () => [
+      {
+        id: "uuid-2",
+        uniqueId: "lead-new",
+        numero: "5511999990002",
+        nome: "Maria",
+        iaAtivada: true,
+        fullpp: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        fupEnabled: false,
+        fupStep: 0,
+        fupNextAt: null,
+        lastMessageAt: null,
+        fupFailureCount: 0,
+        idDeal: null,
+        idContato: null,
+      },
+    ]);
+
+    let selectCallCount = 0;
+    mockSelect.mockImplementation(() => {
+      selectCallCount++;
+      if (selectCallCount === 1) {
+        return { from: mockFrom };
+      }
+      return { from: mockFrom4 };
+    });
+
+    const lead = await service5.upsertLead("5511999990002", "lead-new", "Maria", "sdr");
+    expect(lead.fupEnabled).toBe(false);
+  });
+
+  it("INSERT sem brainType → fupEnabled=false (padrão da tabela), sem SELECT em fup_config (D-04)", async () => {
+    // Lead novo: SELECT de leads retorna vazio
+    mockLimit.mockImplementationOnce(async () => []);
+
+    mockReturning.mockImplementationOnce(async () => [
+      {
+        id: "uuid-3",
+        uniqueId: "lead-new",
+        numero: "5511999990003",
+        nome: "Pedro",
+        iaAtivada: true,
+        fullpp: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        fupEnabled: false,
+        fupStep: 0,
+        fupNextAt: null,
+        lastMessageAt: null,
+        fupFailureCount: 0,
+        idDeal: null,
+        idContato: null,
+      },
+    ]);
+
+    // Sem brainType: apenas 1 SELECT (verificação de lead existente)
+    let selectCallCount = 0;
+    mockSelect.mockImplementation(() => {
+      selectCallCount++;
+      return { from: mockFrom };
+    });
+
+    const lead = await service5.upsertLead("5511999990003", "lead-new", "Pedro");
+    expect(lead.fupEnabled).toBe(false);
+    // Sem brainType → fup_config NÃO deve ser consultada (apenas 1 SELECT)
+    expect(selectCallCount).toBe(1);
+  });
+
+  it("UPDATE (lead existente) preserva fupEnabled — onConflictDoUpdate.set NÃO contém fupEnabled (D-03)", async () => {
+    // Lead existente: SELECT de leads retorna row existente
+    mockLimit.mockImplementationOnce(async () => [
+      {
+        id: "uuid-4",
+        uniqueId: "lead-existing",
+        numero: "5511999990004",
+        nome: "Ana",
+        iaAtivada: true,
+        fullpp: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        fupEnabled: false,
+        fupStep: 0,
+        fupNextAt: null,
+        lastMessageAt: null,
+        fupFailureCount: 0,
+        idDeal: null,
+        idContato: null,
+      },
+    ]);
+
+    mockReturning.mockImplementationOnce(async () => [
+      {
+        id: "uuid-4",
+        uniqueId: "lead-existing",
+        numero: "5511999990004",
+        nome: "Ana",
+        iaAtivada: true,
+        fullpp: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        fupEnabled: false,
+        fupStep: 0,
+        fupNextAt: null,
+        lastMessageAt: null,
+        fupFailureCount: 0,
+        idDeal: null,
+        idContato: null,
+      },
+    ]);
+
+    mockSelect.mockImplementationOnce(() => ({ from: mockFrom }));
+
+    const lead = await service5.upsertLead("5511999990004", "lead-existing", "Ana", "sdr");
+    expect(lead.fupEnabled).toBe(false);
+
+    // D-03: onConflictDoUpdate.set NÃO deve conter fupEnabled (UPDATE preserva valor existente)
+    const callArg = mockOnConflictDoUpdate.mock.calls[0][0] as Record<string, unknown>;
+    expect(callArg.set).not.toHaveProperty("fupEnabled");
+  });
+
+  it("INSERT com fup_config inexistente → fupEnabled=false, sem erro (D-04 silent fallback)", async () => {
+    // Lead novo: SELECT de leads retorna vazio
+    mockLimit.mockImplementationOnce(async () => []);
+    // fup_config NÃO encontrada: retorna vazio
+    mockLimit4.mockImplementationOnce(async () => []);
+
+    mockReturning.mockImplementationOnce(async () => [
+      {
+        id: "uuid-5",
+        uniqueId: "lead-new",
+        numero: "5511999990005",
+        nome: "Carlos",
+        iaAtivada: true,
+        fullpp: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        fupEnabled: false,
+        fupStep: 0,
+        fupNextAt: null,
+        lastMessageAt: null,
+        fupFailureCount: 0,
+        idDeal: null,
+        idContato: null,
+      },
+    ]);
+
+    let selectCallCount = 0;
+    mockSelect.mockImplementation(() => {
+      selectCallCount++;
+      if (selectCallCount === 1) {
+        return { from: mockFrom };
+      }
+      return { from: mockFrom4 };
+    });
+
+    // Não deve lançar exceção quando fup_config não existe
+    let lead: Awaited<ReturnType<typeof service5.upsertLead>> | undefined;
+    let error: unknown;
+    try {
+      lead = await service5.upsertLead("5511999990005", "lead-new", "Carlos", "unknown-brain");
+    } catch (e) {
+      error = e;
+    }
+
+    expect(error).toBeUndefined();
+    expect(lead?.fupEnabled).toBe(false);
   });
 });
