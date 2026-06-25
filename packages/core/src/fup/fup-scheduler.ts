@@ -219,7 +219,10 @@ export class FupScheduler implements IFupScheduler {
         // D-16, EVT-03: publicar evento fire-and-forget
         if (this.opts.eventPublisher) {
           const fupEvent: ToolEvent = {
-            event_id: `${lead.uniqueId}:fup:${lead.fupStep}`,  // D-17: idempotente por step
+            event_id: `${lead.uniqueId}:fup:${lead.fupStep}`,
+            // D-17: formato diverge intencionalmente de EVT-04 (thread_id:tool_call_id).
+            // FUP events não têm tool_call_id — identificados por uniqueId:fup:step.
+            // Idempotente: mesmo step re-enviado produz o mesmo event_id.
             action: "fup",
             lead: { id: lead.uniqueId, nome: lead.nome ?? null, numero: lead.numero },
             result: JSON.stringify({ step: lead.fupStep, message }),

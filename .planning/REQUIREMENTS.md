@@ -19,7 +19,7 @@ Requirements para o milestone v1.4. Cada um mapeia para fases do roadmap.
 - [x] **EVT-01**: Brain publica eventos de resultado de tools em canal separado (webhook via TOOL_EVENTS_URL ou RabbitMQ via TOOL_EVENTS_QUEUE) configurável via ENV, sem bloquear o fluxo principal
 - [x] **EVT-02**: Quando qualify_lead, pause_session ou finish_conversation produzem resultado, o evento `{ action, lead: { id, nome, numero }, result }` é publicado automaticamente no canal de saída
 - [x] **EVT-03**: Quando FUP envia mensagem, publica evento `{ action: "fup", lead, result: { step, message } }` no canal de saída
-- [x] **EVT-04**: Cada evento carrega `event_id` derivado de `thread_id:tool_call_id` para permitir deduplicação idempotente pelo consumidor
+- [x] **EVT-04**: Cada evento carrega `event_id` derivado de `thread_id:tool_call_id` para permitir deduplicação idempotente pelo consumidor. **Exceção FUP:** eventos de FUP usam `event_id = ${lead.uniqueId}:fup:${fup_step}` — FUP events não têm `tool_call_id` (D-17 da Phase 22, decisão intencional).
 
 ### FUP — Follow-up Automático
 
