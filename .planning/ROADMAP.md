@@ -62,7 +62,7 @@
 - [x] **Phase 23: RAG Wiring Fix** - Vincular createSearchKnowledgeTool ao LLM em brain-sdr/brain.ts — fecha RAG-02, RAG-03 (completed 2026-06-24)
 - [x] **Phase 24: Tech Debt & Tracker Cleanup** - Corrigir WR-01..WR-04, 4 erros TypeScript, atualizar REQUIREMENTS.md tracker (completed 2026-06-24)
 - [x] **Phase 25: FUP Activation Trigger** - Ativar fup_enabled automaticamente ao criar/configurar lead para FUP disparar sem intervenção manual (completed 2026-06-25)
-- [ ] **Phase 26: FUP Next-At Init Fix** - Setar fupNextAt no INSERT ao ativar FUP — fecha gap bloqueador FUP-02 (wiring Phase 25 → Phase 22)
+- [x] **Phase 26: FUP Next-At Init Fix** - Setar fupNextAt no INSERT ao ativar FUP — fecha gap bloqueador FUP-02 (wiring Phase 25 → Phase 22) (completed 2026-06-25)
 
 ## Phase Details
 
@@ -79,7 +79,7 @@
 **Plans**: 1 plan
 
 Plans:
-- [ ] 26-01-PLAN.md — Modificar `LeadService.upsertLead()` para calcular e setar `fupNextAt` no INSERT + testes + docs EVT-04
+- [x] 26-01-PLAN.md — Modificar `LeadService.upsertLead()` para calcular e setar `fupNextAt` no INSERT + testes + docs EVT-04
 
 ### Phase 19: Database Foundation
 **Goal**: Schema estável para v1.4 disponível para todos os Brains — tabelas e colunas criadas em migration única antes que qualquer feature de RAG, Tool Events ou FUP seja implementada
@@ -227,7 +227,7 @@ Plans:
 | 23. RAG Wiring Fix | v1.4 | 1/1 | Complete    | 2026-06-24 |
 | 24. Tech Debt & Tracker Cleanup | v1.4 | 3/3 | Complete    | 2026-06-24 |
 | 25. FUP Activation Trigger | v1.4 | 3/3 | Complete    | 2026-06-25 |
-| 26. FUP Next-At Init Fix | v1.4 | 0/1 | Planned     | — |
+| 26. FUP Next-At Init Fix | v1.4 | 1/1 | Complete    | 2026-06-25 |
 
 ## Backlog
 
@@ -238,7 +238,7 @@ Plans:
 **Context:** Hoje o brain-sdr sempre retorna `responseMode: "text"`. O system prompt contém o bloco `<response_format>` como referência comportamental (o LLM conhece os modos), mas sem um mecanismo de saída estruturada o LLM não consegue sinalizar `"audio"` quando o usuário pede. A solução correta é usar `response_format` (OpenAI) ou `generationConfig.responseMimeType` (Google) no nível da API — não instrução de prompt.
 
 **Requirements:** TBD
-**Plans:** 3/3 plans complete
+**Plans:** 1/1 plans complete
 
 Plans:
 - [ ] TBD (promote with /gsd-review-backlog when ready)
