@@ -62,8 +62,24 @@
 - [x] **Phase 23: RAG Wiring Fix** - Vincular createSearchKnowledgeTool ao LLM em brain-sdr/brain.ts — fecha RAG-02, RAG-03 (completed 2026-06-24)
 - [x] **Phase 24: Tech Debt & Tracker Cleanup** - Corrigir WR-01..WR-04, 4 erros TypeScript, atualizar REQUIREMENTS.md tracker (completed 2026-06-24)
 - [x] **Phase 25: FUP Activation Trigger** - Ativar fup_enabled automaticamente ao criar/configurar lead para FUP disparar sem intervenção manual (completed 2026-06-25)
+- [ ] **Phase 26: FUP Next-At Init Fix** - Setar fupNextAt no INSERT ao ativar FUP — fecha gap bloqueador FUP-02 (wiring Phase 25 → Phase 22)
 
 ## Phase Details
+
+### Phase 26: FUP Next-At Init Fix
+**Goal**: Fechar o gap bloqueador entre Phase 25 e Phase 22 — `upsertLead()` deve calcular e persistir `fupNextAt` no INSERT quando `fupEnabled=true`, tornando o FUP automático operacional em produção para todos os leads criados com FUP ativado
+**Depends on**: Phase 25
+**Requirements**: FUP-02
+**Gap Closure**: Fecha gap bloqueador identificado na auditoria v1.4 — FUP-02 partial, integration gap Phase 25 → Phase 22, flow "FUP Activation E2E"
+**Success Criteria** (what must be TRUE):
+  1. `LeadService.upsertLead()` calcula e persiste `fupNextAt = NOW() + intervals_seconds[0]` (ajustado para próximo slot dentro de business hours) no INSERT quando `fupEnabled=true`
+  2. `FupScheduler._tick()` processa leads recém-criados com FUP ativado — `fup_next_at <= NOW()` satisfeito dentro do intervalo configurado
+  3. Flow FUP Activation E2E completo: novo lead → `fupEnabled=true`, `fupNextAt` setado → scheduler processa → FUP enviado
+  4. Spec EVT-04 atualizada documentando que FUP events usam `event_id = uniqueId:fup:step` (divergência intencional de `thread_id:tool_call_id`)
+**Plans**: 0 plans
+
+Plans:
+- [ ] 26-01-PLAN.md — Modificar `LeadService.upsertLead()` para calcular e setar `fupNextAt` no INSERT + testes + docs EVT-04
 
 ### Phase 19: Database Foundation
 **Goal**: Schema estável para v1.4 disponível para todos os Brains — tabelas e colunas criadas em migration única antes que qualquer feature de RAG, Tool Events ou FUP seja implementada
@@ -211,6 +227,7 @@ Plans:
 | 23. RAG Wiring Fix | v1.4 | 1/1 | Complete    | 2026-06-24 |
 | 24. Tech Debt & Tracker Cleanup | v1.4 | 3/3 | Complete    | 2026-06-24 |
 | 25. FUP Activation Trigger | v1.4 | 3/3 | Complete    | 2026-06-25 |
+| 26. FUP Next-At Init Fix | v1.4 | 0/1 | Planned     | — |
 
 ## Backlog
 

@@ -24,7 +24,7 @@ Requirements para o milestone v1.4. Cada um mapeia para fases do roadmap.
 ### FUP — Follow-up Automático
 
 - [x] **FUP-01**: Configuração de FUP (intervalos em segundos, hora mínima, hora máxima, dias permitidos, fuso horário IANA) é armazenada em tabela `fup_config` no banco — não em ENV
-- [x] **FUP-02**: Scheduler background detecta leads silenciosos (last_message_at + limiar via ENV) e processa FUPs usando SELECT FOR UPDATE SKIP LOCKED para segurança em múltiplas instâncias
+- [ ] **FUP-02**: Scheduler background detecta leads silenciosos (last_message_at + limiar via ENV) e processa FUPs usando SELECT FOR UPDATE SKIP LOCKED para segurança em múltiplas instâncias
 - [x] **FUP-03**: Conteúdo de cada FUP é gerado por chamada LLM one-shot usando o histórico da conversa (via PostgresSaver.getTuple) e o prompt "fup" do banco — sem invocar o grafo completo
 - [x] **FUP-04**: Estado de FUP de cada lead é persistido no banco com colunas fup_step, fup_next_at e fup_enabled na tabela leads — sem estado em memória
 - [x] **FUP-05**: Ao enviar o último FUP da sequência configurada, o sistema seta ia_ativada = false e fup_enabled = false automaticamente
@@ -81,7 +81,7 @@ Preenchido pelo roadmapper após criação do roadmap.
 | EVT-03 | Phase 22 | Complete |
 | EVT-04 | Phase 20 | Complete |
 | FUP-01 | Phase 22 | Complete |
-| FUP-02 | Phase 22 | Complete |
+| FUP-02 | Phase 26 | Pending |
 | FUP-03 | Phase 22 | Complete |
 | FUP-04 | Phase 19 | Complete |
 | FUP-05 | Phase 22 | Complete |
@@ -96,4 +96,4 @@ Preenchido pelo roadmapper após criação do roadmap.
 
 ---
 *Requirements defined: 2026-06-23*
-*Last updated: 2026-06-24 — Phase 24 cleanup: RAG-02/03 [x], EVT-03 traceability Phase 20→22*
+*Last updated: 2026-06-25 — Phase 26 gap closure: FUP-02 reset [ ], traceability Phase 22→26 Pending*
