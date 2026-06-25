@@ -93,7 +93,7 @@ Uma infraestrutura de agentes modular onde novos Brains são criados definindo a
 
 ## Context
 
-**v1.4 (in progress):** Phase 24 complete (2026-06-24) — Tech debt cleanup: WR-01 (warning checkpointer null), WR-02 (updatedAt em resetFup), WR-03 (SIGTERM listener cleanup), WR-04 (delay 1s entre retries FupScheduler), SC-5 (TypeScript zero-error). REQUIREMENTS.md: RAG-02/03 marcados Complete. Phase 25 (fup-activation) é próxima.
+**v1.4 (in progress):** Phase 25 complete (2026-06-24) — FUP Activation Trigger: `upsertLead()` aceita `brainType?`, consulta `fup_config` em INSERT, ativa `fup_enabled=true` automaticamente; `BrainRunner.run()` passa `this.brain.brainType`; 13 testes unitários (5 novos FUP). Pipeline end-to-end: Brain → BrainRunner → LeadService → fup_config → fup_enabled automático. FUP-01/FUP-02 satisfeitos.
 
 **v1.3 (shipped 2026-06-16):** 4 fases (14-17), 9 planos, 92 commits, 145 arquivos (+14.132 / -1.051 linhas), 2 dias. MCP Integration via `@langchain/mcp-adapters`; schema-as-tool pattern para responseMode dinâmico; token usage acumulado via BrainStateAnnotation (sum reducer) e exposto em HTTP + RabbitMQ log.
 
@@ -171,4 +171,4 @@ Este documento evolui nas transições de fase e marcos de milestone.
 4. Atualizar Context com estado atual
 
 ---
-*Last updated: 2026-06-24 — Phase 23 complete: RAG wiring fix — createSearchKnowledgeTool wired into brain-sdr bindTools() and ToolNode, closes RAG-02 and RAG-03*
+*Last updated: 2026-06-24 — Phase 25 complete: FUP activation trigger — fup_enabled ativado automaticamente via fup_config em INSERT; pipeline Brain → BrainRunner → LeadService completo*
