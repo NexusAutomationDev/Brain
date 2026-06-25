@@ -5,6 +5,7 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import { eq } from "drizzle-orm";
 import { leads, fupConfig } from "@brain-pkg/database";
 import type { Sql } from "postgres";
+import { getNextValidSlot } from "../fup/fup-scheduler.js";
 
 /** Tipo Lead derivado do schema Drizzle — campos da tabela leads */
 export type Lead = typeof leads.$inferSelect;
@@ -29,6 +30,8 @@ export class LeadService {
    * - INSERT se numero não existe — cria lead com uniqueId e nome fornecidos.
    * - UPDATE se numero já existe — atualiza nome e updatedAt; uniqueId NUNCA é sobrescrito.
    * - Phase 25: Se brainType fornecido E lead novo, consulta fup_config e ativa fup_enabled automaticamente.
+   * - Phase 26 (D-01): Se fup_enabled ativado no INSERT, calcula e persiste fupNextAt = NOW() + intervals_seconds[0]
+   *   ajustado para próximo slot de business hours — FupScheduler processa sem intervenção manual.
    *
    * @param numero - Número do WhatsApp/CRM (chave única de identificação)
    * @param uniqueId - IDLead do payload (gerado pela integração, nunca sobrescrito no update)
@@ -45,23 +48,42 @@ export class LeadService {
 
     const isInsert = !existing[0];
 
-    // Step 2: Query fup_config only on INSERT with brainType (D-02, D-04)
+    // Step 2: Query fup_config only on INSERT with brainType (D-02, D-04, Phase 26 D-01)
     let fupEnabled = false; // default per leads table schema
+    let fupNextAt: Date | null = null; // Phase 26 D-01: calculado no INSERT quando fupEnabled=true
+
     if (isInsert && brainType) {
       const configRows = await this.db
-        .select({ enabled: fupConfig.enabled })
+        .select({
+          enabled: fupConfig.enabled,
+          intervalsSeconds: fupConfig.intervalsSeconds,  // Phase 26 D-04: expandido
+          minHour: fupConfig.minHour,                   // Phase 26 D-04
+          maxHour: fupConfig.maxHour,                   // Phase 26 D-04
+          allowedDays: fupConfig.allowedDays,           // Phase 26 D-04
+          timezone: fupConfig.timezone,                 // Phase 26 D-04
+        })
         .from(fupConfig)
         .where(eq(fupConfig.brainType, brainType))
         .limit(1);
 
-      // D-02: activate FUP only if config exists AND enabled = true
+      const config = configRows[0];
+      // D-02: activate FUP only if config exists AND enabled = true AND intervals não-vazio (Pitfall 2)
       // D-04: silent when config missing — no warning, just default to false
-      if (configRows[0]?.enabled === true) {
+      if (config?.enabled === true && config.intervalsSeconds.length > 0) {
         fupEnabled = true;
+        // Phase 26 D-01: fupNextAt = NOW() + intervals_seconds[0], ajustado para business hours
+        const rawNextAt = new Date(Date.now() + config.intervalsSeconds[0]! * 1000);
+        fupNextAt = getNextValidSlot(
+          rawNextAt,
+          config.minHour,
+          config.maxHour,
+          config.allowedDays,
+          config.timezone,
+        );
       }
     }
 
-    // Step 3: Upsert with fupEnabled (only affects INSERT)
+    // Step 3: Upsert with fupEnabled and fupNextAt (only affects INSERT)
     const rows = await this.db
       .insert(leads)
       .values({
@@ -69,12 +91,14 @@ export class LeadService {
         uniqueId,
         nome: nome ?? null,
         fupEnabled, // only used on INSERT; default (false) when UPDATE path
+        fupNextAt,  // Phase 26 D-01: Date no INSERT com FUP ativo; null caso contrário
       })
       .onConflictDoUpdate({
         target: leads.numero,
         set: {
           // LEAD-02: uniqueId ausente do set — nunca sobrescrito após primeiro insert
           // D-03: fupEnabled ausente do set — preserva valor atual no UPDATE
+          // Phase 26 D-01: fupNextAt ausente do set — INSERT-only; UPDATE nunca altera
           nome: nome ?? null,
           updatedAt: new Date(),
         },
