@@ -457,17 +457,15 @@ export function getNextValidSlot(
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Extração vs. import direto de `getNextValidSlot`**
+1. **Extração vs. import direto de `getNextValidSlot`** — **[RESOLVED]** Import direto escolhido (Opção A, D-05). A função já é `export function getNextValidSlot` em `fup-scheduler.ts` linha 355; sem novo arquivo, sem refactor. Risco de circular import verificado via grep — fup-scheduler.ts não importa lead-service.ts.
    - O que sabemos: função já existe e é exportada de `fup-scheduler.ts`
-   - O que está em aberto: D-05 delega decisão ao planner
-   - Recomendação: import direto (Opção A) para menor scope; extração (Opção B) se mais consumers forem previstos
+   - Decisão: D-05 delegou ao planner → Opção A (import direto em lead-service.ts)
 
-2. **`fup_next_at` no UPDATE quando lead responde (resetFup)**
+2. **`fup_next_at` no UPDATE quando lead responde (resetFup)** — **[RESOLVED → DEFERRED]** Documentado como known limitation; não bloqueia FUP-02. O CONTEXT.md lista explicitamente como fora do escopo desta fase. O primeiro ciclo de FUP funciona com a correção do INSERT; o segundo ciclo (após resetFup) fica para fase futura.
    - O que sabemos: `resetFup()` seta `fupNextAt = null, fupStep = 0`; lead fica com `fup_enabled = true` mas `fup_next_at = NULL` após resposta
-   - O que está em aberto: isso reproduz o gap original para o segundo ciclo de FUP
-   - Recomendação: documentar como known limitation; o CONTEXT.md já lista como DEFERRED. Não bloqueia FUP-02 (primeiro ciclo funciona).
+   - Decisão: DEFERRED — não bloqueia esta fase; registrado em CONTEXT.md como item fora de escopo
 
 ---
 
