@@ -93,6 +93,8 @@ Uma infraestrutura de agentes modular onde novos Brains são criados definindo a
 
 ## Context
 
+**v1.4 (in progress):** Phase 26 complete (2026-06-25) — FUP Next-At Init Fix: `upsertLead()` calcula e persiste `fupNextAt = getNextValidSlot(NOW() + intervals_seconds[0], ...)` no INSERT quando `fupEnabled=true`; FupScheduler processa leads novos sem intervenção manual; 4 novos testes unitários; EVT-04 documentado com exceção FUP events. E2E verificado contra brain_test. FUP-02 gap bloqueador fechado.
+
 **v1.4 (in progress):** Phase 25 complete (2026-06-24) — FUP Activation Trigger: `upsertLead()` aceita `brainType?`, consulta `fup_config` em INSERT, ativa `fup_enabled=true` automaticamente; `BrainRunner.run()` passa `this.brain.brainType`; 13 testes unitários (5 novos FUP). Pipeline end-to-end: Brain → BrainRunner → LeadService → fup_config → fup_enabled automático. FUP-01/FUP-02 satisfeitos.
 
 **v1.3 (shipped 2026-06-16):** 4 fases (14-17), 9 planos, 92 commits, 145 arquivos (+14.132 / -1.051 linhas), 2 dias. MCP Integration via `@langchain/mcp-adapters`; schema-as-tool pattern para responseMode dinâmico; token usage acumulado via BrainStateAnnotation (sum reducer) e exposto em HTTP + RabbitMQ log.
@@ -171,4 +173,4 @@ Este documento evolui nas transições de fase e marcos de milestone.
 4. Atualizar Context com estado atual
 
 ---
-*Last updated: 2026-06-24 — Phase 25 complete: FUP activation trigger — fup_enabled ativado automaticamente via fup_config em INSERT; pipeline Brain → BrainRunner → LeadService completo*
+*Last updated: 2026-06-25 — Phase 26 complete: FUP next-at init fix — fupNextAt calculado e persistido no INSERT via getNextValidSlot(); gap bloqueador FUP-02 fechado; E2E verificado contra brain_test*
