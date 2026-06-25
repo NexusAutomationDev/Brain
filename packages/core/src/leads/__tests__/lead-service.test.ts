@@ -213,8 +213,10 @@ describe("LeadService — FUP activation (Phase 25)", () => {
   it("INSERT com fup_config enabled=true → lead retornado tem fupEnabled=true (D-02)", async () => {
     // Lead novo: SELECT de leads retorna vazio
     mockLimit.mockImplementationOnce(async () => []);
-    // fup_config encontrada e enabled=true
-    mockLimit4.mockImplementationOnce(async () => [{ enabled: true }]);
+    // fup_config encontrada e enabled=true — Phase 26 D-04: campos de business hours incluídos
+    mockLimit4.mockImplementationOnce(async () => [
+      { enabled: true, intervalsSeconds: [3600], minHour: 8, maxHour: 18, allowedDays: ["mon", "tue", "wed", "thu", "fri"], timezone: "America/Sao_Paulo" },
+    ]);
 
     // mockReturning retorna lead com fupEnabled=true
     mockReturning.mockImplementationOnce(async () => [
@@ -256,8 +258,10 @@ describe("LeadService — FUP activation (Phase 25)", () => {
   it("INSERT com fup_config enabled=false → lead retornado tem fupEnabled=false (D-02)", async () => {
     // Lead novo: SELECT de leads retorna vazio
     mockLimit.mockImplementationOnce(async () => []);
-    // fup_config encontrada mas enabled=false
-    mockLimit4.mockImplementationOnce(async () => [{ enabled: false }]);
+    // fup_config encontrada mas enabled=false — Phase 26 D-04: campos de business hours incluídos
+    mockLimit4.mockImplementationOnce(async () => [
+      { enabled: false, intervalsSeconds: [3600], minHour: 8, maxHour: 18, allowedDays: ["mon", "tue", "wed", "thu", "fri"], timezone: "America/Sao_Paulo" },
+    ]);
 
     mockReturning.mockImplementationOnce(async () => [
       {
