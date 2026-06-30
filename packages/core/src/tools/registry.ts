@@ -35,6 +35,15 @@ export class ToolsRegistry {
   }
 
   /**
+   * TECH-01: Expõe o envWhitelist para injeção em BrainBuildContext.
+   * null = BRAIN_TOOLS não setado ou vazio (sem filtro).
+   * Set<string> = whitelist ativa com nomes exatos de tools.
+   */
+  getEnvWhitelist(): Set<string> | null {
+    return this.envWhitelist;
+  }
+
+  /**
    * Register a brainType with no tools (for brains that use tools: []).
    * No-op if already registered.
    */

@@ -512,6 +512,8 @@ export class BrainRunner {
       tools: filteredTools,
       sql: this.sql, // D-03: injetado para tools de DB — buildGraph() acessa via ctx.sql
       mcpTools, // D-01: sempre array; [] quando MCP_URL ausente (D-09)
+      // D-02/TECH-01: enabledTools exposto para Brain filtrar closures nativas em buildGraph()
+      enabledTools: this.toolsRegistry.getEnvWhitelist(),
     };
 
     // D-02: compile() called HERE — never inside buildGraph()

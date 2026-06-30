@@ -29,6 +29,13 @@ export interface BrainBuildContext {
    * Brains espalham via: bindTools([...nativeTools, ...ctx.mcpTools])
    */
   mcpTools: StructuredTool[];
+  /**
+   * D-01/TECH-01: Whitelist de tools habilitadas via BRAIN_TOOLS ENV.
+   * null = sem filtro (BRAIN_TOOLS não setado ou vazio).
+   * Set<string> com nomes exatos = filtro ativo para closures nativas em buildGraph().
+   * Brain usa: [...tools].filter(t => !ctx.enabledTools || ctx.enabledTools.has(t.name))
+   */
+  enabledTools: Set<string> | null;
 }
 
 /**
