@@ -29,7 +29,7 @@ const RUN_FUP = !!DATABASE_URL;
 // Pasta de migrations: ENV ou fallback para packages/database/src/migrations
 const MIGRATIONS_FOLDER =
   process.env.MIGRATIONS_FOLDER ??
-  path.join(import.meta.dir, "../../../../../database/src/migrations");
+  path.join(import.meta.dir, "../../../../../packages/database/src/migrations");
 
 // Identificadores únicos para não colidir com dados de produção
 const BRAIN_TYPE = "sdr-fup-e2e";
