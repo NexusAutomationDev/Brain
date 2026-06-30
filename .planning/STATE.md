@@ -2,29 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Embedding SDK + Brain Suporte + Tech Debt
-status: planning
-stopped_at: ~
-last_updated: "2026-06-29"
-last_activity: 2026-06-29
+status: Ready to plan
+last_updated: "2026-06-30T23:30:21.958Z"
 progress:
-  total_phases: 4
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
-phases:
-  - id: 27
-    name: Tech Debt Fixes
-    status: not_started
-  - id: 28
-    name: Embedding SDK
-    status: not_started
-  - id: 29
-    name: Brain Suporte Core
-    status: not_started
-  - id: 30
-    name: Brain Suporte Docker
-    status: not_started
+  total_phases: 6
+  completed_phases: 1
+  total_plans: 3
+  completed_plans: 3
+  percent: 100
 ---
 
 # Project State
@@ -88,11 +73,13 @@ Phase 30 ░░░░░░░░░░░░░░░░ 0%  Brain Suporte Dock
 ## Accumulated Context
 
 ### Decisions
+
 - IEmbeddingProvider comes BEFORE Brain Suporte (SUP-04 depends on it)
 - Brain Suporte Docker is its own phase (deploy boundary, independent Dockerfile validation)
 - TECH-01/02/03 grouped in Phase 27 — small isolated fixes, no inter-dependencies
 
 ### Known Pitfalls (carry-forward from v1.3/v1.4)
+
 - MCP transport must use `"streamable_http"` with underscore (not hyphen) — ValueError without clear message
 - `prepare: false` required in all postgres.js connections (PgBouncer transaction mode)
 - `bun:sql` has stuck-connection bug after constraint errors — use `postgres.js` driver
