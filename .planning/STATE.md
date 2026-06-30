@@ -93,3 +93,11 @@ Phase 30 ░░░░░░░░░░░░░░░░ 0%  Brain Suporte Dock
 ## Next Steps
 
 Run `/gsd-plan-phase 27` to plan Phase 27: Tech Debt Fixes.
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260630-ssd | Melhorar a seção Git Commit Guidelines do CLAUDE.md (scope, breaking changes, formatação, idioma) | 2026-06-30 | 3647768 | [260630-ssd-melhorar-a-secao-git-commit-guidelines-d](./quick/260630-ssd-melhorar-a-secao-git-commit-guidelines-d/) |
+
+Last activity: 2026-06-30 - Completed quick task 260630-ssd: Melhorar a seção Git Commit Guidelines do CLAUDE.md
