@@ -84,7 +84,12 @@
   2. `bun test` roda teste de integração do FupScheduler contra PostgreSQL real sem mock — scheduler processa lead elegível e publica evento
   3. `GET /health` retorna campo `transport` com status `connected` ou `disconnected` refletindo estado real da conexão
 
-**Plans**: TBD
+**Plans:** 3 plans
+
+Plans:
+- [ ] 27-01-PLAN.md — BRAIN_TOOLS enabledTools: BrainBuildContext + ToolsRegistry getter + brain-sdr filter
+- [ ] 27-02-PLAN.md — FUP E2E integration test contra PostgreSQL real (LLM mockado)
+- [ ] 27-03-PLAN.md — Transport status no GET /health: ITransport.getStatus() + HealthCheckResult expandido
 
 ### Phase 28: Embedding SDK
 **Goal**: `packages/embeddings` existe como abstração completa de provider — qualquer Brain configura modelo e dimensões via ENV sem tocar TypeScript
@@ -154,7 +159,7 @@
 | 24. Tech Debt & Tracker Cleanup | v1.4 | 3/3 | Complete | 2026-06-24 |
 | 25. FUP Activation Trigger | v1.4 | 3/3 | Complete | 2026-06-25 |
 | 26. FUP Next-At Init Fix | v1.4 | 1/1 | Complete | 2026-06-25 |
-| 27. Tech Debt Fixes | v1.5 | 0/? | Not started | — |
+| 27. Tech Debt Fixes | v1.5 | 0/3 | Not started | — |
 | 28. Embedding SDK | v1.5 | 0/? | Not started | — |
 | 29. Brain Suporte Core | v1.5 | 0/? | Not started | — |
 | 30. Brain Suporte Docker | v1.5 | 0/? | Not started | — |
