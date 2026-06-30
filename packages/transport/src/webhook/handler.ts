@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { ConfigurationError, BrainOutputValidationError } from "@brain-pkg/shared";
 import { createLogger } from "@brain-pkg/observability";
-import type { ITransport } from "../interface.js";
+import type { ITransport, TransportStatus } from "../interface.js";
 import { BrainEventSchema } from "./events.js";
 import type { BrainEvent } from "./events.js";
 
@@ -149,5 +149,13 @@ export class WebhookTransport implements ITransport {
       this.server.stop();
       this.server = undefined;
     }
+  }
+
+  /**
+   * D-12/TECH-03: HTTP server não tem estado de conexão separado — sempre connected.
+   * Servidor Bun para de aceitar requests apenas quando stop() é chamado (gerenciado externamente).
+   */
+  getStatus(): TransportStatus {
+    return { type: 'webhook', connected: true };
   }
 }
