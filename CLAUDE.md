@@ -61,9 +61,11 @@ O scope identifica a área afetada pela mudança — geralmente o nome do pacote
 📝 docs(api): update endpoint examples
 ```
 
-### Limite de tamanho da descrição
+### Título: tamanho e modo
 
-A linha de descrição (após emoji + type + scope) deve ter no máximo **72 caracteres**, idealmente até **50**, para manter legibilidade em `git log --oneline` e em ferramentas de CI/CD.
+- A linha de descrição (após emoji + type + scope) deve ter no máximo **72 caracteres**, idealmente até **50**, para manter legibilidade em `git log --oneline` e em ferramentas de CI/CD.
+- Escreva no **modo imperativo** (`add`, `fix`, `change` — não `added`, `fixes`, `changing`).
+- **Não** termine o título com ponto final.
 
 ### Corpo da mensagem (body)
 
@@ -78,14 +80,18 @@ Use o corpo para explicar **o quê** mudou e **por quê** — não **como** (iss
 
 ### Breaking Changes
 
-Para mudanças que quebram compatibilidade, adicione `!` após o type/scope e/ou um footer `BREAKING CHANGE:` explicando o impacto e a migração necessária.
+Para mudanças que quebram compatibilidade, adicione `!` após o type/scope e/ou um footer `BREAKING CHANGE:` explicando o impacto e a migração necessária. Quando houver `BREAKING CHANGE:` e/ou `!`, use **💥** como emoji do commit, substituindo o emoji do type. Breaking changes disparam um bump de versão MAJOR (semver).
 
 ```bash
-♻️ refactor(api)!: remove deprecated /v1/chats endpoint
+💥 refactor(api)!: remove deprecated /v1/chats endpoint
 
 BREAKING CHANGE: clients must migrate to /v2/chats. The /v1 endpoint
 returned a flat array; /v2 returns a paginated object with `data` and `meta`.
 ```
+
+### Idioma da mensagem de commit
+
+O título (`<description>`) deve ser escrito em **inglês**, seguindo o histórico real do repositório (verificado via `git log`) e os exemplos deste guia — independente do idioma do código ou comentários ao redor. O corpo (body) pode usar português em commits internos/de processo (ex: `docs(phase-N)`), mas o título permanece em inglês para manter consistência e buscabilidade no `git log`.
 
 ### Important Rules
 
