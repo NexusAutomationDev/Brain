@@ -82,7 +82,7 @@ Uma infraestrutura de agentes modular onde novos Brains são criados definindo a
 - ✓ EVT-03: FUP publica evento `{ action: "fup", lead, result: { step, message } }` no canal de saída — v1.4
 - ✓ EVT-04: event_id = `thread_id:tool_call_id` (exceção FUP: `uniqueId:fup:step` — decisão intencional D-17) — v1.4
 - ✓ FUP-01: Configuração de FUP (intervalos, min/max hora, dias, timezone IANA) em tabela `fup_config` no banco — v1.4
-- ~ FUP-02: Scheduler SELECT FOR UPDATE SKIP LOCKED; `fupNextAt` setado no INSERT via `getNextValidSlot()` — v1.4 (código implementado; E2E human verification pendente)
+- ✓ FUP-02: Scheduler SELECT FOR UPDATE SKIP LOCKED; E2E integration test contra PostgreSQL real — Phase 27
 - ✓ FUP-03: Conteúdo de FUP gerado por LLM one-shot via PostgresSaver.getTuple() usando histórico da conversa — v1.4
 - ✓ FUP-04: Estado FUP persistido em leads: fup_step, fup_next_at, fup_enabled — v1.4
 - ✓ FUP-05: Último FUP seta ia_ativada=false e fup_enabled=false automaticamente — v1.4
@@ -97,7 +97,7 @@ Uma infraestrutura de agentes modular onde novos Brains são criados definindo a
 - [ ] Outros Brains: Suporte, Customer Success
 - [ ] Sub-agente de qualificação avançada com SPIN/BANT completo
 - [ ] Brain SDR publicando respostas de volta ao RabbitMQ (canal de resposta async)
-- [ ] Resolver TD-03: `BRAIN_TOOLS` whitelist não cobre tools bound diretamente em buildGraph()
+- [x] Resolver TD-03: `BRAIN_TOOLS` whitelist agora cobre closures em buildGraph() via enabledTools — Phase 27
 - [ ] responseMode dinâmico via structured output multi-provider (OpenAI + Google) — hoje hardcoded "text" em brain.ts
 - [ ] CI/CD: build + publish imagem Docker do brain-sdr via DockGate (Phase 18 backlog)
 
@@ -130,13 +130,13 @@ O Brain SDR tem uma arquitetura com sub-agente de qualificação stateless: o Br
 Brains planejados para o futuro: Suporte, Customer Success, Cobrança, RH, Jurídico, E-commerce, Agendamento.
 
 **Tech debt acumulado (carry-over para v1.5+):**
-- TD-03: `BRAIN_TOOLS` whitelist inerte para tools bound diretamente em `buildGraph()`
+- ~~TD-03~~: ✓ Resolvido em Phase 27 — `enabledTools` cobre closures em buildGraph()
+- ~~OBS-02~~: ✓ Resolvido em Phase 27 — GET /health expõe TransportStatus
+- ~~FUP-02~~: ✓ Resolvido em Phase 27 — E2E integration test contra PostgreSQL real
 - TD-04: `LeadService.setFullpp()` / `setIaAtivada()` sem callers de produção
 - MEM-03: semantic write path (dead code) — createEmbeddings() nunca chamado
-- OBS-02: transport status ausente no GET /health
 - brain-echo `hasOtherToolCall` guard ausente no nó LLM — non-fatal
 - D-16: `vector(1536)` hardcoded na migration 0007 — mismatch se EMBEDDING_DIMENSIONS ENV alterado sem re-migrar
-- FUP-02 human verification pendente: E2E runtime com banco real (código implementado)
 
 ## Constraints
 
@@ -164,7 +164,7 @@ Brains planejados para o futuro: Suporte, Customer Success, Cobrança, RH, Jurí
 | Drizzle _journal.json para migrations (GAP-1 v1.1) | Drizzle exige entrada no journal para executar SQL — 0005 foi adicionado pós-audit | ✓ Fixed — migrate() agora aplica seed de prompts SDR na inicialização |
 | BrainOutput em shared, BrainOutputSchema em core (v1.2) | Evitar ciclo de dependência ai→core; type sem Zod em shared, schema Zod somente em core | ✓ Good — separação funcionou em todas as fases; transport usa duck typing IBrainRunnerLike |
 | Tools padrão como factories com closure sobre sql (v1.2) | Mesmo padrão do boundQualifyTool — factory recebe sql e retorna StructuredTool | ✓ Good — pause_session e finish_conversation funcionando; thread_id vem de configurable, nunca do LLM |
-| BRAIN_TOOLS como whitelist CSV via ENV (v1.2) | Controle de tools em runtime sem recompilação — enableTool() silenciosamente ignora tools fora da whitelist | ⚠ Revisit — whitelist não cobre tools bound diretamente em buildGraph() (TD-03); cobertura parcial |
+| BRAIN_TOOLS como whitelist CSV via ENV (v1.2, fix v1.5/Phase 27) | Controle de tools em runtime sem recompilação — enableTool() silenciosamente ignora tools fora da whitelist | ✓ Fixed — TD-03 resolvido: enabledTools flui via BrainBuildContext, cobre closures nativas e mcpTools |
 | row-lock via _schema_lock (v1.2, substitui pg_advisory_lock) | pg_advisory_lock não funciona sob PgBouncer (connection-level lock perdido na devolução do pool) | ✓ Good — row-lock transacional funciona em qualquer pooler; DDL idempotente fora de transação |
 | rabbitmq-client (não amqplib-bun) mantido em v1.2 | Sem mudança de decisão — zero deps, Bun-compatible, auto-reconnect built-in | ✓ Good — RabbitMQ consumer fire-and-forget por design; TD-05 documentado mas não é bug |
 | schema-as-tool para responseMode (v1.3) | `withStructuredOutput()` + `bindTools()` mutuamente exclusivos (langchainjs #7757) — `createRespondTool()` via `bindTools()` + nó `respond` + router | ✓ Good — multi-provider sem branching; UAT 2/2 OpenAI + Anthropic |
@@ -197,4 +197,4 @@ Este documento evolui nas transições de fase e marcos de milestone.
 4. Atualizar Context com estado atual
 
 ---
-*Last updated: 2026-06-25 after v1.4 milestone — RAG + Eventos de Tools + FUP Automático shipped*
+*Last updated: 2026-06-30 — Phase 27 complete: TD-03 (BRAIN_TOOLS closures), FUP-02 (E2E test real PG), OBS-02 (/health transport status) tech debts resolved*
