@@ -1,28 +1,55 @@
 import type { Sql } from 'postgres';
 
 /**
+ * D-11/TECH-03: Status snapshot do transport — mirrored from @brain-pkg/transport.
+ * Definido localmente para evitar dependência circular:
+ * @brain-pkg/transport → @brain-pkg/observability → @brain-pkg/transport (CIRCULAR).
+ * Duck typing — qualquer objeto com { type, connected } satisfaz este contrato.
+ */
+export interface TransportStatus {
+  type: 'webhook' | 'rabbitmq';
+  connected: boolean;
+}
+
+/**
+ * D-10/TECH-03: Interface mínima de ITransport usada pelo health check.
+ * Definida localmente (duck typing) para evitar dependência circular com @brain-pkg/transport.
+ * WebhookTransport e RabbitMQTransport implementam structuralmente este contrato.
+ */
+export interface ITransportLike {
+  getStatus(): TransportStatus;
+}
+
+/**
  * Health check result structure per D-13.
  *
  * @property status - Overall system health: 'ok' | 'degraded' | 'error'
  * @property checks - Individual check results
+ * @property transport - TransportStatus snapshot (D-15/TECH-03). Omitido quando transport não injetado (backward compat).
  * @property version - Git commit hash or 'unknown' (Claude's discretion: included for debugging)
  * @property timestamp - ISO 8601 timestamp
  *
- * Future fields (D-15 - deferred to Phase 2 when transport package exists):
- * @property transport - Transport type ('webhook' | 'rabbitmq') - WILL BE ADDED IN PHASE 2
- *
  * Security note (T-03-02): This response exposes only status and boolean checks.
  * Never include connection strings, usernames, or passwords in health check output.
+ * T-27-03-01: TransportStatus contém apenas type e connected — nunca expõe RABBITMQ_URL, credenciais ou stack traces.
  */
 export interface HealthCheckResult {
   status: 'ok' | 'degraded' | 'error';
   checks: {
     db: 'connected' | 'failed';
-    // Future: transport?: 'webhook' | 'rabbitmq' (D-15 - Phase 2)
+    /**
+     * D-15/TECH-03: Status do transport. Omitido quando transport não injetado (backward compat).
+     * 'connected' = transport operacional; 'disconnected' = transport em falha/reconexão.
+     */
+    transport?: 'connected' | 'disconnected';
   };
+  /**
+   * D-16/TECH-03: TransportStatus completo (type + connected).
+   * Omitido quando transport não injetado (backward compat).
+   */
+  transport?: TransportStatus;
   version?: string;
   timestamp: string;
-  // transport?: string; // D-15: Will be added in Phase 2 when transport package exists
 }
 
 /**
@@ -41,38 +68,34 @@ export async function checkDatabase(sql: Sql): Promise<boolean> {
 }
 
 /**
- * Performs a full health check and returns structured JSON result.
+ * OBS-02/TECH-03: Realiza health check completo incluindo status do transport.
  *
- * OBS-02: Validates database connectivity and returns HealthCheckResult per D-13.
+ * HTTP status code mapping (D-14/D-16):
+ * - 200: status === 'ok' (db + transport ok)
+ * - 503: db === 'failed' OU transport === 'disconnected' (qualquer dependência crítica com falha)
+ * - 500: status === 'error' (erro interno inesperado)
  *
- * HTTP status code mapping (D-14) — applied by the caller (Hono route):
- * - 200: status === 'ok'
- * - 503: checks.db === 'failed' (dependency unavailable)
- * - 500: status === 'error' (internal error)
- *
- * Note: D-15 defers transport field to Phase 2 when transport package exists.
- * The commented fields in HealthCheckResult interface are placeholders for Phase 2.
- *
- * Usage in Hono app:
- * ```ts
- * app.get('/health', async (c) => {
- *   const result = await performHealthCheck(sql);
- *   const statusCode = result.status === 'ok' ? 200
- *     : result.checks.db === 'failed' ? 503
- *     : 500;
- *   return c.json(result, statusCode);
- * });
- * ```
+ * @param sql - postgres.js Sql instance para verificar DB
+ * @param transport - ITransportLike opcional; omitido = campo transport ausente do resultado (backward compat)
  */
-export async function performHealthCheck(sql: Sql): Promise<HealthCheckResult> {
+export async function performHealthCheck(sql: Sql, transport?: ITransportLike): Promise<HealthCheckResult> {
   const dbOk = await checkDatabase(sql);
+  const transportStatus = transport?.getStatus();
+  const transportOk = transportStatus ? transportStatus.connected : true; // sem transport = não verifica
 
-  // D-13: Structured JSON response with status and checks
+  // D-16: transport desconectado = 'degraded' (Brain não processa mensagens)
+  // db falha = 'error' (mais grave — sem dados)
+  const status = !dbOk ? 'error' : !transportOk ? 'degraded' : 'ok';
+
   return {
-    status: dbOk ? 'ok' : 'error',
+    status,
     checks: {
       db: dbOk ? 'connected' : 'failed',
+      ...(transportStatus && {
+        transport: transportStatus.connected ? 'connected' : 'disconnected',
+      }),
     },
+    ...(transportStatus && { transport: transportStatus }),
     version: process.env.GIT_COMMIT || 'unknown',
     timestamp: new Date().toISOString(),
   };

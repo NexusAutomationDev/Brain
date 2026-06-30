@@ -74,20 +74,30 @@ async function main() {
   // T-09-03-06: log explícito de "BrainRunner initialized" + porta para rastreabilidade de startup
   logger.info({}, "BrainRunner initialized");
 
-  const app = createServer(sql, runner);
+  // D-TECH-03: criar transport ANTES de createServer() para que /health possa expor status.
+  // createTransport() retorna WebhookTransport ou RabbitMQTransport baseado em TRANSPORT ENV.
+  const transport = createTransport(runner);
+
+  // Montar app com transport disponível para /health
+  const app = createServer(sql, runner, transport);
   const port = parseInt(process.env.PORT || "3000", 10);
 
+  // Iniciar servidor HTTP (Bun.serve para o Hono app — sempre necessário para /health e /webhook)
   Bun.serve({ port, fetch: app.fetch });
   logger.info({ port }, "brain-sdr server listening");
 
-  // TRP-06: start RabbitMQ consumer when TRANSPORT=rabbitmq
-  // Webhook mode is handled by the Hono server above (POST /api/v1/webhook route).
-  // RabbitMQ mode starts a consumer in addition to the health/core HTTP server.
+  // Iniciar transport:
+  // - TRANSPORT=webhook: WebhookTransport.start() cria um Bun.serve próprio — conflitaria com o
+  //   Bun.serve acima (mesma porta). Em modo webhook o servidor HTTP acima já serve /api/v1/webhook
+  //   via createWebhookApp(runner). Transport criado apenas para getStatus() no /health.
+  // - TRANSPORT=rabbitmq: RabbitMQTransport.start() conecta ao broker e inicia consumer.
+  //   Requer start() explícito pois não usa HTTP — é um consumer de fila separado.
   const transportType = process.env.TRANSPORT ?? "webhook";
   if (transportType === "rabbitmq") {
-    const transport = createTransport(runner);
     await transport.start();
-    logger.info({ transport: transportType }, "RabbitMQ transport started");
+    logger.info({ transport: transportType }, "transport started");
+  } else {
+    logger.info({ transport: transportType }, "transport ready (webhook uses HTTP server above)");
   }
 }
 

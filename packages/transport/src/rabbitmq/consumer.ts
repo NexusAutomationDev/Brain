@@ -11,7 +11,7 @@ import { Connection, ConsumerStatus } from "rabbitmq-client";
 import { ConfigurationError } from "@brain-pkg/shared";
 import { createLogger } from "@brain-pkg/observability";
 import { BrainEventSchema } from "../webhook/events.js";
-import type { ITransport } from "../interface.js";
+import type { ITransport, TransportStatus } from "../interface.js";
 import type { IBrainRunnerLike } from "../webhook/handler.js";
 
 const MAX_ATTEMPTS = 3;
@@ -40,6 +40,8 @@ export class RabbitMQTransport implements ITransport {
   // Pitfall RESEARCH.md: chave por IDLead:Numero — sobrevive a deliveryTag reset após REQUEUE
   private readonly retryMap = new Map<string, number>();
   private readonly logger = createLogger();
+  // D-13/TECH-03: flag de estado real da conexão RabbitMQ — setado no evento 'connection', resetado no stop()
+  private connected = false;
 
   constructor(private readonly runner: IBrainRunnerLike) {}
 
@@ -68,9 +70,10 @@ export class RabbitMQTransport implements ITransport {
     this.rabbit.on("error", (err: unknown) =>
       this.logger.error({ err }, "RabbitMQ connection error")
     );
-    this.rabbit.on("connection", () =>
-      this.logger.info({}, "RabbitMQ connected")
-    );
+    this.rabbit.on("connection", () => {
+      this.connected = true;
+      this.logger.info({}, "RabbitMQ connected");
+    });
 
     // Publisher para DLQ — confirm:true aguarda confirmação do broker (Pitfall 5 do RESEARCH)
     this.pub = this.rabbit.createPublisher({ confirm: true });
@@ -153,10 +156,21 @@ export class RabbitMQTransport implements ITransport {
 
   /** Encerra consumer, publisher e conexão graciosamente. */
   async stop(): Promise<void> {
+    // D-13/TECH-03: setar connected=false antes de fechar conexões
+    this.connected = false;
     await this.sub?.close();
     await this.pub?.close();
     await this.rabbit?.close();
     this.retryMap.clear();
     this.logger.info({}, "RabbitMQTransport stopped");
+  }
+
+  /**
+   * D-13/TECH-03: Retorna estado real da conexão RabbitMQ.
+   * connected=true após evento 'connection' + antes de stop().
+   * connected=false antes de start() ou após stop().
+   */
+  getStatus(): TransportStatus {
+    return { type: 'rabbitmq', connected: this.connected };
   }
 }
