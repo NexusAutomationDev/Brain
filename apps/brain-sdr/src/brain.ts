@@ -96,18 +96,24 @@ export const sdrBrain: IBrain = {
     if (!ctx.llm.bindTools) {
       throw new Error("LLM provider não suporta tool calling — configure um provider compatível (ex: OpenAI, Anthropic, Gemini)");
     }
-    // D-08 (Fase 12): bind com tools nativas + MCP tools injetadas (MCP-02, D-03)
-    // Fase 16: respondTool adicionada (D-09) — LLM escolhe responseMode dinamicamente
-    // Phase 23: boundSearchKnowledgeTool adicionada (D-01) — RAG-02/RAG-03
-    // ctx.mcpTools é sempre array (D-02) — [] quando MCP_URL ausente (sem impacto no comportamento)
-    const llmWithTools = ctx.llm.bindTools([
+    // D-03/TECH-01: Filtrar tools nativas pelo enabledTools whitelist.
+    // ctx.enabledTools = null → sem filtro (BRAIN_TOOLS não setado).
+    // ctx.enabledTools = Set<string> → apenas tools com nome no Set são vinculadas ao LLM.
+    // Aplica-se a closures nativas (boundQualifyTool, etc.) E a ctx.mcpTools injetadas.
+    const nativeTools = [
       boundQualifyTool,
       boundPauseSessionTool,
       boundFinishConversationTool,
       boundSearchKnowledgeTool,  // D-01 (Phase 23): RAG-02/RAG-03
-      respondTool,         // D-09 (Fase 16): respond tool para responseMode dinâmico
-      ...ctx.mcpTools,    // D-03: MCP tools injetadas pelo BrainRunner; [] quando MCP_URL ausente (D-02)
-    ]);
+      respondTool,               // D-09 (Fase 16): respond tool para responseMode dinâmico
+    ];
+    const allTools = [...nativeTools, ...ctx.mcpTools];
+    const filteredAllTools = ctx.enabledTools
+      ? allTools.filter((t) => ctx.enabledTools!.has(t.name))
+      : allTools;
+
+    // D-08 (Fase 12): bind com tools filtradas — LLM só pode chamar o que está no whitelist
+    const llmWithTools = ctx.llm.bindTools(filteredAllTools);
 
     // HIST-03: context window — slice feito no nó, não no invoke() (Pitfall 3 do runner.ts)
     const getContextWindow = (): number => {
@@ -205,12 +211,13 @@ export const sdrBrain: IBrain = {
           tokenUsage: extractTokenUsage(response),
         };
       })
-      // D-07 (Fase 12): ToolNode com tools nativas + MCP tools (MCP-02, D-03)
+      // D-07 (Fase 12): ToolNode com tools filtradas — sincronizado com filteredAllTools do LLM (TECH-01)
       // Fase 16: respondTool excluída do ToolNode de tools — tem seu próprio nó "respond"
       // Phase 23: boundSearchKnowledgeTool adicionada ao ToolNode (D-01) — RAG-02/RAG-03
       // D-11, MCP-04: handleToolErrors: true — captura erro de MCP tool, injeta ToolMessage — evita thread corrompido (PITFALL-2)
+      // TECH-01: O ToolNode usa as mesmas tools filtradas — LLM só pode chamar o que está bound
       .addNode("tools", new ToolNode(
-        [boundQualifyTool, boundPauseSessionTool, boundFinishConversationTool, boundSearchKnowledgeTool, ...ctx.mcpTools],
+        filteredAllTools,
         { handleToolErrors: true }
       ))
       // D-02 (Fase 16): nó respond como nó regular (não ToolNode) — pode setar brainOutput + messages
