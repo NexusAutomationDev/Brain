@@ -282,11 +282,51 @@ mensagem recebida (webhook ou RabbitMQ)
 
 ### Como Criar um Novo Brain
 
-Novo Brain = novo app em `apps/brain-{tipo}/` que:
-1. Implementa `IBrain` (init, run, getPrompts, getTools)
-2. Define `MIGRATIONS_FOLDER` no `.env`
-3. Registra o tipo no `ToolsRegistry`
-4. Tem seu próprio `Dockerfile` (imagem independente)
+Novo Brain = novo app em `apps/brain-{tipo}/`. **Checklist obrigatório** — todo Brain entrega todos esses artefatos:
+
+**Estrutura mínima:**
+```
+apps/brain-{tipo}/
+  src/
+    index.ts          # entry point — BrainRunner.start()
+    brain.ts          # implementação IBrain
+    graph.ts          # buildGraph() com nós LangGraph
+    prompts/          # prompts carregados do banco (sem hardcode)
+    tools/            # tools específicas do Brain (se houver)
+  migrations/
+    meta/
+      _journal.json   # obrigatório para runMigrations()
+    0001_init.sql     # schema inicial do Brain
+  Dockerfile          # imagem independente (multi-stage)
+  .env.example        # ENVs necessárias documentadas
+  package.json        # workspace entry + scripts
+```
+
+**Dockerfile obrigatório** (todo Brain tem sua própria imagem):
+```dockerfile
+FROM node:22-slim AS builder
+# ... build steps
+FROM oven/bun:1 AS runner
+# ... runtime
+```
+
+**ENVs mínimas obrigatórias** (documentar em `.env.example`):
+- `DATABASE_URL`, `DATABASE_NAME` — banco do cliente
+- `TRANSPORT` — `webhook` ou `rabbitmq`
+- `MIGRATIONS_FOLDER` — caminho para `migrations/`
+- `API_KEY` — chave do provider LLM
+- `MODEL` — modelo LLM a usar
+
+**Código obrigatório:**
+1. `IBrain` implementado: `init()`, `run()`, `getPrompts()`, `getTools()`
+2. `buildGraph()` com `BrainStateAnnotation` + nós `llm` e `tools`
+3. `BrainRunner.start()` como entry point em `index.ts`
+4. Brain registrado no `ToolsRegistry` com seu tipo
+5. Migration inicial no `_journal.json`
+
+**A partir do v1.5 — adicional obrigatório:**
+- `IEmbeddingProvider` configurado via ENV (`EMBEDDING_PROVIDER`, `EMBEDDING_MODEL`, `EMBEDDING_DIMENSIONS`)
+- Tools via MCP dinâmico (não hardcoded em `buildGraph()`) quando aplicável
 
 O SDK (`packages/core`) cuida de todo o resto: lifecycle, migrations, transport, LangGraph, PostgresSaver.
 
