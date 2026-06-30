@@ -51,6 +51,42 @@
 🔒️ security: validate JWT tokens before processing requests
 ```
 
+### Scope (opcional)
+
+O scope identifica a área afetada pela mudança — geralmente o nome do pacote, app ou módulo (`packages/database` → `database`, `apps/brain-sdr` → `brain-sdr`). Use kebab-case quando o nome for composto.
+
+```bash
+✨ feat(brain-sdr): add qualification sub-agent
+🐛 fix(database): resolve connection timeout in pool
+📝 docs(api): update endpoint examples
+```
+
+### Limite de tamanho da descrição
+
+A linha de descrição (após emoji + type + scope) deve ter no máximo **72 caracteres**, idealmente até **50**, para manter legibilidade em `git log --oneline` e em ferramentas de CI/CD.
+
+### Corpo da mensagem (body)
+
+Use o corpo para explicar **o quê** mudou e **por quê** — não **como** (isso já está no diff). Separe do título por uma linha em branco. Use bullet points quando houver múltiplas mudanças relacionadas.
+
+```bash
+♻️ refactor(transport): simplify RabbitMQ reconnection logic
+
+- Remove manual retry loop in favor of amqplib-bun's built-in backoff
+- Reduces reconnection time from ~5s to ~1s under normal failure
+```
+
+### Breaking Changes
+
+Para mudanças que quebram compatibilidade, adicione `!` após o type/scope e/ou um footer `BREAKING CHANGE:` explicando o impacto e a migração necessária.
+
+```bash
+♻️ refactor(api)!: remove deprecated /v1/chats endpoint
+
+BREAKING CHANGE: clients must migrate to /v2/chats. The /v1 endpoint
+returned a flat array; /v2 returns a paginated object with `data` and `meta`.
+```
+
 ### Important Rules
 
 **NEVER** include these lines in commits:
