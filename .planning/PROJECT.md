@@ -10,6 +10,15 @@ O primeiro Brain real (SDR) foi entregue no v1.1 — atende leads no WhatsApp co
 
 Uma infraestrutura de agentes modular onde novos Brains são criados definindo apenas prompts, tools, embeddings e fluxos — sem reescrever a base.
 
+## Current Milestone: v1.5 Embedding SDK + Brain Suporte + Tech Debt
+
+**Goal:** Padronizar a camada de embeddings com abstração de provider, entregar o segundo Brain real (Suporte via WhatsApp com MCP dinâmico e RAG obrigatório) e quitar o tech debt acumulado do v1.4.
+
+**Target features:**
+- Tech Debt Cleanup (TD-03, FUP-02, MEM-03, OBS-02)
+- Embedding SDK (`packages/embeddings`): IEmbeddingProvider + adapter OpenAI + fix D-16 (dimensions via ENV)
+- Brain de Suporte (`apps/brain-support`): tools via MCP dinâmico, RAG sempre ativo, embedding próprio (provider/dimensions configurável por Brain), transport WhatsApp idêntico ao SDR
+
 ## Last Milestone: v1.4 RAG + Eventos de Tools + FUP Automático — SHIPPED 2026-06-25
 
 8 fases (19-26), 18 planos, 157 commits, 181 arquivos, +24.233 / -12.268 linhas. RAG semântico + Canal de eventos de tools + FUP Automático com scheduler e geração LLM entregues.

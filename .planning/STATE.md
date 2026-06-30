@@ -1,28 +1,28 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.4
-milestone_name: RAG + Eventos de Tools + FUP Automático
-status: complete
-stopped_at: Milestone v1.4 archived
-last_updated: "2026-06-25"
-last_activity: 2026-06-25
+milestone: v1.5
+milestone_name: Embedding SDK + Brain Suporte + Tech Debt
+status: planning
+stopped_at: ~
+last_updated: "2026-06-29"
+last_activity: 2026-06-29
 progress:
-  total_phases: 8
-  completed_phases: 8
-  total_plans: 18
-  completed_plans: 18
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-06-25 after v1.4 milestone)
+See: .planning/PROJECT.md (updated 2026-06-29 after v1.5 milestone started)
 
 **Core value:** Infraestrutura de agentes modular onde novos Brains são criados definindo apenas prompts, tools, embeddings e fluxos — sem reescrever a base
 
-**Current focus:** Planning next milestone (v1.5)
+**Current focus:** Not started (defining requirements)
 
 ## Milestone v1.4 Summary — SHIPPED 2026-06-25
 
