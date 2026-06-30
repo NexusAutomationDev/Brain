@@ -7,11 +7,24 @@ stopped_at: ~
 last_updated: "2026-06-29"
 last_activity: 2026-06-29
 progress:
-  total_phases: 0
+  total_phases: 4
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
   percent: 0
+phases:
+  - id: 27
+    name: Tech Debt Fixes
+    status: not_started
+  - id: 28
+    name: Embedding SDK
+    status: not_started
+  - id: 29
+    name: Brain Suporte Core
+    status: not_started
+  - id: 30
+    name: Brain Suporte Docker
+    status: not_started
 ---
 
 # Project State
@@ -22,7 +35,32 @@ See: .planning/PROJECT.md (updated 2026-06-29 after v1.5 milestone started)
 
 **Core value:** Infraestrutura de agentes modular onde novos Brains são criados definindo apenas prompts, tools, embeddings e fluxos — sem reescrever a base
 
-**Current focus:** Not started (defining requirements)
+**Current focus:** v1.5 — Tech Debt + Embedding SDK + Brain Suporte
+
+## Current Position
+
+| Field | Value |
+|-------|-------|
+| Milestone | v1.5 Embedding SDK + Brain Suporte + Tech Debt |
+| Phase | 27 — Tech Debt Fixes (not started) |
+| Status | Roadmap created, ready to execute |
+| Progress | 0/4 phases complete |
+
+```
+Phase 27 ░░░░░░░░░░░░░░░░ 0%  Tech Debt Fixes
+Phase 28 ░░░░░░░░░░░░░░░░ 0%  Embedding SDK
+Phase 29 ░░░░░░░░░░░░░░░░ 0%  Brain Suporte Core
+Phase 30 ░░░░░░░░░░░░░░░░ 0%  Brain Suporte Docker
+```
+
+## v1.5 Phases
+
+| Phase | Name | Requirements | Status |
+|-------|------|--------------|--------|
+| 27 | Tech Debt Fixes | TECH-01, TECH-02, TECH-03 | Not started |
+| 28 | Embedding SDK | EMBD-01, EMBD-02, EMBD-03, EMBD-04, EMBD-05 | Not started |
+| 29 | Brain Suporte Core | SUP-01, SUP-02, SUP-03, SUP-04, SUP-05, SUP-07, SUP-08 | Not started |
+| 30 | Brain Suporte Docker | SUP-06 | Not started |
 
 ## Milestone v1.4 Summary — SHIPPED 2026-06-25
 
@@ -39,12 +77,25 @@ See: .planning/PROJECT.md (updated 2026-06-29 after v1.5 milestone started)
 
 **157 commits | 181 files changed | +24.233 / -12.268 lines | 3 days**
 
-## Tech Debt (carry-over para v1.5+)
+## Tech Debt (carry-over para v1.5)
 
-- **TD-03** (Baixo): `BRAIN_TOOLS` whitelist inerte para tools bound diretamente em `buildGraph()`
-- **TD-04** (Baixo): `LeadService.setFullpp()` / `setIaAtivada()` sem callers de produção
-- **D-16** (Baixo): `vector(1536)` hardcoded na migration — mismatch se `EMBEDDING_DIMENSIONS` ENV alterado sem re-migrar
-- **FUP-02** human verification pendente: E2E runtime com banco real (código implementado e correto)
+- **TD-03** (Baixo): `BRAIN_TOOLS` whitelist inerte para tools bound diretamente em `buildGraph()` → TECH-01
+- **D-16** (Baixo): `vector(1536)` hardcoded na migration → EMBD-03
+- **FUP-02** human verification pendente → TECH-02
+- **MEM-03** semantic write path (dead code) → EMBD-05
+- **OBS-02** transport status ausente no GET /health → TECH-03
+
+## Accumulated Context
+
+### Decisions
+- IEmbeddingProvider comes BEFORE Brain Suporte (SUP-04 depends on it)
+- Brain Suporte Docker is its own phase (deploy boundary, independent Dockerfile validation)
+- TECH-01/02/03 grouped in Phase 27 — small isolated fixes, no inter-dependencies
+
+### Known Pitfalls (carry-forward from v1.3/v1.4)
+- MCP transport must use `"streamable_http"` with underscore (not hyphen) — ValueError without clear message
+- `prepare: false` required in all postgres.js connections (PgBouncer transaction mode)
+- `bun:sql` has stuck-connection bug after constraint errors — use `postgres.js` driver
 
 ## Archived
 
@@ -54,4 +105,4 @@ See: .planning/PROJECT.md (updated 2026-06-29 after v1.5 milestone started)
 
 ## Next Steps
 
-Run `/gsd-new-milestone` to start v1.5 planning (requirements → roadmap → execute).
+Run `/gsd-plan-phase 27` to plan Phase 27: Tech Debt Fixes.

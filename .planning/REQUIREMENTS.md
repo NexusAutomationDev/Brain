@@ -55,32 +55,30 @@
 
 ## Traceability
 
-Preenchido pelo roadmapper.
-
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| TECH-01 | — | Pending |
-| TECH-02 | — | Pending |
-| TECH-03 | — | Pending |
-| EMBD-01 | — | Pending |
-| EMBD-02 | — | Pending |
-| EMBD-03 | — | Pending |
-| EMBD-04 | — | Pending |
-| EMBD-05 | — | Pending |
-| SUP-01 | — | Pending |
-| SUP-02 | — | Pending |
-| SUP-03 | — | Pending |
-| SUP-04 | — | Pending |
-| SUP-05 | — | Pending |
-| SUP-06 | — | Pending |
-| SUP-07 | — | Pending |
-| SUP-08 | — | Pending |
+| TECH-01 | Phase 27 | Pending |
+| TECH-02 | Phase 27 | Pending |
+| TECH-03 | Phase 27 | Pending |
+| EMBD-01 | Phase 28 | Pending |
+| EMBD-02 | Phase 28 | Pending |
+| EMBD-03 | Phase 28 | Pending |
+| EMBD-04 | Phase 28 | Pending |
+| EMBD-05 | Phase 28 | Pending |
+| SUP-01 | Phase 29 | Pending |
+| SUP-02 | Phase 29 | Pending |
+| SUP-03 | Phase 29 | Pending |
+| SUP-04 | Phase 29 | Pending |
+| SUP-05 | Phase 29 | Pending |
+| SUP-06 | Phase 30 | Pending |
+| SUP-07 | Phase 29 | Pending |
+| SUP-08 | Phase 29 | Pending |
 
 **Coverage:**
 - v1.5 requirements: 16 total
-- Mapped to phases: 0
-- Unmapped: 16 ⚠️ (pending roadmap)
+- Mapped to phases: 16
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-06-29*
-*Last updated: 2026-06-29 after initial definition*
+*Last updated: 2026-06-29 after roadmap creation (phases 27-30)*

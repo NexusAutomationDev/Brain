@@ -7,6 +7,7 @@
 - ✅ **v1.2 Output Parser + Tool Contracts** — Phases 10-13 (shipped 2026-06-15) — [archive](milestones/v1.2-ROADMAP.md)
 - ✅ **v1.3 MCP Integration + Dynamic responseMode** — Phases 14-17 (shipped 2026-06-16) — [archive](milestones/v1.3-ROADMAP.md)
 - ✅ **v1.4 RAG + Eventos de Tools + FUP Automático** — Phases 19-26 (shipped 2026-06-25) — [archive](milestones/v1.4-ROADMAP.md)
+- 🔄 **v1.5 Embedding SDK + Brain Suporte + Tech Debt** — Phases 27-30 (active)
 
 ## Phases
 
@@ -65,6 +66,64 @@
 
 </details>
 
+### v1.5 Embedding SDK + Brain Suporte + Tech Debt (Phases 27-30)
+
+- [ ] **Phase 27: Tech Debt Fixes** — BRAIN_TOOLS buildGraph coverage + FUP-02 E2E test + /health transport status
+- [ ] **Phase 28: Embedding SDK** — IEmbeddingProvider interface + OpenAI adapter + ENV-driven dimensions + semantic write path
+- [ ] **Phase 29: Brain Suporte Core** — LangGraph graph + MCP tools + RAG obrigatório + transport + BrainOutput + leads + ToolsRegistry
+- [ ] **Phase 30: Brain Suporte Docker** — Dockerfile multi-stage independente + validação end-to-end de deploy
+
+## Phase Details
+
+### Phase 27: Tech Debt Fixes
+**Goal**: Tech debt acumulado do v1.4 está quitado — BRAIN_TOOLS cobre todas as tools, FUP tem teste E2E real e /health expõe status do transport
+**Depends on**: Nothing (isolated fixes, no inter-dependencies)
+**Requirements**: TECH-01, TECH-02, TECH-03
+**Success Criteria** (what must be TRUE):
+  1. Developer seta `BRAIN_TOOLS=qualify_lead` e a tool bound diretamente em `buildGraph()` é excluída do grafo
+  2. `bun test` roda teste de integração do FupScheduler contra PostgreSQL real sem mock — scheduler processa lead elegível e publica evento
+  3. `GET /health` retorna campo `transport` com status `connected` ou `disconnected` refletindo estado real da conexão
+
+**Plans**: TBD
+
+### Phase 28: Embedding SDK
+**Goal**: `packages/embeddings` existe como abstração completa de provider — qualquer Brain configura modelo e dimensões via ENV sem tocar TypeScript
+**Depends on**: Nothing (new package, no runtime dependencies on Phase 27)
+**Requirements**: EMBD-01, EMBD-02, EMBD-03, EMBD-04, EMBD-05
+**Success Criteria** (what must be TRUE):
+  1. Developer implementa `IEmbeddingProvider` com `embed()`, `dimensions` e `providerName` e o Brain aceita sem modificação no core
+  2. `OpenAIEmbeddingProvider` em `packages/embeddings` embeda textos via API OpenAI com modelo e dimensões configuráveis
+  3. Migration cria coluna `vector(N)` onde N vem de `EMBEDDING_DIMENSIONS` ENV — mudar ENV e re-migrar gera coluna com nova dimensão sem erro
+  4. BrainRunner chama `createEmbeddings()` via `IEmbeddingProvider` ao processar mensagem — escrita semântica deixa de ser dead code
+
+**Plans**: TBD
+
+### Phase 29: Brain Suporte Core
+**Goal**: `apps/brain-support` processa mensagens de suporte end-to-end — RAG sempre ativo, tools via MCP, histórico persistente e saída estruturada validada pelo SDK
+**Depends on**: Phase 28 (IEmbeddingProvider para SUP-04)
+**Requirements**: SUP-01, SUP-02, SUP-03, SUP-04, SUP-05, SUP-07, SUP-08
+**Success Criteria** (what must be TRUE):
+  1. Brain Suporte recebe mensagem via webhook (`TRANSPORT=webhook`) e via RabbitMQ (`TRANSPORT=rabbitmq`) e produz resposta sem alterar código
+  2. Grafo sempre inclui `search_knowledge` no `ToolNode` — nenhuma ENV ou flag pode desativá-la
+  3. Tools de gestão (qualify, pause_session, finish_conversation) chegam ao grafo via MCP dinâmico — remover servidor MCP não quebra o Brain (fallback gracioso)
+  4. Brain Suporte usa `IEmbeddingProvider` com modelo e dimensões independentes do Brain SDR — alterar `EMBEDDING_MODEL` de um não afeta o outro
+  5. Resposta do Brain Suporte é `BrainOutput` válido (`fullResponse`, `responseMode`) — BrainRunner lança `BrainOutputValidationError` para saídas inválidas
+  6. Gate `ia_ativada` bloqueia processamento silenciosamente; histórico de conversa por lead é recuperado do PostgresSaver via `thread_id = lead.uniqueId`
+  7. `ToolsRegistry.registerBrainType("support", ...)` existe — habilitar tools por tipo funciona
+
+**Plans**: TBD
+
+### Phase 30: Brain Suporte Docker
+**Goal**: `apps/brain-support` tem imagem Docker independente que sobe, migra e atende mensagens — pronto para entrega a clientes
+**Depends on**: Phase 29 (Brain Suporte Core completo)
+**Requirements**: SUP-06
+**Success Criteria** (what must be TRUE):
+  1. `docker build -f apps/brain-support/Dockerfile .` conclui sem erro — imagem multi-stage funcional
+  2. Container sobe, roda `runMigrations()` com advisory lock e expõe `GET /health` com status `ok`
+  3. Container processa mensagem de teste via webhook e retorna `BrainOutput` válido sem depender de arquivos do brain-sdr
+
+**Plans**: TBD
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -95,6 +154,10 @@
 | 24. Tech Debt & Tracker Cleanup | v1.4 | 3/3 | Complete | 2026-06-24 |
 | 25. FUP Activation Trigger | v1.4 | 3/3 | Complete | 2026-06-25 |
 | 26. FUP Next-At Init Fix | v1.4 | 1/1 | Complete | 2026-06-25 |
+| 27. Tech Debt Fixes | v1.5 | 0/? | Not started | — |
+| 28. Embedding SDK | v1.5 | 0/? | Not started | — |
+| 29. Brain Suporte Core | v1.5 | 0/? | Not started | — |
+| 30. Brain Suporte Docker | v1.5 | 0/? | Not started | — |
 
 ## Backlog
 
