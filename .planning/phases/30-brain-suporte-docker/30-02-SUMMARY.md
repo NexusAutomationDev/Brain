@@ -124,3 +124,14 @@ None - no external service configuration required. Local `docker compose up` usa
 - FOUND: .planning/phases/30-brain-suporte-docker/30-02-SUMMARY.md
 - FOUND: commit 4375952
 - FOUND: commit 0deb195
+
+## Orchestrator Correction (post-Wave-1)
+
+After Wave 1 completed, the user flagged that `apps/brain-support/docker-compose.yml` diverged
+from the established `apps/brain-sdr/docker-compose.yml` production pattern (bundled local
+Postgres + isolated network vs. external host Postgres via `host.docker.internal` + `traefikNet`).
+The compose file was rewritten to mirror brain-sdr's production pattern exactly: no bundled
+Postgres, `extra_hosts: host.docker.internal:host-gateway`, `traefikNet` external network,
+`MIGRATIONS_FOLDER` override. The bundled-Postgres local dev/test convenience described above
+was superseded by this change — `docker compose config` re-validated successfully against the
+new file.
