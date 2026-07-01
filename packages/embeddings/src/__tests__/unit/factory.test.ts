@@ -1,16 +1,30 @@
 import { describe, it, expect, beforeEach, afterAll, mock } from "bun:test";
 
-mock.module("../../openai-provider.js", () => ({
-  OpenAIEmbeddingProvider: class MockOpenAIEmbeddingProvider {
-    providerName = "openai";
-    dimensions = 1536;
+// Mock the underlying LangChain SDKs (not the sibling provider modules) — mock.module
+// patches the global module registry by resolved path, so mocking "../../openai-provider.js"
+// or "../../gemini-provider.js" directly would leak into openai-provider.test.ts /
+// gemini-provider.test.ts when the full suite runs in one process. Mocking the LangChain
+// packages instead is safe because those are also mocked (identically) in the provider
+// test files, so there is no behavior mismatch.
+mock.module("@langchain/openai", () => ({
+  OpenAIEmbeddings: class MockOpenAIEmbeddings {
+    async embedQuery(_text: string): Promise<number[]> {
+      return Array(1536).fill(0.1);
+    }
+    async embedDocuments(texts: string[]): Promise<number[][]> {
+      return texts.map(() => Array(1536).fill(0.1));
+    }
   },
 }));
 
-mock.module("../../gemini-provider.js", () => ({
-  GeminiEmbeddingProvider: class MockGeminiEmbeddingProvider {
-    providerName = "gemini";
-    dimensions = 3072;
+mock.module("@langchain/google-genai", () => ({
+  GoogleGenerativeAIEmbeddings: class MockGoogleGenerativeAIEmbeddings {
+    async embedQuery(_text: string): Promise<number[]> {
+      return Array(3072).fill(0.1);
+    }
+    async embedDocuments(texts: string[]): Promise<number[][]> {
+      return texts.map(() => Array(3072).fill(0.1));
+    }
   },
 }));
 

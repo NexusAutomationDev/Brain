@@ -2,3 +2,4 @@
 export type { IEmbeddingProvider } from "./provider.interface.js";
 export { OpenAIEmbeddingProvider } from "./openai-provider.js";
 export { GeminiEmbeddingProvider } from "./gemini-provider.js";
+export { createEmbeddingProvider, resolveEmbeddingProviderName } from "./factory.js";
