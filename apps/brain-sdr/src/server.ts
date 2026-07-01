@@ -9,6 +9,7 @@ import { createHealthApp } from "@brain-pkg/observability";
 import { createWebhookApp } from "@brain-pkg/transport";
 import type { ITransport } from "@brain-pkg/transport";
 import { createCoreApp, createIngestApp, type BrainRunner } from "@brain-pkg/core";
+import type { IEmbeddingProvider } from "@brain-pkg/embeddings";
 import type { Sql } from "postgres";
 
 /**
@@ -18,15 +19,23 @@ import type { Sql } from "postgres";
  * @param sql - postgres.js Sql instance para health check
  * @param runner - BrainRunner já inicializado para processar eventos
  * @param transport - ITransport opcional para expor status no GET /health (D-14/TECH-03)
+ * @param embeddingProvider - IEmbeddingProvider opcional (D-02) — quando ausente, /api/v1/ingest não é montado
  */
-export function createServer(sql: Sql, runner: BrainRunner, transport?: ITransport): Hono {
+export function createServer(
+  sql: Sql,
+  runner: BrainRunner,
+  transport?: ITransport,
+  embeddingProvider?: IEmbeddingProvider
+): Hono {
   const app = new Hono();
 
   // Montar sub-apps — todos na rota raiz '/'
   app.route("/", createHealthApp(sql, transport)); // D-14/TECH-03: transport para /health
   app.route("/", createWebhookApp(runner));
   app.route("/", createCoreApp(runner));
-  app.route("/", createIngestApp(sql)); // RAG-01/D-05: ingest endpoint
+  if (embeddingProvider) {
+    app.route("/", createIngestApp(sql, embeddingProvider)); // RAG-01/D-05: ingest endpoint
+  }
 
   return app;
 }

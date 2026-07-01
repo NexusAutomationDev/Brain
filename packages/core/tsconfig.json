@@ -9,6 +9,7 @@
   "references": [
     { "path": "../shared" },
     { "path": "../ai" },
+    { "path": "../embeddings" },
     { "path": "../memory" },
     { "path": "../database" },
     { "path": "../transport" },

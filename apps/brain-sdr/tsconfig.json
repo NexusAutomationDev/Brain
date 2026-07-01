@@ -9,6 +9,7 @@
   "references": [
     { "path": "../../packages/shared" },
     { "path": "../../packages/database" },
+    { "path": "../../packages/embeddings" },
     { "path": "../../packages/observability" },
     { "path": "../../packages/ai" },
     { "path": "../../packages/memory" },

@@ -9,8 +9,5 @@ export { createCheckpointer } from "./graph/checkpointer.js";
 export { createLLM } from "./llm/factory.js";
 export type { LLMOptions } from "./llm/factory.js";
 
-// Embeddings factory
-export { createEmbeddings } from "./embeddings/factory.js";
-
 // Token usage helper — D-07
 export { extractTokenUsage } from "./utils/token.js";

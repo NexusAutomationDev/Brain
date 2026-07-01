@@ -17,21 +17,6 @@ export interface ChunkResult {
 }
 
 /**
- * D-14: Resolve o modelo de embedding pelo LLM_PROVIDER quando EMBEDDING_MODEL ausente.
- * Usada tanto em ingest.ts quanto em createSearchKnowledgeTool para garantir consistência.
- */
-export function resolveEmbeddingModel(): string {
-  if (process.env.EMBEDDING_MODEL) return process.env.EMBEDDING_MODEL;
-  const provider = process.env.LLM_PROVIDER || "openai";
-  const defaults: Record<string, string> = {
-    gemini: "text-embedding-004",
-    openai: "text-embedding-3-small",
-    openrouter: "text-embedding-3-small",
-  };
-  return defaults[provider] ?? "text-embedding-3-small";
-}
-
-/**
  * RAG-02/RAG-03: Busca cosine similarity em múltiplas coleções.
  *
  * D-03a: Filtra por embeddingModel = modelo atual — chunks de modelos antigos ignorados.
@@ -46,7 +31,7 @@ export function resolveEmbeddingModel(): string {
  * @param db - Drizzle database instance
  * @param queryVector - Vetor da query já calculado via embedder.embedQuery()
  * @param collections - Array de coleções (mínimo 1 — validado no schema Zod da tool)
- * @param embeddingModel - Modelo atual resolvido via resolveEmbeddingModel()
+ * @param embeddingModel - Modelo atual, sourced de IEmbeddingProvider.providerName (D-17)
  * @param topK - Máximo de resultados (default: 5 — D-07)
  * @param threshold - Mínimo de similaridade (default: 0.5 — D-08)
  */
