@@ -63,12 +63,20 @@ mock.module("@brain-pkg/ai", () => ({
   BrainStateAnnotation: {},
 }));
 
+// EMBD-05: track the most recently constructed MemoryManager mock instance so tests
+// can assert on getContext()/saveContext() call args (queryVector, embedding field).
+let lastMemoryManagerInstance: {
+  getContext: ReturnType<typeof mock>;
+  saveContext: ReturnType<typeof mock>;
+} | null = null;
+
 mock.module("@brain-pkg/memory", () => ({
   MemoryManager: mock(function () {
-    return {
+    lastMemoryManagerInstance = {
       getContext: mock(async () => ({ profile: null, checkpoint: undefined, similarEmbeddings: [] })),
       saveContext: mock(async () => {}),
     };
+    return lastMemoryManagerInstance;
   }),
 }));
 
@@ -916,5 +924,163 @@ describe("EMBD-05: embeddingProvider injection + dimension fail-fast", () => {
     } finally {
       process.exit = originalExit;
     }
+  });
+});
+
+describe("EMBD-05: run() wires embeddingProvider at query-time and save-time", () => {
+  let registry: ToolsRegistry;
+
+  beforeEach(() => {
+    registry = new ToolsRegistry();
+    registry.enableTool("test", "dummy");
+    lastMemoryManagerInstance = null;
+  });
+
+  test("Test 1: run() calls embedQuery(event.Message) once, passes resulting vector to getContext()", async () => {
+    const injectedProvider = {
+      embed: mock(async (texts: string[]) => texts.map(() => [9, 9, 9])),
+      embedQuery: mock(async (_text: string) => [1, 2, 3]),
+      dimensions: 1536,
+      providerName: "test-provider",
+    };
+
+    const brain = makeBrain(["system"]);
+    const runner = new BrainRunner({
+      brain,
+      sql: mockSql,
+      toolsRegistry: registry,
+      embeddingProvider: injectedProvider,
+    });
+    await runner.init();
+    await runner.run(makeEvent());
+
+    expect(injectedProvider.embedQuery).toHaveBeenCalledTimes(1);
+    expect(injectedProvider.embedQuery).toHaveBeenCalledWith("hello");
+
+    expect(lastMemoryManagerInstance).not.toBeNull();
+    const [, , queryVectorArg] = lastMemoryManagerInstance!.getContext.mock.calls[0] as [
+      string,
+      string,
+      number[],
+    ];
+    expect(queryVectorArg).toEqual([1, 2, 3]);
+  });
+
+  test("Test 2: embedQuery() rejection — run() does not throw, falls back to [] queryVector, turn completes", async () => {
+    const injectedProvider = {
+      embed: mock(async (texts: string[]) => texts.map(() => [9, 9, 9])),
+      embedQuery: mock(async (_text: string) => {
+        throw new Error("embedding API down");
+      }),
+      dimensions: 1536,
+      providerName: "test-provider",
+    };
+
+    const brain = makeBrain(["system"]);
+    const runner = new BrainRunner({
+      brain,
+      sql: mockSql,
+      toolsRegistry: registry,
+      embeddingProvider: injectedProvider,
+    });
+    await runner.init();
+
+    const result = await runner.run(makeEvent());
+
+    expect(result).not.toBeNull();
+    expect(result?.brainOutput.fullResponse).toBe("test reply");
+
+    expect(lastMemoryManagerInstance).not.toBeNull();
+    const [, , queryVectorArg] = lastMemoryManagerInstance!.getContext.mock.calls[0] as [
+      string,
+      string,
+      number[],
+    ];
+    expect(queryVectorArg).toEqual([]);
+  });
+
+  test("Test 3: run() calls saveContext() with embedding field populated from embed([profileText])", async () => {
+    const injectedProvider = {
+      embed: mock(async (_texts: string[]) => [[4, 5, 6]]),
+      embedQuery: mock(async (_text: string) => [1, 2, 3]),
+      dimensions: 1536,
+      providerName: "test-provider",
+    };
+
+    const brain = makeBrain(["system"]);
+    const runner = new BrainRunner({
+      brain,
+      sql: mockSql,
+      toolsRegistry: registry,
+      embeddingProvider: injectedProvider,
+    });
+    await runner.init();
+    await runner.run(makeEvent());
+
+    expect(lastMemoryManagerInstance).not.toBeNull();
+    const [saveInput] = lastMemoryManagerInstance!.saveContext.mock.calls[0] as [
+      { userId: string; sessionId?: string; embedding?: { userId: string; sessionId: string; embedding: number[] } },
+    ];
+    expect(saveInput.embedding).toBeDefined();
+    expect(saveInput.embedding!.embedding).toEqual([4, 5, 6]);
+    expect(saveInput.embedding!.userId).toBe("lead-test-1");
+    expect(saveInput.embedding!.sessionId).toBe("lead-abc");
+  });
+
+  test("Test 4: save-time embed() rejection — run() does not throw, saveContext() called WITHOUT embedding field", async () => {
+    const injectedProvider = {
+      embed: mock(async (_texts: string[]) => {
+        throw new Error("embedding API down at save-time");
+      }),
+      embedQuery: mock(async (_text: string) => [1, 2, 3]),
+      dimensions: 1536,
+      providerName: "test-provider",
+    };
+
+    const brain = makeBrain(["system"]);
+    const runner = new BrainRunner({
+      brain,
+      sql: mockSql,
+      toolsRegistry: registry,
+      embeddingProvider: injectedProvider,
+    });
+    await runner.init();
+
+    const result = await runner.run(makeEvent());
+
+    expect(result).not.toBeNull();
+    expect(lastMemoryManagerInstance).not.toBeNull();
+    expect(lastMemoryManagerInstance!.saveContext).toHaveBeenCalledTimes(1);
+    const [saveInput] = lastMemoryManagerInstance!.saveContext.mock.calls[0] as [
+      { embedding?: unknown },
+    ];
+    expect(saveInput.embedding).toBeUndefined();
+  });
+
+  test("Test 5: queryVector.length > 0 reaches getContext() — semantic search layer no longer permanently skipped", async () => {
+    const injectedProvider = {
+      embed: mock(async (texts: string[]) => texts.map(() => [9, 9, 9])),
+      embedQuery: mock(async (_text: string) => [0.5, 0.5, 0.5]),
+      dimensions: 1536,
+      providerName: "test-provider",
+    };
+
+    const brain = makeBrain(["system"]);
+    const runner = new BrainRunner({
+      brain,
+      sql: mockSql,
+      toolsRegistry: registry,
+      embeddingProvider: injectedProvider,
+    });
+    await runner.init();
+    await runner.run(makeEvent());
+
+    expect(lastMemoryManagerInstance).not.toBeNull();
+    const [, , queryVectorArg] = lastMemoryManagerInstance!.getContext.mock.calls[0] as [
+      string,
+      string,
+      number[],
+    ];
+    expect(queryVectorArg.length).toBeGreaterThan(0);
   });
 });

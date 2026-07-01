@@ -327,10 +327,21 @@ export class BrainRunner {
       "HIST-03: context window snapshot"
     );
 
+    // EMBD-05/D-09: Embed a mensagem do usuário ANTES de getContext() — bloqueante,
+    // getContext() depende do vetor para busca semântica. D-10: fallback gracioso —
+    // falha na chamada de embedding nunca quebra o atendimento ao lead.
+    let queryVector: number[] = [];
+    try {
+      queryVector = await this.embeddingProvider!.embedQuery(event.Message);
+    } catch (err) {
+      this.logger.warn(
+        { brainId: this.brain.id, threadId, err },
+        "embeddingProvider.embedQuery failed — continuing with empty queryVector (D-10 fallback)"
+      );
+    }
+
     // Step 1: Hydrate memory — retrieve context from all 3 layers (MEM-04)
-    // Pass empty queryVector to skip semantic search in v1 (no embedding of input yet)
-    // Context flows through the PostgresSaver checkpointer; explicit message injection deferred to Phase 8.
-    await this.memoryManager.getContext(threadId, event.IDLead, []);
+    await this.memoryManager.getContext(threadId, event.IDLead, queryVector);
 
     // Step 2: Invoke compiled graph with thread_id + Langfuse callbacks
     const callbacks = createTracingCallbacks({
@@ -410,15 +421,36 @@ export class BrainRunner {
     }
 
     // Step 4: Persist long-term memory after the turn (MEM-04)
+    // EMBD-05/D-08: embedar profileValue e popular embedding — ativa upsertEmbedding()
+    // (MEM-03 original — nunca disparado até esta fase). D-10: fallback gracioso.
     // Pitfall 5: usar brainOutput.fullResponse em vez de 'reply' (variável removida)
+    const profileValue = {
+      lastUserMessage: event.Message,
+      lastReply: brainOutput.fullResponse,
+      conversationId: threadId,
+    };
+    let embeddingField: { userId: string; sessionId: string; content: string; embedding: number[] } | undefined;
+    try {
+      const profileText = `${profileValue.lastUserMessage}\n${profileValue.lastReply}`;
+      const [vector] = await this.embeddingProvider!.embed([profileText]);
+      embeddingField = {
+        userId: event.IDLead,
+        sessionId: threadId,
+        content: profileText,
+        embedding: vector,
+      };
+    } catch (err) {
+      this.logger.warn(
+        { brainId: this.brain.id, threadId, err },
+        "embeddingProvider.embed failed for saveContext — continuing without embedding (D-10 fallback)"
+      );
+    }
+
     await this.memoryManager.saveContext({
       userId: event.IDLead,
       profileKey: "context",
-      profileValue: {
-        lastUserMessage: event.Message,
-        lastReply: brainOutput.fullResponse,
-        conversationId: threadId,
-      },
+      profileValue,
+      embedding: embeddingField,
     });
 
     // D-02, D-08: extrair tokenUsage do estado retornado pelo grafo
