@@ -48,6 +48,12 @@ Novos Brains (Suporte, etc.) e mudanças ao grafo do Brain SDR estão fora do es
 - **D-17 (consequência de D-14):** `search_knowledge` deve evitar misturar vetores de `embedding_model` incompatíveis na mesma busca — caso contrário, resultados de similaridade ficam sem sentido de forma silenciosa. Mecanismo exato (filtro estrito por `embedding_model` atual vs. outro critério) fica em Claude's Discretion.
 - **Escopo explicitamente limitado do re-embed tool:** não é o pipeline enterprise-grade de zero-downtime (shadow index + recalibração de threshold + arquitetura event-driven) descrito na pesquisa — é uma ferramenta básica de reprocessamento em lote. O padrão industry-grade completo fica registrado em Deferred Ideas.
 
+### Confirmações pós-pesquisa (RESEARCH.md)
+
+- **D-18:** `GeminiEmbeddingProvider` usa `gemini-embedding-001` como novo modelo default, substituindo `text-embedding-004` (descontinuado pelo Google em 14/01/2026, já retornando erro "model not found" — bug pré-existente, não causado por esta fase). Dimensão default para Gemini passa a ser **3072** (não 768) — documentar em `.env.example` que `EMBEDDING_DIMENSIONS=3072` é esperado para Brains configurados com `EMBEDDING_PROVIDER=gemini`, já que o wrapper LangChain instalado (`@langchain/google-genai`) não expõe `outputDimensionality` para reduzir isso.
+- **D-19:** Migration `0009` inclui `TRUNCATE embeddings, knowledge_chunks;` antes do `ALTER COLUMN TYPE vector(N)` — autocontida, sem passo manual. Seguro porque D-05 confirma que não há dados de produção reais ainda.
+- **D-20:** `IEmbeddingProvider` expõe **ambos** `embed(texts: string[]): Promise<number[][]>` (lote/ingestão) e `embedQuery(text: string): Promise<number[]>` (busca) — superset do texto literal de EMBD-01, evita `embed([text])[0]` em todo call site de busca (`search-knowledge.ts`).
+
 ### Claude's Discretion
 
 - Nome e path exatos do endpoint/script de re-embed (ex: `POST /api/v1/reindex` vs script CLI standalone).
