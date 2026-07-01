@@ -38,13 +38,14 @@ mock.module("drizzle-orm", () => ({
   sql: mock((strings: TemplateStringsArray, ...values: unknown[]) => ({ op: "sql", strings, values })),
 }));
 
-// Mock do embedder retornado por createEmbeddings
-const mockEmbedDocuments = mock(async (chunks: string[]) => chunks.map(() => [0.1, 0.2, 0.3]));
-const mockEmbedder = { embedDocuments: mockEmbedDocuments };
-
-mock.module("@brain-pkg/ai", () => ({
-  createEmbeddings: mock(async () => mockEmbedder),
-}));
+// Mock do IEmbeddingProvider injetado — plain object satisfazendo a interface (D-02)
+const mockEmbed = mock(async (chunks: string[]) => chunks.map(() => [0.1, 0.2, 0.3]));
+const mockEmbeddingProvider = {
+  embed: mockEmbed,
+  embedQuery: mock(async (_text: string) => [0.1, 0.2, 0.3]),
+  dimensions: 3,
+  providerName: "openai",
+};
 
 // WAVE 0: Import falhará com "Cannot find module" — estado RED esperado
 import { createIngestApp } from "../../rag/ingest.js";
@@ -73,7 +74,8 @@ describe("POST /api/v1/ingest (RAG-01, RAG-04)", () => {
     mockInsertValues.mockClear();
     mockDb.delete.mockClear();
     mockDb.insert.mockClear();
-    mockEmbedDocuments.mockClear();
+    mockEmbed.mockClear();
+    mockEmbed.mockImplementation(async (chunks: string[]) => chunks.map(() => [0.1, 0.2, 0.3]));
   });
 
   afterEach(() => {
@@ -90,13 +92,13 @@ describe("POST /api/v1/ingest (RAG-01, RAG-04)", () => {
     });
 
     it("retorna 401 quando Authorization header está ausente", async () => {
-      const app = createIngestApp({} as never);
+      const app = createIngestApp({} as never, mockEmbeddingProvider as never);
       const res = await app.fetch(makeRequest({ text: "some text", collection: "faq" }));
       expect(res.status).toBe(401);
     });
 
     it("retorna 401 com token Bearer incorreto", async () => {
-      const app = createIngestApp({} as never);
+      const app = createIngestApp({} as never, mockEmbeddingProvider as never);
       const res = await app.fetch(
         makeRequest(
           { text: "some text", collection: "faq" },
@@ -107,7 +109,7 @@ describe("POST /api/v1/ingest (RAG-01, RAG-04)", () => {
     });
 
     it("retorna 401 sem o prefixo Bearer (token direto)", async () => {
-      const app = createIngestApp({} as never);
+      const app = createIngestApp({} as never, mockEmbeddingProvider as never);
       const res = await app.fetch(
         makeRequest(
           { text: "some text", collection: "faq" },
@@ -121,7 +123,7 @@ describe("POST /api/v1/ingest (RAG-01, RAG-04)", () => {
   describe("RAG-01: falha fechada quando INGEST_TOKEN não configurado", () => {
     it("retorna 503 quando INGEST_TOKEN não está setado", async () => {
       delete process.env.INGEST_TOKEN;
-      const app = createIngestApp({} as never);
+      const app = createIngestApp({} as never, mockEmbeddingProvider as never);
       const res = await app.fetch(
         makeRequest(
           { text: "some text", collection: "faq" },
@@ -138,7 +140,7 @@ describe("POST /api/v1/ingest (RAG-01, RAG-04)", () => {
     });
 
     it("retorna 400 quando body não tem campo 'text'", async () => {
-      const app = createIngestApp({} as never);
+      const app = createIngestApp({} as never, mockEmbeddingProvider as never);
       const res = await app.fetch(
         makeRequest(
           { collection: "faq" },
@@ -149,7 +151,7 @@ describe("POST /api/v1/ingest (RAG-01, RAG-04)", () => {
     });
 
     it("retorna 400 quando body não tem campo 'collection'", async () => {
-      const app = createIngestApp({} as never);
+      const app = createIngestApp({} as never, mockEmbeddingProvider as never);
       const res = await app.fetch(
         makeRequest(
           { text: "some text" },
@@ -160,7 +162,7 @@ describe("POST /api/v1/ingest (RAG-01, RAG-04)", () => {
     });
 
     it("retorna 400 quando text é string vazia", async () => {
-      const app = createIngestApp({} as never);
+      const app = createIngestApp({} as never, mockEmbeddingProvider as never);
       const res = await app.fetch(
         makeRequest(
           { text: "", collection: "faq" },
@@ -177,7 +179,7 @@ describe("POST /api/v1/ingest (RAG-01, RAG-04)", () => {
     });
 
     it("retorna 200 com body { status: 'ok', chunks: N } em happy path", async () => {
-      const app = createIngestApp({} as never);
+      const app = createIngestApp({} as never, mockEmbeddingProvider as never);
       const res = await app.fetch(
         makeRequest(
           { text: "Texto de exemplo para ingestão na base de conhecimento.", collection: "faq" },
@@ -198,7 +200,7 @@ describe("POST /api/v1/ingest (RAG-01, RAG-04)", () => {
     });
 
     it("INSERT batch registra embeddingModel não-nulo", async () => {
-      const app = createIngestApp({} as never);
+      const app = createIngestApp({} as never, mockEmbeddingProvider as never);
       await app.fetch(
         makeRequest(
           { text: "Texto para testar metadados de embedding.", collection: "produtos" },
@@ -213,7 +215,7 @@ describe("POST /api/v1/ingest (RAG-01, RAG-04)", () => {
     });
 
     it("INSERT batch registra chunkIndex e totalChunks não-nulos", async () => {
-      const app = createIngestApp({} as never);
+      const app = createIngestApp({} as never, mockEmbeddingProvider as never);
       await app.fetch(
         makeRequest(
           { text: "Texto para testar metadados de chunk index.", collection: "produtos" },
@@ -234,7 +236,7 @@ describe("POST /api/v1/ingest (RAG-01, RAG-04)", () => {
     });
 
     it("DELETE é chamado antes do INSERT (re-ingestão)", async () => {
-      const app = createIngestApp({} as never);
+      const app = createIngestApp({} as never, mockEmbeddingProvider as never);
       await app.fetch(
         makeRequest(
           { text: "Texto para re-ingestão.", collection: "faq" },
@@ -246,6 +248,53 @@ describe("POST /api/v1/ingest (RAG-01, RAG-04)", () => {
       const deleteCallOrder = mockDb.delete.mock.invocationCallOrder[0];
       const insertCallOrder = mockDb.insert.mock.invocationCallOrder[0];
       expect(deleteCallOrder).toBeLessThan(insertCallOrder);
+    });
+  });
+
+  describe("Pitfall 3: falha parcial/total de embedding (vetores vazios)", () => {
+    beforeEach(() => {
+      process.env.INGEST_TOKEN = "secret-ingest-token";
+    });
+
+    it("insere apenas os N-1 chunks válidos quando 1 vetor vem vazio entre N", async () => {
+      // Texto longo o suficiente para gerar múltiplos chunks (CHUNK_SIZE=1000)
+      const longText = Array(5).fill("Parágrafo de teste para gerar múltiplos chunks. ".repeat(30)).join("\n\n");
+      mockEmbed.mockImplementationOnce(async (chunks: string[]) =>
+        chunks.map((_, i) => (i === 0 ? [] : [0.1, 0.2, 0.3]))
+      );
+
+      const app = createIngestApp({} as never, mockEmbeddingProvider as never);
+      const res = await app.fetch(
+        makeRequest(
+          { text: longText, collection: "faq" },
+          { Authorization: "Bearer secret-ingest-token" }
+        )
+      );
+
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { status: string; chunks: number };
+      expect(body.status).toBe("ok");
+      expect(mockInsertValues).toHaveBeenCalled();
+      const insertedRows = mockInsertValues.mock.calls[0][0] as Array<unknown>;
+      expect(insertedRows.length).toBe(body.chunks);
+      expect(insertedRows.length).toBeGreaterThan(0);
+    });
+
+    it("retorna 502 e não chama db.insert quando TODOS os vetores vêm vazios", async () => {
+      mockEmbed.mockImplementationOnce(async (chunks: string[]) => chunks.map(() => []));
+
+      const app = createIngestApp({} as never, mockEmbeddingProvider as never);
+      const res = await app.fetch(
+        makeRequest(
+          { text: "Texto curto de teste.", collection: "faq" },
+          { Authorization: "Bearer secret-ingest-token" }
+        )
+      );
+
+      expect(res.status).toBe(502);
+      const body = (await res.json()) as { error: string };
+      expect(body.error).toBe("Embedding failed for all chunks");
+      expect(mockDb.insert).not.toHaveBeenCalled();
     });
   });
 });

@@ -14,10 +14,51 @@ import { ToolNode } from "@langchain/langgraph/prebuilt";
 import { BrainStateAnnotation, extractTokenUsage } from "@brain-pkg/ai";
 import type { IBrain, BrainBuildContext } from "@brain-pkg/core";
 import { createPauseSessionTool, createFinishConversationTool, createRespondTool, createSearchKnowledgeTool } from "@brain-pkg/core";
+import { createEmbeddingProvider } from "@brain-pkg/embeddings";
+import type { IEmbeddingProvider } from "@brain-pkg/embeddings";
 import { qualifyLeadTool, runQualificationAgent } from "./qualifier.js";
 import { createLogger } from "@brain-pkg/observability";
 
 const logger = createLogger();
+
+// D-02 (Phase 28): buildGraph() é síncrono por contrato (IBrain) — createEmbeddingProvider()
+// é async, então não pode ser await'd diretamente no corpo de buildGraph(). LazyEmbeddingProvider
+// resolve o provider real (memoizado no processo) na primeira chamada de embed()/embedQuery() —
+// providerName/dimensions refletem a instância real assim que a Promise resolve, o que satisfaz
+// search-knowledge.ts (só lê providerName após o await de embedQuery()).
+let embeddingProviderPromise: Promise<IEmbeddingProvider> | null = null;
+function getEmbeddingProvider(): Promise<IEmbeddingProvider> {
+  if (!embeddingProviderPromise) {
+    embeddingProviderPromise = createEmbeddingProvider();
+  }
+  return embeddingProviderPromise;
+}
+
+class LazyEmbeddingProvider implements IEmbeddingProvider {
+  private resolved: IEmbeddingProvider | null = null;
+
+  get providerName(): string {
+    return this.resolved?.providerName ?? "unresolved";
+  }
+
+  get dimensions(): number {
+    return this.resolved?.dimensions ?? 0;
+  }
+
+  async embed(texts: string[]): Promise<number[][]> {
+    this.resolved = await getEmbeddingProvider();
+    return this.resolved.embed(texts);
+  }
+
+  async embedQuery(text: string): Promise<number[]> {
+    this.resolved = await getEmbeddingProvider();
+    return this.resolved.embedQuery(text);
+  }
+}
+
+function lazyEmbeddingProvider(): IEmbeddingProvider {
+  return new LazyEmbeddingProvider();
+}
 
 // Schema estático para sdrBrain.tools[] — campo declarativo IBrain (D-02 Phase 23)
 // NÃO é executado em produção; createSearchKnowledgeTool(ctx.sql!) é a versão bound.
@@ -84,7 +125,11 @@ export const sdrBrain: IBrain = {
     const boundFinishConversationTool = createFinishConversationTool(ctx.sql!);
 
     // D-01 (Phase 23): search_knowledge bound com closure sobre ctx.sql — RAG-02/RAG-03
-    const boundSearchKnowledgeTool = createSearchKnowledgeTool(ctx.sql!);
+    // D-02 (Phase 28): embeddingProvider injetado via createEmbeddingProvider() (@brain-pkg/embeddings).
+    // buildGraph() é síncrono por contrato (IBrain) — não pode await aqui. lazyEmbeddingProvider()
+    // resolve o provider real de forma lazy/memoizada na primeira chamada real (dentro do handler
+    // async da tool), mirroring o padrão de getEmbedder() lazy nos providers de @brain-pkg/embeddings.
+    const boundSearchKnowledgeTool = createSearchKnowledgeTool(ctx.sql!, lazyEmbeddingProvider());
 
     // D-09 (Fase 16): respond tool para responseMode dinâmico (schema-as-tool)
     const respondTool = createRespondTool();

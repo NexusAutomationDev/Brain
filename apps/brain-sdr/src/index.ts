@@ -12,6 +12,7 @@
 
 import { TenantPoolManager } from "@brain-pkg/database";
 import { BrainRunner, ToolsRegistry } from "@brain-pkg/core";
+import { createEmbeddingProvider } from "@brain-pkg/embeddings";
 import { createLogger } from "@brain-pkg/observability";
 import { createTransport } from "@brain-pkg/transport";
 import { createServer } from "./server.js";
@@ -78,8 +79,12 @@ async function main() {
   // createTransport() retorna WebhookTransport ou RabbitMQTransport baseado em TRANSPORT ENV.
   const transport = createTransport(runner);
 
-  // Montar app com transport disponível para /health
-  const app = createServer(sql, runner, transport);
+  // D-02 (Phase 28): resolve o IEmbeddingProvider uma única vez no startup — substitui
+  // createEmbeddings() de @brain-pkg/ai. Injetado em createServer() para montar /api/v1/ingest.
+  const embeddingProvider = await createEmbeddingProvider();
+
+  // Montar app com transport e embeddingProvider disponíveis
+  const app = createServer(sql, runner, transport, embeddingProvider);
   const port = parseInt(process.env.PORT || "3000", 10);
 
   // Iniciar servidor HTTP (Bun.serve para o Hono app — sempre necessário para /health e /webhook)

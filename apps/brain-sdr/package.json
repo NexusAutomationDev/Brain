@@ -15,6 +15,7 @@
     "@brain-pkg/ai": "workspace:*",
     "@brain-pkg/core": "workspace:*",
     "@brain-pkg/database": "workspace:*",
+    "@brain-pkg/embeddings": "workspace:*",
     "@brain-pkg/observability": "workspace:*",
     "@brain-pkg/transport": "workspace:*",
     "@langchain/core": "^1.1.48",

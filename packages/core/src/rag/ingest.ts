@@ -9,11 +9,10 @@ import { Hono } from "hono";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { and, eq } from "drizzle-orm";
 import { knowledgeChunks } from "@brain-pkg/database";
-import { createEmbeddings } from "@brain-pkg/ai";
+import type { IEmbeddingProvider } from "@brain-pkg/embeddings";
 import { createLogger } from "@brain-pkg/observability";
 import type { Sql } from "postgres";
 import { splitText } from "./chunker.js";
-import { resolveEmbeddingModel } from "./search.js";
 
 const logger = createLogger();
 const MAX_TEXT_BYTES = 1_000_000; // T-21-02-02: 1MB max — DoS mitigation
@@ -25,8 +24,9 @@ const MAX_TEXT_BYTES = 1_000_000; // T-21-02-02: 1MB max — DoS mitigation
  * Sem dependência em BrainRunner — recebe sql direto (como createHealthApp).
  *
  * @param sql - postgres.js Sql instance do tenant
+ * @param embeddingProvider - IEmbeddingProvider injetado (D-02: substitui createEmbeddings())
  */
-export function createIngestApp(sql: Sql): Hono {
+export function createIngestApp(sql: Sql, embeddingProvider: IEmbeddingProvider): Hono {
   const app = new Hono();
 
   app.post("/api/v1/ingest", async (c) => {
@@ -65,19 +65,41 @@ export function createIngestApp(sql: Sql): Hono {
 
     const { text, collection } = body as { text: string; collection: string };
 
-    // D-14/D-15: Resolver modelo de embedding pelo provider
-    const embeddingModel = resolveEmbeddingModel();
+    // D-14/D-15/D-17: modelo de embedding sourced diretamente do provider injetado
+    const embeddingModel = embeddingProvider.providerName;
 
     // D-02: Chunk recursivo do texto
     const chunks = await splitText(text);
 
     // D-16: EMBEDDING_DIMENSIONS=768 garante compatibilidade OpenAI/Gemini na mesma coluna pgvector.
-    // createEmbeddings() já lê EMBEDDING_DIMENSIONS automaticamente via factory.ts.
+    // embeddingProvider já lê EMBEDDING_DIMENSIONS automaticamente via createEmbeddingProvider().
     // Sem código adicional necessário aqui — compatibilidade é responsabilidade do operador
     // configurar EMBEDDING_DIMENSIONS=768 quando usar múltiplos providers na mesma coleção.
-    // Gerar embeddings em batch (usar embedDocuments para batch)
-    const embedder = await createEmbeddings();
-    const vectors = await embedder.embedDocuments(chunks);
+    // Gerar embeddings em batch
+    const vectors = await embeddingProvider.embed(chunks);
+
+    // Pitfall 3 guard: Gemini's embedDocuments() pode retornar vetor vazio por chunk em
+    // falha parcial silenciosa. Filtramos os índices válidos antes de persistir.
+    const validIndices = vectors
+      .map((v, i) => (v.length > 0 ? i : -1))
+      .filter((i) => i !== -1);
+    if (validIndices.length === 0) {
+      logger.warn(
+        { collection, totalChunks: chunks.length },
+        "Embedding failed for all chunks"
+      );
+      return c.json({ error: "Embedding failed for all chunks" }, 502);
+    }
+    if (validIndices.length < chunks.length) {
+      logger.warn(
+        {
+          collection,
+          failed: chunks.length - validIndices.length,
+          succeeded: validIndices.length,
+        },
+        "Some chunks failed to embed — inserting only successfully embedded chunks"
+      );
+    }
 
     const db = drizzle(sql);
 
@@ -92,14 +114,14 @@ export function createIngestApp(sql: Sql): Hono {
         )
       );
 
-    // RAG-04: INSERT batch com metadados obrigatórios não-nulos
-    const rows = chunks.map((content, i) => ({
+    // RAG-04: INSERT batch com metadados obrigatórios não-nulos (apenas chunks válidos)
+    const rows = validIndices.map((i, idx) => ({
       collection,
-      content,
+      content: chunks[i],
       embedding: vectors[i],
-      embeddingModel,             // D-15: modelo gravado em cada chunk
-      chunkIndex: i,              // RAG-04: índice do chunk (0-based)
-      totalChunks: chunks.length, // RAG-04: total de chunks do documento
+      embeddingModel,               // D-15: modelo gravado em cada chunk
+      chunkIndex: idx,              // RAG-04: índice do chunk (0-based, entre os válidos)
+      totalChunks: validIndices.length, // RAG-04: total de chunks persistidos
       updatedAt: new Date(),
     }));
     await db.insert(knowledgeChunks).values(rows);
