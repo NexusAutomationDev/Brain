@@ -64,6 +64,13 @@
       "when": 1750100000000,
       "tag": "0008_fup_failure_count",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1782916100000,
+      "tag": "0009_embedding_dimensions_fix",
+      "breakpoints": true
     }
   ]
 }
