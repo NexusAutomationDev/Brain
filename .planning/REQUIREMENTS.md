@@ -10,6 +10,9 @@
 - [x] **TECH-01**: Developer pode controlar tools bound em `buildGraph()` via `BRAIN_TOOLS` whitelist (fix TD-03)
 - [x] **TECH-02**: Existe teste de integração E2E do FUP rodando contra banco PostgreSQL real (fix FUP-02)
 - [x] **TECH-03**: `GET /health` retorna status do transport (conectado/desconectado) junto com health geral (fix OBS-02)
+- [ ] **TECH-04**: Fix de docker-compose.yml (porta 3003 para brain-support) está commitado e workflows de CI (`publish-brain-sdr.yml`, `publish-brain-support.yml`) fazem quote/validam saída do `jq` (fix v1.5 audit — integration finding)
+- [ ] **TECH-05**: Tool `respond` tem proteção de append-after-filter equivalente a `search_knowledge`; `.env.example` do brain-sdr documenta ENVs de embedding; migration 0009 tem aviso inline sobre `vector(1536)` hardcoded (fix v1.5 audit — pre-client-onboarding items)
+- [ ] **TECH-06**: Achados warning/info de code review das fases 27-30 resolvidos e lacunas de documentação/teste (frontmatter, test ordering, test isolation) preenchidas (fix v1.5 audit — tech debt cleanup)
 
 ### Embedding SDK
 
@@ -73,12 +76,15 @@
 | SUP-06 | Phase 30 | Complete |
 | SUP-07 | Phase 29 | Complete |
 | SUP-08 | Phase 29 | Complete |
+| TECH-04 | Phase 31 | Pending |
+| TECH-05 | Phase 31 | Pending |
+| TECH-06 | Phase 32 | Pending |
 
 **Coverage:**
-- v1.5 requirements: 16 total
-- Mapped to phases: 16
+- v1.5 requirements: 19 total
+- Mapped to phases: 19
 - Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-06-29*
-*Last updated: 2026-06-29 after roadmap creation (phases 27-30)*
+*Last updated: 2026-07-01 after gap closure phase creation (phases 31-32, from v1.5 audit tech debt)*
