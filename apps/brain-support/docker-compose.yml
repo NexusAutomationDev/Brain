@@ -12,7 +12,7 @@ services:
       dockerfile: apps/brain-support/Dockerfile
     image: brain-support:latest
     ports:
-      - "${PORT:-3002}:${PORT:-3002}"
+      - "${PORT:-3003}:${PORT:-3002}"
     env_file: .env
     environment:
       MIGRATIONS_FOLDER: /app/migrations
