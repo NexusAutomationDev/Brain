@@ -71,6 +71,13 @@
       "when": 1782916100000,
       "tag": "0009_embedding_dimensions_fix",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1783000000000,
+      "tag": "0010_brain_support_prompts",
+      "breakpoints": true
     }
   ]
 }
