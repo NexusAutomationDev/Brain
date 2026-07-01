@@ -77,6 +77,17 @@ const searchKnowledgeToolSchema = tool(
   }
 );
 
+// WR-01 (29-REVIEW.md) / SUP-02 gap fix: MCP tools whose name collides with a reserved
+// native tool name must never reach bindTools()/ToolNode — an operator-configured MCP_URL
+// server exposing e.g. "search_knowledge" would otherwise create two same-named tool
+// objects with undefined precedence, silently defeating the "never disableable" guarantee.
+const RESERVED_TOOL_NAMES = new Set([
+  "search_knowledge",
+  "pause_session",
+  "finish_conversation",
+  "respond",
+]);
+
 export const supportBrain: IBrain = {
   id: "brain-support",
   brainType: "support",
@@ -113,7 +124,21 @@ export const supportBrain: IBrain = {
       boundFinishConversationTool,
       respondTool,
     ];
-    const allToolsExceptSearch = [...nativeTools, ...ctx.mcpTools];
+    // WR-01 fix: drop any MCP tool whose name collides with a reserved native tool name
+    // BEFORE concatenation — closes the SUP-02 gap where an MCP_URL server exposing
+    // "search_knowledge" (or pause_session/finish_conversation/respond) could shadow
+    // the native closure with undefined bindTools()/ToolNode precedence.
+    const safeMcpTools = ctx.mcpTools.filter((t) => {
+      const collides = RESERVED_TOOL_NAMES.has(t.name);
+      if (collides) {
+        logger.warn(
+          { toolName: t.name },
+          "MCP tool nome colide com tool nativa reservada — descartada (WR-01/SUP-02)"
+        );
+      }
+      return !collides;
+    });
+    const allToolsExceptSearch = [...nativeTools, ...safeMcpTools];
     const filteredExceptSearch = ctx.enabledTools
       ? allToolsExceptSearch.filter((t) => ctx.enabledTools!.has(t.name))
       : allToolsExceptSearch;
