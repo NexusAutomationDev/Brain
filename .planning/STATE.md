@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Embedding SDK + Brain Suporte + Tech Debt
 status: Ready to plan
-last_updated: "2026-07-01T21:01:04.068Z"
+last_updated: "2026-07-01T22:17:40.827Z"
 last_activity: 2026-07-01
 progress:
   total_phases: 6
-  completed_phases: 3
-  total_plans: 11
-  completed_plans: 11
+  completed_phases: 4
+  total_plans: 14
+  completed_plans: 14
   percent: 100
 ---
 
@@ -28,15 +28,15 @@ See: .planning/PROJECT.md (updated 2026-06-29 after v1.5 milestone started)
 | Field | Value |
 |-------|-------|
 | Milestone | v1.5 Embedding SDK + Brain Suporte + Tech Debt |
-| Phase | 29 — Brain Suporte Core (not started) |
-| Status | Phases 27-28 complete, ready to plan Phase 29 |
-| Progress | 2/4 phases complete |
+| Phase | 30 — Brain Suporte Docker (complete) |
+| Status | Phases 27-30 complete — v1.5 milestone phases done |
+| Progress | 4/4 phases complete |
 
 ```
 Phase 27 ████████████████ 100%  Tech Debt Fixes
 Phase 28 ████████████████ 100%  Embedding SDK
-Phase 29 ░░░░░░░░░░░░░░░░ 0%  Brain Suporte Core
-Phase 30 ░░░░░░░░░░░░░░░░ 0%  Brain Suporte Docker
+Phase 29 ████████████████ 100%  Brain Suporte Core
+Phase 30 ████████████████ 100%  Brain Suporte Docker
 ```
 
 ## v1.5 Phases
@@ -45,8 +45,8 @@ Phase 30 ░░░░░░░░░░░░░░░░ 0%  Brain Suporte Dock
 |-------|------|--------------|--------|
 | 27 | Tech Debt Fixes | TECH-01, TECH-02, TECH-03 | Complete (2026-06-30) |
 | 28 | Embedding SDK | EMBD-01, EMBD-02, EMBD-03, EMBD-04, EMBD-05 | Complete (2026-07-01) |
-| 29 | Brain Suporte Core | SUP-01, SUP-02, SUP-03, SUP-04, SUP-05, SUP-07, SUP-08 | Not started |
-| 30 | Brain Suporte Docker | SUP-06 | Not started |
+| 29 | Brain Suporte Core | SUP-01, SUP-02, SUP-03, SUP-04, SUP-05, SUP-07, SUP-08 | Complete (2026-07-01) |
+| 30 | Brain Suporte Docker | SUP-06 | Complete (2026-07-01) |
 
 ## Milestone v1.4 Summary — SHIPPED 2026-06-25
 

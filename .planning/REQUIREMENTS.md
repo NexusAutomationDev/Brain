@@ -26,7 +26,7 @@
 - [x] **SUP-03**: Tools do grafo (qualify, pause_session, finish_conversation) carregadas via MCP dinâmico, sem hardcode em `buildGraph()` (reinterpretado per D-01/D-02: `pause_session`/`finish_conversation` são closures nativas hardcoded, sem `qualify_lead` — desvio confirmado pelo usuário)
 - [x] **SUP-04**: Brain Suporte usa `IEmbeddingProvider` com provider/modelo/dimensões configuráveis independentemente do SDR
 - [x] **SUP-05**: Brain Suporte retorna `BrainOutput` estruturado (`fullResponse`, `responseMode`) validado pelo SDK
-- [ ] **SUP-06**: `Dockerfile` multi-stage independente e funcional para `apps/brain-support`
+- [x] **SUP-06**: `Dockerfile` multi-stage independente e funcional para `apps/brain-support`
 - [x] **SUP-07**: Gate `ia_ativada` + histórico de conversa persistente por lead via `PostgresSaver` (thread_id = lead.uniqueId)
 - [x] **SUP-08**: Brain Suporte registrado no `ToolsRegistry` com tipo `"support"`
 
@@ -70,7 +70,7 @@
 | SUP-03 | Phase 29 | Complete (override — see 29-VERIFICATION.md D-01/D-02) |
 | SUP-04 | Phase 29 | Complete |
 | SUP-05 | Phase 29 | Complete |
-| SUP-06 | Phase 30 | Pending |
+| SUP-06 | Phase 30 | Complete |
 | SUP-07 | Phase 29 | Complete |
 | SUP-08 | Phase 29 | Complete |
 
