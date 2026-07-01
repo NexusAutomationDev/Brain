@@ -86,6 +86,30 @@ mock.module("drizzle-orm/postgres-js", () => ({
   drizzle: mock(() => ({})),
 }));
 
+// EMBD-05: mock IEmbeddingProvider + createEmbeddingProvider (default dimensions: 1536,
+// matches mockSql's default dimension-check response — keeps existing tests green)
+const mockEmbeddingProvider = {
+  embed: mock(async (texts: string[]) => texts.map(() => [0.1, 0.2, 0.3])),
+  embedQuery: mock(async (_text: string) => [0.1, 0.2, 0.3]),
+  dimensions: 1536,
+  providerName: "openai",
+};
+const mockCreateEmbeddingProvider = mock(async () => mockEmbeddingProvider);
+mock.module("@brain-pkg/embeddings", () => ({
+  createEmbeddingProvider: mockCreateEmbeddingProvider,
+}));
+
+// EMBD-05/D-15: tagged-template-compatible mock for `this.sql<...>`...`` calls in runner.ts.
+// Default resolves the dimension-check query to 1536 — matches mockEmbeddingProvider.dimensions
+// so the fail-fast check passes by default in all existing tests.
+function makeMockSql(dimensions = 1536) {
+  const fn = mock(async (_strings: TemplateStringsArray, ..._values: unknown[]) => [
+    { dimensions },
+  ]);
+  return fn as unknown as import("postgres").Sql;
+}
+const mockSql = makeMockSql();
+
 mock.module("@brain-pkg/database", () => ({
   runMigrations: mock(async () => {}),
   // Mock das tabelas do Drizzle — necessário porque lead-service.ts importa `leads` de @brain-pkg/database
@@ -194,13 +218,13 @@ describe("BrainRunner", () => {
     const brain = makeBrain(["system"]);
     const runner = new BrainRunner({
       brain,
-      sql: {} as never,
+      sql: mockSql,
       toolsRegistry: registry,
     });
 
     await runner.init();
 
-    expect(mockLoadPrompts).toHaveBeenCalledWith({}, "test", ["system"]);
+    expect(mockLoadPrompts).toHaveBeenCalledWith(mockSql, "test", ["system"]);
   });
 
   test("init() calls process.exit(1) when MIGRATIONS_FOLDER ENV is not set and migrationsFolder option is absent (D-11, T-06-07)", async () => {
@@ -215,7 +239,7 @@ describe("BrainRunner", () => {
     // No migrationsFolder option passed — relies solely on ENV (which is now unset)
     const runner = new BrainRunner({
       brain,
-      sql: {} as never,
+      sql: mockSql,
       toolsRegistry: registry,
     });
 
@@ -242,7 +266,7 @@ describe("BrainRunner", () => {
     const brain = makeBrain(["system"]);
     const runner = new BrainRunner({
       brain,
-      sql: {} as never,
+      sql: mockSql,
       toolsRegistry: registry,
     });
 
@@ -261,7 +285,7 @@ describe("BrainRunner", () => {
     const brain = makeBrain(["system"]);
     const runner = new BrainRunner({
       brain,
-      sql: {} as never,
+      sql: mockSql,
       toolsRegistry: registry,
     });
 
@@ -277,7 +301,7 @@ describe("BrainRunner", () => {
     const brain = makeBrain(["system"]);
     const runner = new BrainRunner({
       brain,
-      sql: {} as never,
+      sql: mockSql,
       toolsRegistry: registry,
     });
 
@@ -294,7 +318,7 @@ describe("BrainRunner", () => {
 
   test("run() returns wrapper { brainOutput, tokenUsage } (D-02, D-08, TOK-04a)", async () => {
     const brain = makeBrain(["system"]);
-    const runner = new BrainRunner({ brain, sql: {} as never, toolsRegistry: registry });
+    const runner = new BrainRunner({ brain, sql: mockSql, toolsRegistry: registry });
     await runner.init();
     const result = await runner.run(makeEvent());
 
@@ -317,7 +341,7 @@ describe("BrainRunner", () => {
       updatedAt: new Date(),
     }));
     const brain = makeBrain(["system"]);
-    const runner = new BrainRunner({ brain, sql: {} as never, toolsRegistry: registry });
+    const runner = new BrainRunner({ brain, sql: mockSql, toolsRegistry: registry });
     await runner.init();
     const result = await runner.run(makeEvent());
     expect(result).toBeNull();
@@ -325,7 +349,7 @@ describe("BrainRunner", () => {
 
   test("run() tokenUsage usa valores do state.tokenUsage retornado pelo grafo (TOK-04c)", async () => {
     const brain = makeBrain(["system"]);
-    const runner = new BrainRunner({ brain, sql: {} as never, toolsRegistry: registry });
+    const runner = new BrainRunner({ brain, sql: mockSql, toolsRegistry: registry });
     await runner.init();
     const result = await runner.run(makeEvent());
 
@@ -349,7 +373,7 @@ describe("BrainRunner", () => {
         })),
       })) as unknown as IBrain["buildGraph"],
     };
-    const runner = new BrainRunner({ brain: brainSemTokenUsage, sql: {} as never, toolsRegistry: registry });
+    const runner = new BrainRunner({ brain: brainSemTokenUsage, sql: mockSql, toolsRegistry: registry });
     await runner.init();
     const result = await runner.run(makeEvent());
 
@@ -361,7 +385,7 @@ describe("BrainRunner", () => {
     const brain = makeBrain(["system"]);
     const runner = new BrainRunner({
       brain,
-      sql: {} as never,
+      sql: mockSql,
       toolsRegistry: registry,
     });
 
@@ -381,7 +405,7 @@ describe("BrainRunner", () => {
       ...makeBrain(["system"]),
       defaultPrompts: { system: "Updated system prompt" },
     };
-    const runner = new BrainRunner({ brain, sql: {} as never, toolsRegistry: registry });
+    const runner = new BrainRunner({ brain, sql: mockSql, toolsRegistry: registry });
     await runner.init();
 
     await runner.refreshPrompts();
@@ -395,7 +419,7 @@ describe("BrainRunner", () => {
   test("refreshPrompts() does NOT call upsertPrompts when brain.defaultPrompts is undefined", async () => {
     mockUpsertPrompts.mockClear();
     const brain = makeBrain(["system"]); // no defaultPrompts
-    const runner = new BrainRunner({ brain, sql: {} as never, toolsRegistry: registry });
+    const runner = new BrainRunner({ brain, sql: mockSql, toolsRegistry: registry });
     await runner.init();
 
     await runner.refreshPrompts();
@@ -423,7 +447,7 @@ describe("BrainRunner", () => {
       }));
 
       const brain = makeBrain(["system"]);
-      const runner = new BrainRunner({ brain, sql: {} as never, toolsRegistry: registry });
+      const runner = new BrainRunner({ brain, sql: mockSql, toolsRegistry: registry });
       await runner.init();
 
       const result = await runner.run(makeEvent());
@@ -433,7 +457,7 @@ describe("BrainRunner", () => {
     test("run() retorna wrapper quando iaAtivada=true", async () => {
       // mockUpsertLead default já retorna iaAtivada: true — sem override necessário
       const brain = makeBrain(["system"]);
-      const runner = new BrainRunner({ brain, sql: {} as never, toolsRegistry: registry });
+      const runner = new BrainRunner({ brain, sql: mockSql, toolsRegistry: registry });
       await runner.init();
 
       const result = await runner.run(makeEvent());
@@ -443,7 +467,7 @@ describe("BrainRunner", () => {
 
     test("run() chama upsertLead com Numero, IDLead e Name do evento", async () => {
       const brain = makeBrain(["system"]);
-      const runner = new BrainRunner({ brain, sql: {} as never, toolsRegistry: registry });
+      const runner = new BrainRunner({ brain, sql: mockSql, toolsRegistry: registry });
       await runner.init();
 
       await runner.run(makeEvent());
@@ -472,7 +496,7 @@ describe("BrainRunner", () => {
           })),
         })) as unknown as IBrain["buildGraph"],
       };
-      const runner = new BrainRunner({ brain: brainSemOutput, sql: {} as never, toolsRegistry: registry });
+      const runner = new BrainRunner({ brain: brainSemOutput, sql: mockSql, toolsRegistry: registry });
       await runner.init();
 
       // NOTE: using string check instead of class import to avoid zod v4 "cached value already set" panic in bun 1.3.2
@@ -492,7 +516,7 @@ describe("BrainRunner", () => {
           })),
         })) as unknown as IBrain["buildGraph"],
       };
-      const runner = new BrainRunner({ brain: brainOutputInvalido, sql: {} as never, toolsRegistry: registry });
+      const runner = new BrainRunner({ brain: brainOutputInvalido, sql: mockSql, toolsRegistry: registry });
       await runner.init();
 
       // NOTE: using string check instead of class import to avoid zod v4 "cached value already set" panic in bun 1.3.2
@@ -504,7 +528,12 @@ describe("BrainRunner", () => {
 
   describe("D-03: _compileGraph passes sql to BrainBuildContext", () => {
     test("buildGraph receives ctx with sql equal to the sql instance passed to BrainRunner", async () => {
-      const sqlInstance = { tag: "sql-sentinel" } as never;
+      // Callable (tagged-template) so `this.sql<...>`...`` in init()'s D-15 dimension
+      // check resolves, while still carrying a `.tag` marker for identity comparison below.
+      const sqlInstance = Object.assign(
+        mock(async () => [{ dimensions: 1536 }]),
+        { tag: "sql-sentinel" }
+      ) as unknown as never;
 
       const buildGraphMock = mock(() => ({
         compile: mock(() => ({
@@ -554,7 +583,7 @@ describe("BrainRunner", () => {
     test("usa padrão 40 quando CONTEXT_WINDOW_MESSAGES não está definida", async () => {
       delete process.env.CONTEXT_WINDOW_MESSAGES;
       const brain = makeBrain(["system"]);
-      const runner = new BrainRunner({ brain, sql: {} as never, toolsRegistry: registry });
+      const runner = new BrainRunner({ brain, sql: mockSql, toolsRegistry: registry });
       await runner.init();
       // run() não deve lançar erro — getState retorna values.messages=[]
       const result = await runner.run(makeEvent());
@@ -565,7 +594,7 @@ describe("BrainRunner", () => {
     test("usa CONTEXT_WINDOW_MESSAGES=10 quando definida", async () => {
       process.env.CONTEXT_WINDOW_MESSAGES = "10";
       const brain = makeBrain(["system"]);
-      const runner = new BrainRunner({ brain, sql: {} as never, toolsRegistry: registry });
+      const runner = new BrainRunner({ brain, sql: mockSql, toolsRegistry: registry });
       await runner.init();
       const result = await runner.run(makeEvent());
       expect(result).not.toBeNull();
@@ -575,7 +604,7 @@ describe("BrainRunner", () => {
     test("fallback para 40 quando CONTEXT_WINDOW_MESSAGES é inválida ('abc')", async () => {
       process.env.CONTEXT_WINDOW_MESSAGES = "abc";
       const brain = makeBrain(["system"]);
-      const runner = new BrainRunner({ brain, sql: {} as never, toolsRegistry: registry });
+      const runner = new BrainRunner({ brain, sql: mockSql, toolsRegistry: registry });
       await runner.init();
       // Não deve lançar, não deve usar NaN como window size
       const result = await runner.run(makeEvent());
@@ -603,7 +632,7 @@ describe("BrainRunner", () => {
           })),
         })) as unknown as IBrain["buildGraph"],
       };
-      const runner = new BrainRunner({ brain, sql: {} as never, toolsRegistry: registry });
+      const runner = new BrainRunner({ brain, sql: mockSql, toolsRegistry: registry });
       await runner.init();
       await runner.run(makeEvent());
 
@@ -633,7 +662,7 @@ describe("EVT-01: EventPublisher — sem ENV configurada", () => {
     const brain = makeBrain(["system"]);
     const runner = new BrainRunner({
       brain,
-      sql: {} as never,
+      sql: mockSql,
       toolsRegistry: registry,
     });
     await runner.init();
@@ -666,7 +695,7 @@ describe("EVT-01: close() com publisher injetado", () => {
     const brain = makeBrain(["system"]);
     const runner = new BrainRunner({
       brain,
-      sql: {} as never,
+      sql: mockSql,
       toolsRegistry: registry,
       eventPublisher: mockPublisher,
     });
@@ -714,7 +743,7 @@ describe("EVT-02, EVT-04: Whitelist e event_id — injeção via BrainRunnerOpti
 
     const runner = new BrainRunner({
       brain,
-      sql: {} as never,
+      sql: mockSql,
       toolsRegistry: registry,
       eventPublisher: mockEventPublisher,
     });
@@ -758,7 +787,7 @@ describe("EVT-02, EVT-04: Whitelist e event_id — injeção via BrainRunnerOpti
 
     const runner = new BrainRunner({
       brain,
-      sql: {} as never,
+      sql: mockSql,
       toolsRegistry: registry,
       eventPublisher: mockEventPublisher,
     });
@@ -768,5 +797,124 @@ describe("EVT-02, EVT-04: Whitelist e event_id — injeção via BrainRunnerOpti
     // name undefined não passa o guard typeof === "string" → publish não é chamado
     await Promise.resolve();
     expect(mockPublish).not.toHaveBeenCalled();
+  });
+});
+
+describe("EMBD-05: embeddingProvider injection + dimension fail-fast", () => {
+  let registry: ToolsRegistry;
+
+  beforeEach(() => {
+    registry = new ToolsRegistry();
+    registry.enableTool("test", "dummy");
+    mockCreateEmbeddingProvider.mockClear();
+  });
+
+  test("Test 1: injected embeddingProvider is used — createEmbeddingProvider() is NOT called", async () => {
+    const injectedProvider = {
+      embed: mock(async (texts: string[]) => texts.map(() => [1, 2, 3])),
+      embedQuery: mock(async (_text: string) => [1, 2, 3]),
+      dimensions: 1536,
+      providerName: "injected-provider",
+    };
+
+    const brain = makeBrain(["system"]);
+    const runner = new BrainRunner({
+      brain,
+      sql: mockSql,
+      toolsRegistry: registry,
+      embeddingProvider: injectedProvider,
+    });
+
+    await runner.init();
+
+    expect(mockCreateEmbeddingProvider).not.toHaveBeenCalled();
+  });
+
+  test("Test 2: no embeddingProvider injected — init() calls createEmbeddingProvider() exactly once", async () => {
+    const brain = makeBrain(["system"]);
+    const runner = new BrainRunner({
+      brain,
+      sql: mockSql,
+      toolsRegistry: registry,
+    });
+
+    await runner.init();
+
+    expect(mockCreateEmbeddingProvider).toHaveBeenCalledTimes(1);
+  });
+
+  test("Test 3: init() queries pg_attribute.atttypmod AFTER runMigrations() and AFTER provider resolution", async () => {
+    const callOrder: string[] = [];
+
+    const orderedSql = mock(async () => {
+      callOrder.push("dimension-query");
+      return [{ dimensions: 1536 }];
+    }) as unknown as import("postgres").Sql;
+
+    mockCreateEmbeddingProvider.mockImplementationOnce(async () => {
+      callOrder.push("createEmbeddingProvider");
+      return mockEmbeddingProvider;
+    });
+
+    const brain = makeBrain(["system"]);
+    const runner = new BrainRunner({
+      brain,
+      sql: orderedSql,
+      toolsRegistry: registry,
+    });
+
+    await runner.init();
+
+    // runMigrations() itself is mocked (no callOrder entry) — but createEmbeddingProvider
+    // and the dimension query both happen after it in the source; assert relative ordering
+    // between provider resolution and the dimension query.
+    expect(callOrder).toEqual(["createEmbeddingProvider", "dimension-query"]);
+  });
+
+  test("Test 4: dimension mismatch — logger.error with 'EMBEDDING_DIMENSIONS mismatch' + process.exit(1)", async () => {
+    const mismatchSql = mock(async () => [{ dimensions: 768 }]) as unknown as import("postgres").Sql;
+
+    const originalExit = process.exit;
+    const mockExit = mock((_code: number) => { throw new Error("process.exit called"); });
+    process.exit = mockExit as never;
+
+    const brain = makeBrain(["system"]);
+    const runner = new BrainRunner({
+      brain,
+      sql: mismatchSql,
+      toolsRegistry: registry,
+    });
+
+    try {
+      await runner.init();
+      expect.unreachable("init() should have called process.exit(1) on dimension mismatch");
+    } catch (e) {
+      expect((e as Error).message).toBe("process.exit called");
+      expect(mockExit).toHaveBeenCalledWith(1);
+    } finally {
+      process.exit = originalExit;
+    }
+  });
+
+  test("Test 5: dimensions match — init() completes normally, no process.exit call", async () => {
+    const matchingSql = mock(async () => [{ dimensions: 1536 }]) as unknown as import("postgres").Sql;
+
+    const originalExit = process.exit;
+    const mockExit = mock((_code: number) => {});
+    process.exit = mockExit as never;
+
+    const brain = makeBrain(["system"]);
+    const runner = new BrainRunner({
+      brain,
+      sql: matchingSql,
+      toolsRegistry: registry,
+    });
+
+    try {
+      await runner.init();
+      expect(mockExit).not.toHaveBeenCalled();
+    } finally {
+      process.exit = originalExit;
+    }
   });
 });

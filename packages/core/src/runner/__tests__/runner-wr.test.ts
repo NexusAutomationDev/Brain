@@ -77,6 +77,18 @@ mock.module("drizzle-orm/postgres-js", () => ({
   drizzle: mock(() => ({})),
 }));
 
+// EMBD-05: mock embeddings provider + callable sql fixture for the D-15 dimension check in init()
+const mockEmbeddingProviderWr = {
+  embed: mock(async (texts: string[]) => texts.map(() => [0.1, 0.2, 0.3])),
+  embedQuery: mock(async (_text: string) => [0.1, 0.2, 0.3]),
+  dimensions: 1536,
+  providerName: "openai",
+};
+mock.module("@brain-pkg/embeddings", () => ({
+  createEmbeddingProvider: mock(async () => mockEmbeddingProviderWr),
+}));
+const mockSqlWr = mock(async () => [{ dimensions: 1536 }]) as unknown as never;
+
 mock.module("@brain-pkg/database", () => ({
   runMigrations: mock(async () => {}),
   leads: {},
@@ -160,7 +172,7 @@ describe("WR-01: BrainRunner.init() warns when FUP_WEBHOOK_URL set but checkpoin
 
     const runner = new BrainRunner({
       brain: makeBrain(),
-      sql: {} as never,
+      sql: mockSqlWr,
       toolsRegistry: makeRegistry(),
     });
 
@@ -184,7 +196,7 @@ describe("WR-01: BrainRunner.init() warns when FUP_WEBHOOK_URL set but checkpoin
 
     const runner = new BrainRunner({
       brain: makeBrain(),
-      sql: {} as never,
+      sql: mockSqlWr,
       toolsRegistry: makeRegistry(),
     });
 
@@ -204,7 +216,7 @@ describe("WR-01: BrainRunner.init() warns when FUP_WEBHOOK_URL set but checkpoin
 
     const runner = new BrainRunner({
       brain: makeBrain(),
-      sql: {} as never,
+      sql: mockSqlWr,
       toolsRegistry: makeRegistry(),
     });
 
@@ -241,7 +253,7 @@ describe("WR-03: BrainRunner stores SIGTERM handler and removes it in close()", 
 
     const runner = new BrainRunner({
       brain: makeBrain(),
-      sql: {} as never,
+      sql: mockSqlWr,
       toolsRegistry: makeRegistry(),
     });
     await runner.init();
@@ -258,7 +270,7 @@ describe("WR-03: BrainRunner stores SIGTERM handler and removes it in close()", 
 
     const runner = new BrainRunner({
       brain: makeBrain(),
-      sql: {} as never,
+      sql: mockSqlWr,
       toolsRegistry: makeRegistry(),
     });
     await runner.init();
@@ -280,7 +292,7 @@ describe("WR-03: BrainRunner stores SIGTERM handler and removes it in close()", 
 
     const runner = new BrainRunner({
       brain: makeBrain(),
-      sql: {} as never,
+      sql: mockSqlWr,
       toolsRegistry: makeRegistry(),
     });
 
@@ -303,7 +315,7 @@ describe("WR-03: BrainRunner stores SIGTERM handler and removes it in close()", 
   it("calling close() twice does not throw — _sigtermHandler null guard prevents double process.off", async () => {
     const runner = new BrainRunner({
       brain: makeBrain(),
-      sql: {} as never,
+      sql: mockSqlWr,
       toolsRegistry: makeRegistry(),
     });
     await runner.init();

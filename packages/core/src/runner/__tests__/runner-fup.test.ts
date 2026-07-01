@@ -61,6 +61,17 @@ mock.module("@brain-pkg/observability", () => ({
   createTracingCallbacks: mock(() => []),
 }));
 
+// EMBD-05: mock embeddings provider + callable sql fixture for the D-15 dimension check in init()
+const mockEmbeddingProviderFup = {
+  embed: mock(async (texts: string[]) => texts.map(() => [0.1, 0.2, 0.3])),
+  embedQuery: mock(async (_text: string) => [0.1, 0.2, 0.3]),
+  dimensions: 1536,
+  providerName: "openai",
+};
+mock.module("@brain-pkg/embeddings", () => ({
+  createEmbeddingProvider: mock(async () => mockEmbeddingProviderFup),
+}));
+
 mock.module("@brain-pkg/database", () => ({
   runMigrations: mock(async () => {}),
 }));
@@ -145,6 +156,9 @@ const mockBrain = {
   buildGraph: mockBuildGraph,
 };
 
+// EMBD-05/D-15: callable sql fixture — resolves the dimension-check query in init()
+const mockSqlFup = mock(async () => [{ dimensions: 1536 }]) as unknown as never;
+
 describe("BrainRunner.run() — FUP-06: touchLastMessage antes do gate ia_ativada", () => {
   let runner: BrainRunner;
   let toolsRegistry: ToolsRegistry;
@@ -164,7 +178,7 @@ describe("BrainRunner.run() — FUP-06: touchLastMessage antes do gate ia_ativad
 
     runner = new BrainRunner({
       brain: mockBrain as never,
-      sql: {} as never,
+      sql: mockSqlFup,
       toolsRegistry,
       migrationsFolder: "/tmp/fake-migrations",
     });

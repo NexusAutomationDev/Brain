@@ -11,6 +11,8 @@ import type { LLMOptions } from "@brain-pkg/ai";
 import { MultiServerMCPClient } from "@langchain/mcp-adapters";
 import { runMigrations } from "@brain-pkg/database";
 import { MemoryManager } from "@brain-pkg/memory";
+import type { IEmbeddingProvider } from "@brain-pkg/embeddings";
+import { createEmbeddingProvider } from "@brain-pkg/embeddings";
 import { createTracingCallbacks } from "@brain-pkg/observability";
 import { createLogger } from "@brain-pkg/observability";
 import { ConfigurationError, BrainOutputValidationError } from "@brain-pkg/shared";
@@ -51,6 +53,8 @@ export interface BrainRunnerOptions {
   migrationsFolder?: string;
   /** EventPublisher injetável para testes (D-11). Ausente = criado em init() a partir de ENVs. */
   eventPublisher?: IEventPublisher;
+  /** IEmbeddingProvider injetável para testes (EMBD-05). Ausente = criado em init() a partir de ENVs — mesmo padrão de eventPublisher. */
+  embeddingProvider?: IEmbeddingProvider;
 }
 
 
@@ -77,6 +81,7 @@ export class BrainRunner {
   private memoryManager: MemoryManager | null = null;
   private mcpClient: MultiServerMCPClient | null = null;
   private eventPublisher: IEventPublisher | null = null;
+  private embeddingProvider: IEmbeddingProvider | null = null;
   private fupScheduler: IFupScheduler | null = null;
   // FUP-03/D-12: checkpointer salvo como campo para injeção no FupScheduler
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -102,6 +107,10 @@ export class BrainRunner {
     // D-11: EventPublisher injetável para testes; null = criado em init() a partir de ENVs
     if (options.eventPublisher) {
       this.eventPublisher = options.eventPublisher;
+    }
+    // EMBD-05: embeddingProvider injetável para testes; null = criado em init() a partir de ENVs
+    if (options.embeddingProvider) {
+      this.embeddingProvider = options.embeddingProvider;
     }
   }
 
@@ -134,6 +143,34 @@ export class BrainRunner {
       process.exit(1);
     });
     this.logger.info({ brainId: this.brain.id }, 'Migrations completed');
+
+    // EMBD-05: resolver embeddingProvider — SEMPRE, não condicional a ENV presente
+    // (D-09: embedding é bloqueante no fluxo principal, não opcional como eventPublisher)
+    if (!this.embeddingProvider) {
+      this.embeddingProvider = await createEmbeddingProvider();
+    }
+
+    // D-15: fail-fast se a dimensão do provider não bate com a coluna vector(N) já migrada.
+    // Roda APÓS runMigrations() (coluna já existe) e APÓS embeddingProvider resolvido.
+    const [{ dimensions: columnDim }] = await this.sql<{ dimensions: number }[]>`
+      SELECT atttypmod AS dimensions
+      FROM pg_attribute
+      WHERE attrelid = 'knowledge_chunks'::regclass
+        AND attname = 'embedding'
+        AND attnum > 0
+    `;
+    if (columnDim !== this.embeddingProvider.dimensions) {
+      this.logger.error(
+        {
+          brainId: this.brain.id,
+          expected: columnDim,
+          actual: this.embeddingProvider.dimensions,
+          providerName: this.embeddingProvider.providerName,
+        },
+        "EMBEDDING_DIMENSIONS mismatch — provider dimensions do not match the vector(N) column. Fix EMBEDDING_DIMENSIONS or regenerate migration 0009."
+      );
+      process.exit(1);
+    }
 
     this.prompts = await loadPrompts(this.sql, this.brain.brainType, this.brain.promptKeys);
 
