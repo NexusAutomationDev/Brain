@@ -111,19 +111,23 @@ Plans:
 - [x] 28-05-PLAN.md — Batch re-embed tool: POST /api/v1/reembed (Wave 2)
 
 ### Phase 29: Brain Suporte Core
-**Goal**: `apps/brain-support` processa mensagens de suporte end-to-end — RAG sempre ativo, tools via MCP, histórico persistente e saída estruturada validada pelo SDK
+**Goal**: `apps/brain-support` processa mensagens de suporte end-to-end — RAG estruturalmente sempre ativo, `pause_session`/`finish_conversation` nativas em `buildGraph()` (D-02), histórico persistente e saída estruturada validada pelo SDK
 **Depends on**: Phase 28 (IEmbeddingProvider para SUP-04)
 **Requirements**: SUP-01, SUP-02, SUP-03, SUP-04, SUP-05, SUP-07, SUP-08
 **Success Criteria** (what must be TRUE):
   1. Brain Suporte recebe mensagem via webhook (`TRANSPORT=webhook`) e via RabbitMQ (`TRANSPORT=rabbitmq`) e produz resposta sem alterar código
   2. Grafo sempre inclui `search_knowledge` no `ToolNode` — nenhuma ENV ou flag pode desativá-la
-  3. Tools de gestão (qualify, pause_session, finish_conversation) chegam ao grafo via MCP dinâmico — remover servidor MCP não quebra o Brain (fallback gracioso)
+  3. Tools de gestão (`pause_session`, `finish_conversation`) são closures nativas criadas em `buildGraph()`, sem equivalente de `qualify_lead` (D-01/D-02) — mecanismo de MCP dinâmico genérico do core continua disponível, herdado sem trabalho adicional (D-03)
   4. Brain Suporte usa `IEmbeddingProvider` com modelo e dimensões independentes do Brain SDR — alterar `EMBEDDING_MODEL` de um não afeta o outro
   5. Resposta do Brain Suporte é `BrainOutput` válido (`fullResponse`, `responseMode`) — BrainRunner lança `BrainOutputValidationError` para saídas inválidas
   6. Gate `ia_ativada` bloqueia processamento silenciosamente; histórico de conversa por lead é recuperado do PostgresSaver via `thread_id = lead.uniqueId`
   7. `ToolsRegistry.registerBrainType("support", ...)` existe — habilitar tools por tipo funciona
 
-**Plans**: TBD
+**Plans:** 0/2 plans complete
+
+Plans:
+- [ ] 29-01-PLAN.md — apps/brain-support: supportBrain (buildGraph com pause_session/finish_conversation nativas + search_knowledge sempre-on) + index.ts + server.ts
+- [ ] 29-02-PLAN.md — Migration 0010 (seed prompt 'system' para brain_type='support') + .env.example + testes de ToolsRegistry/server
 
 ### Phase 30: Brain Suporte Docker
 **Goal**: `apps/brain-support` tem imagem Docker independente que sobe, migra e atende mensagens — pronto para entrega a clientes
@@ -168,7 +172,7 @@ Plans:
 | 26. FUP Next-At Init Fix | v1.4 | 1/1 | Complete | 2026-06-25 |
 | 27. Tech Debt Fixes | v1.5 | 3/3 | Complete    | 2026-06-30 |
 | 28. Embedding SDK | v1.5 | 5/5 | Complete    | 2026-07-01 |
-| 29. Brain Suporte Core | v1.5 | 0/? | Not started | — |
+| 29. Brain Suporte Core | v1.5 | 0/2 | Planned | — |
 | 30. Brain Suporte Docker | v1.5 | 0/? | Not started | — |
 
 ## Backlog
