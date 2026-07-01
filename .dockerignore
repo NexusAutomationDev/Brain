@@ -1,0 +1,37 @@
+# .dockerignore — build context excludes for all Brains
+# Applies to every `docker build -f apps/<brain>/Dockerfile .` invocation since all
+# Brains share the same build context (repo root). Prevents leaking secrets, git history,
+# and stale host-tree build artifacts into the Docker build context sent to the daemon.
+
+# Dependencies — reinstalled fresh inside the builder stage via pnpm install --frozen-lockfile
+node_modules
+**/node_modules
+
+# Git metadata — never needed inside a build context
+.git
+.gitignore
+
+# Environment files — MUST NOT enter the build context (secrets)
+.env
+.env.*
+!.env.example
+
+# Host-tree build artifacts — stale/platform-mismatched dist/tsbuildinfo from local dev
+# must not shadow what the builder stage compiles fresh with tsc
+dist
+**/dist
+*.tsbuildinfo
+**/*.tsbuildinfo
+.turbo
+**/.turbo
+
+# Editor/OS noise
+.DS_Store
+*.bak
+
+# Claude Code / GSD planning artifacts — not needed at build time
+.claude
+.planning
+
+# Manual test scripts (gitignored already, but exclude defensively)
+manual
