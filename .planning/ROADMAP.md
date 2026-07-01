@@ -159,7 +159,10 @@ Plans:
   3. `apps/brain-sdr/.env.example` documenta `EMBEDDING_PROVIDER`/`EMBEDDING_MODEL`/`EMBEDDING_DIMENSIONS`
   4. Migration `0009_embedding_dimensions_fix.sql` tem comentário inline avisando que `vector(1536)` é hardcoded para OpenAI e requer `TRUNCATE` manual ao regenerar com outra `EMBEDDING_DIMENSIONS`
 
-**Plans:** 0/? plans complete
+**Plans:** 1 plan
+
+Plans:
+- [ ] 31-01-PLAN.md — CI shell hygiene (quote $RESPONSE, validate URL) + respond tool append-after-filter (brain-sdr + brain-support) + .env.example embedding docs + migration inline comment
 
 ### Phase 32: Code Quality Cleanup — Accumulated Warnings & Test/Doc Hygiene
 **Goal**: Achados warning/info de code review acumulados nas fases 27-30 estão resolvidos e as lacunas de documentação/teste estão preenchidas, zerando o ledger de tech debt do v1.5
