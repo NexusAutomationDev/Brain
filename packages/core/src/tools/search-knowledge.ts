@@ -8,7 +8,7 @@
 
 import { tool } from "@langchain/core/tools";
 import { drizzle } from "drizzle-orm/postgres-js";
-import { createEmbeddings } from "@brain-pkg/ai";
+import type { IEmbeddingProvider } from "@brain-pkg/embeddings";
 import type { Sql } from "postgres";
 import { z } from "zod";
 import { searchKnowledge } from "../rag/search.js";
@@ -17,23 +17,6 @@ import type { ChunkResult } from "../rag/search.js";
 // D-11: String constante para "sem resultados" — testável por igualdade exata
 const NO_RESULTS_MSG =
   "Nenhum resultado encontrado para a consulta nas coleções informadas.";
-
-/**
- * D-14: Resolve o modelo de embedding pelo LLM_PROVIDER quando EMBEDDING_MODEL ausente.
- * Nota: duplicada de search.ts para evitar import do módulo que é mockado nos testes.
- * O mock de test/search-knowledge.test.ts substitui search.js completamente, então
- * resolveEmbeddingModel deve ser local para não ser afetada pelo mock.
- */
-function resolveEmbeddingModel(): string {
-  if (process.env.EMBEDDING_MODEL) return process.env.EMBEDDING_MODEL;
-  const provider = process.env.LLM_PROVIDER || "openai";
-  const defaults: Record<string, string> = {
-    gemini: "text-embedding-004",
-    openai: "text-embedding-3-small",
-    openrouter: "text-embedding-3-small",
-  };
-  return defaults[provider] ?? "text-embedding-3-small";
-}
 
 /**
  * D-10: Formata resultados de chunks em blocos legíveis pelo LLM.
@@ -57,10 +40,12 @@ function formatResults(results: ChunkResult[]): string {
  * Anti-pattern evitado: embedding da query ocorre AQUI (não em search.ts) — separação de concerns.
  *
  * @param sql - postgres.js Sql instance do tenant (de BrainBuildContext.sql)
+ * @param embeddingProvider - IEmbeddingProvider injetado (D-02: substitui createEmbeddings())
  * @param searchFn - override de searchKnowledge para testes (opcional)
  */
 export function createSearchKnowledgeTool(
   sql: Sql,
+  embeddingProvider: IEmbeddingProvider,
   searchFn: typeof searchKnowledge = searchKnowledge
 ) {
   const db = drizzle(sql);
@@ -71,19 +56,16 @@ export function createSearchKnowledgeTool(
         return NO_RESULTS_MSG;
       }
 
-      // D-14: resolver modelo atual para filtrar por embedding_model (D-03a)
-      const embeddingModel = resolveEmbeddingModel();
-
-      // Gerar embedding da query (Pitfall 1: usar embedQuery, não embedDocuments)
-      const embedder = await createEmbeddings();
-      const queryVector = await embedder.embedQuery(args.query);
+      // Gerar embedding da query (Pitfall 1: usar embedQuery, não embed)
+      const queryVector = await embeddingProvider.embedQuery(args.query);
 
       // D-07/D-08/D-09: topK=5 e threshold=0.5 hardcoded — LLM não controla
+      // D-17: providerName do embeddingProvider injetado (não resolveEmbeddingModel())
       const results = await searchFn(
         db,
         queryVector,
         args.collections,
-        embeddingModel
+        embeddingProvider.providerName
       );
 
       if (results.length === 0) {
