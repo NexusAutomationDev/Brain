@@ -27,6 +27,27 @@ describe("BrainSupport — IBrain contract (SUP-01, SUP-05)", () => {
   });
 });
 
+describe("BrainSupport — respond tool sempre ativa (TECH-05, D-01)", () => {
+  test("buildGraph() com BRAIN_TOOLS whitelist omitting 'respond' still includes respond in bindTools", async () => {
+    const mod = await import("../../brain.js");
+    const bindToolsMock = mock(() => ({
+      invoke: mock(async () => new AIMessage({ content: "ok", tool_calls: [] })),
+    }));
+    const ctx = {
+      llm: { bindTools: bindToolsMock },
+      prompts: { system: "prompt sistema" },
+      tools: [],
+      sql: {} as any,
+      mcpTools: [],
+      enabledTools: new Set(["pause_session"]), // respond deliberately omitted
+    };
+    mod.supportBrain.buildGraph(ctx as any);
+    const callArgs = (bindToolsMock as any).mock.calls[0][0] as Array<{ name: string }>;
+    const toolNames = callArgs.map((t) => t.name);
+    expect(toolNames).toContain("respond");  // respond present despite not in enabledTools
+  });
+});
+
 describe("BrainSupport — search_knowledge sempre ativa (D-04, SUP-02)", () => {
   test("buildGraph(ctx) com enabledTools=Set(['pause_session']) ainda inclui search_knowledge no bindTools — bypass do filtro", async () => {
     const mod = await import("../../brain.js");

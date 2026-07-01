@@ -217,6 +217,27 @@ describe("tokenUsage em BrainSDR llm node (D-06, D-07, TOK-07)", () => {
   });
 });
 
+describe("BrainSDR — respond tool sempre ativa (TECH-05, D-01)", () => {
+  test("buildGraph() com BRAIN_TOOLS whitelist omitting 'respond' still includes respond in bindTools", async () => {
+    const mod = await import("../../brain.js");
+    const bindToolsMock = mock(() => ({
+      invoke: mock(async () => ({ content: "ok", tool_calls: [] })),
+    }));
+    const ctx = {
+      llm: { bindTools: bindToolsMock },
+      prompts: { system: "sys", qualification: "qual" },
+      tools: [],
+      sql: {} as any,
+      mcpTools: [],
+      enabledTools: new Set(["qualify_lead", "pause_session"]), // respond deliberately omitted
+    };
+    mod.sdrBrain.buildGraph(ctx as any);
+    const callArgs = (bindToolsMock as any).mock.calls[0][0] as Array<{ name: string }>;
+    const toolNames = callArgs.map((t) => t.name);
+    expect(toolNames).toContain("respond");  // respond present despite not in enabledTools
+  });
+});
+
 describe("BrainSDR — routeAfterLlm router customizado (D-01, RESP-01)", () => {
   test("retorna brainOutput com responseMode 'text' quando LLM chama respond tool com responseMode='text'", async () => {
     const mod = await import("../../brain.js");
