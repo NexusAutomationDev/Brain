@@ -138,7 +138,12 @@ Plans:
   2. Container sobe, roda `runMigrations()` com advisory lock e expõe `GET /health` com status `ok`
   3. Container processa mensagem de teste via webhook e retorna `BrainOutput` válido sem depender de arquivos do brain-sdr
 
-**Plans**: TBD
+**Plans:** 3 plans
+
+Plans:
+- [ ] 30-01-PLAN.md — Root .dockerignore (all Brains) + fix packages/embeddings gap in apps/brain-sdr/Dockerfile (D-03/D-06)
+- [ ] 30-02-PLAN.md — apps/brain-support/Dockerfile (multi-stage, embeddings included) + docker-compose.yml (D-01/D-02/D-04/D-05/D-09)
+- [ ] 30-03-PLAN.md — .github/workflows/publish-brain-support.yml (D-10/D-11/D-12) + real e2e validation round-trip (D-07/D-08)
 
 ## Progress
 
@@ -173,7 +178,7 @@ Plans:
 | 27. Tech Debt Fixes | v1.5 | 3/3 | Complete    | 2026-06-30 |
 | 28. Embedding SDK | v1.5 | 5/5 | Complete    | 2026-07-01 |
 | 29. Brain Suporte Core | v1.5 | 3/3 | Complete    | 2026-07-01 |
-| 30. Brain Suporte Docker | v1.5 | 0/? | Not started | — |
+| 30. Brain Suporte Docker | v1.5 | 0/3 | Not started | — |
 
 ## Backlog
 
