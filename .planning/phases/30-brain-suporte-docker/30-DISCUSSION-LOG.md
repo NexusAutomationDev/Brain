@@ -75,11 +75,11 @@
 
 | Option | Description | Selected |
 |--------|-------------|----------|
-| Sim, espelhar exatamente (mesma tag v*.*.*) | Mesmo trigger do brain-sdr | |
-| Espelhar mas com tag própria | Mesmo padrão, prefixo de tag diferente para não colidir | ✓ |
+| Sim, espelhar exatamente (mesma tag v*.*.*) | Mesmo trigger do brain-sdr | ✓ (revisado) |
+| Espelhar mas com tag própria | Mesmo padrão, prefixo de tag diferente para não colidir | (escolha inicial, revertida) |
 
-**User's choice:** Espelhar mas com tag própria.
-**Notes:** Usuário pediu explicitamente ("também coloca o CI/CD da mesma forma que o brain-sdr está") — escopo novo em relação ao roadmap original da Phase 30 (que só cobria SUP-06/Dockerfile), aprovado inline durante a discussão. Workflow encontrado: `.github/workflows/publish-brain-sdr.yml` (build → DockGate upload). Tag prefix escolhido em pergunta de follow-up: `brain-support-v*.*.*`.
+**User's choice (revisado):** Espelhar exatamente, mesma tag `v*.*.*`/`v*.*` do brain-sdr.
+**Notes:** Usuário pediu explicitamente ("também coloca o CI/CD da mesma forma que o brain-sdr está") — escopo novo em relação ao roadmap original da Phase 30 (que só cobria SUP-06/Dockerfile), aprovado inline durante a discussão. Workflow encontrado: `.github/workflows/publish-brain-sdr.yml` (build → DockGate upload). Escolha inicial de follow-up foi um prefixo próprio (`brain-support-v*.*.*`), mas o usuário revisou depois e confirmou manter o mesmo trigger do brain-sdr — um push de tag `v1.0.0` passa a disparar ambos os workflows simultaneamente, comportamento aceito intencionalmente.
 
 ---
 

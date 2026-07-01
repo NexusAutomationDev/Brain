@@ -41,7 +41,7 @@
   - `IMAGE_NAME: brain-support`
   - `file: apps/brain-support/Dockerfile`
   - cache scope (`scope=brain-support` em vez de `scope=brain-sdr`)
-- **D-11:** Trigger de tag usa um **prefixo próprio** para não colidir com o `v*.*.*` que hoje publica o brain-sdr: `brain-support-v*.*.*` (ex.: tag `brain-support-v1.0.0` dispara o publish do brain-support; `v1.0.0` sozinho continua publicando só o brain-sdr).
+- **D-11 (revisado):** Trigger de tag usa o **mesmo padrão** do brain-sdr — `v*.*.*` / `v*.*` (não um prefixo próprio). Usuário revisou a decisão original (que propunha `brain-support-v*.*.*`) e confirmou manter igual ao brain-sdr: um push de tag `v1.0.0` dispara **ambos** os workflows (`publish-brain-sdr.yml` e `publish-brain-support.yml`) simultaneamente — comportamento aceito intencionalmente, sem necessidade de tags separadas por app.
 - **D-12:** Secrets `DOCKGATE_URL` e `DOCKGATE_UPLOAD_TOKEN` já existem no repo (usados pelo workflow do brain-sdr) — **não** é necessário criar novos secrets, apenas reusar os mesmos no novo workflow.
 
 ### Claude's Discretion
