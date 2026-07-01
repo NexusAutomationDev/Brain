@@ -90,6 +90,14 @@ Uma infraestrutura de agentes modular onde novos Brains são criados definindo a
 - ✓ FUP-07: Janela de horário/dias → slot IANA válido calculado por `getNextValidSlot()` — v1.4
 - ✓ FUP-08: Retry até 3x com fup_failure_count; logar alerta após falha — v1.4
 
+**v1.5 — Embedding SDK (Phase 28)**
+
+- ✓ EMBD-01: `IEmbeddingProvider` interface (`embed()`, `embedQuery()`, `dimensions`, `providerName`) implementável por qualquer provider — Phase 28
+- ✓ EMBD-02: `OpenAIEmbeddingProvider` disponível como adapter padrão em `packages/embeddings` — Phase 28
+- ✓ EMBD-03: Migration `0009` cria coluna `vector(N)` com N derivado de `EMBEDDING_DIMENSIONS` em generate-time (override pré-produção: TRUNCATE deve ser re-adicionado manualmente na regeneração — ver 28-VERIFICATION.md) — Phase 28
+- ✓ EMBD-04: Brain configura provider, modelo e dimensões via ENV sem alterar código TypeScript — Phase 28
+- ✓ EMBD-05: `BrainRunner` conecta semantic write path (`createEmbeddings`) ao `IEmbeddingProvider` — MEM-03 resolvido, escrita semântica deixou de ser dead code — Phase 28
+
 ### Active
 
 **Backlog (pós v1.4)**
@@ -98,6 +106,7 @@ Uma infraestrutura de agentes modular onde novos Brains são criados definindo a
 - [ ] Sub-agente de qualificação avançada com SPIN/BANT completo
 - [ ] Brain SDR publicando respostas de volta ao RabbitMQ (canal de resposta async)
 - [x] Resolver TD-03: `BRAIN_TOOLS` whitelist agora cobre closures em buildGraph() via enabledTools — Phase 27
+- [x] Embedding SDK (`packages/embeddings`): IEmbeddingProvider + adapter OpenAI/Gemini + dimensões via ENV — Phase 28
 - [ ] responseMode dinâmico via structured output multi-provider (OpenAI + Google) — hoje hardcoded "text" em brain.ts
 - [ ] CI/CD: build + publish imagem Docker do brain-sdr via DockGate (Phase 18 backlog)
 
@@ -133,10 +142,11 @@ Brains planejados para o futuro: Suporte, Customer Success, Cobrança, RH, Jurí
 - ~~TD-03~~: ✓ Resolvido em Phase 27 — `enabledTools` cobre closures em buildGraph()
 - ~~OBS-02~~: ✓ Resolvido em Phase 27 — GET /health expõe TransportStatus
 - ~~FUP-02~~: ✓ Resolvido em Phase 27 — E2E integration test contra PostgreSQL real
+- ~~MEM-03~~: ✓ Resolvido em Phase 28 — `BrainRunner` chama `embeddingProvider.embed()`/`embedQuery()` em query/save time; semantic write path deixou de ser dead code
+- ~~D-16~~: ✓ Resolvido em Phase 28 (com ressalva) — migration `0009` deriva `vector(N)` de `EMBEDDING_DIMENSIONS` em generate-time; TRUNCATE deve ser re-adicionado manualmente na regeneração e o valor commitado (1536) é OpenAI-specific — aceito como tradeoff pré-produção, ver 28-VERIFICATION.md
 - TD-04: `LeadService.setFullpp()` / `setIaAtivada()` sem callers de produção
-- MEM-03: semantic write path (dead code) — createEmbeddings() nunca chamado
 - brain-echo `hasOtherToolCall` guard ausente no nó LLM — non-fatal
-- D-16: `vector(1536)` hardcoded na migration 0007 — mismatch se EMBEDDING_DIMENSIONS ENV alterado sem re-migrar
+- `apps/brain-sdr/.env.example` não documenta `EMBEDDING_PROVIDER`/`EMBEDDING_MODEL`/`EMBEDDING_DIMENSIONS` (gap de documentação, Phase 28 code review WR-01/IN-03)
 
 ## Constraints
 
@@ -197,4 +207,4 @@ Este documento evolui nas transições de fase e marcos de milestone.
 4. Atualizar Context com estado atual
 
 ---
-*Last updated: 2026-06-30 — Phase 27 complete: TD-03 (BRAIN_TOOLS closures), FUP-02 (E2E test real PG), OBS-02 (/health transport status) tech debts resolved*
+*Last updated: 2026-07-01 — Phase 28 complete: `packages/embeddings` (IEmbeddingProvider + OpenAI/Gemini adapters), migration 0009 (ENV-driven vector(N)), BrainRunner semantic write path wired (MEM-03), D-16 resolved with pre-production override (see 28-VERIFICATION.md)*
