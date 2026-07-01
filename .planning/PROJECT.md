@@ -107,7 +107,10 @@ Uma infraestrutura de agentes modular onde novos Brains são criados definindo a
 - ✓ SUP-05: `BrainOutput` estruturado validado pelo SDK — Phase 29
 - ✓ SUP-07: Gate `ia_ativada` + histórico persistente via `PostgresSaver` (thread_id = lead.uniqueId) — Phase 29
 - ✓ SUP-08: Brain Suporte registrado no `ToolsRegistry` com tipo `"support"` — Phase 29
-- SUP-06 (`Dockerfile` multi-stage) deferido para Phase 30
+
+**v1.5 — Brain Suporte Docker (Phase 30)**
+
+- ✓ SUP-06: `Dockerfile` multi-stage independente para `apps/brain-support`, incluindo `packages/embeddings` desde o início; `docker-compose.yml` de produção espelhando `apps/brain-sdr` (Postgres externo via `host.docker.internal`); CI/CD (`publish-brain-support.yml`) e validação e2e real (build → migrations → /health → /api/v1/webhook) — Phase 30
 
 ### Active
 
@@ -219,4 +222,4 @@ Este documento evolui nas transições de fase e marcos de milestone.
 4. Atualizar Context com estado atual
 
 ---
-*Last updated: 2026-07-01 — Phase 29 complete: `apps/brain-support` (SUP-01/02/03/04/05/07/08) — ReAct graph com `search_knowledge` estruturalmente sempre ativo (gap SUP-02/D-04 fechado em 29-03 via `RESERVED_TOOL_NAMES` filter contra `ctx.mcpTools`), `pause_session`/`finish_conversation` nativas per D-01/D-02, prompt seed + `.env.example` completo (corrigindo gap do Phase 28). SUP-06 (Dockerfile) deferido para Phase 30. Ver 29-VERIFICATION.md (7/7 passed).
+*Last updated: 2026-07-01 — Phase 30 complete: `apps/brain-support` tem imagem Docker independente (multi-stage, `packages/embeddings` incluído desde o início), `docker-compose.yml` de produção espelhando o padrão de `apps/brain-sdr` (Postgres externo via `host.docker.internal`, sem banco bundlado — corrigido pós-Wave-1 a pedido do usuário), CI/CD via `publish-brain-support.yml` e validação e2e real contra Docker daemon (build → migrations → /health → /api/v1/webhook). SUP-06 fechado. Todas as 4 fases do v1.5 (27-30) completas. Ver 30-VERIFICATION.md (6/6 passed).
