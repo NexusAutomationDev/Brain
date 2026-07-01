@@ -69,7 +69,7 @@
 ### v1.5 Embedding SDK + Brain Suporte + Tech Debt (Phases 27-30)
 
 - [x] **Phase 27: Tech Debt Fixes** — BRAIN_TOOLS buildGraph coverage + FUP-02 E2E test + /health transport status (completed 2026-06-30)
-- [ ] **Phase 28: Embedding SDK** — IEmbeddingProvider interface + OpenAI adapter + ENV-driven dimensions + semantic write path
+- [x] **Phase 28: Embedding SDK** — IEmbeddingProvider interface + OpenAI adapter + ENV-driven dimensions + semantic write path (completed 2026-07-01)
 - [ ] **Phase 29: Brain Suporte Core** — LangGraph graph + MCP tools + RAG obrigatório + transport + BrainOutput + leads + ToolsRegistry
 - [ ] **Phase 30: Brain Suporte Docker** — Dockerfile multi-stage independente + validação end-to-end de deploy
 
@@ -101,14 +101,14 @@ Plans:
   3. Migration cria coluna `vector(N)` onde N vem de `EMBEDDING_DIMENSIONS` ENV — mudar ENV e re-migrar gera coluna com nova dimensão sem erro
   4. BrainRunner chama `createEmbeddings()` via `IEmbeddingProvider` ao processar mensagem — escrita semântica deixa de ser dead code
 
-**Plans:** 5 plans, 3 waves
+**Plans:** 5/5 plans complete
 
 Plans:
-- [ ] 28-01-PLAN.md — packages/embeddings: IEmbeddingProvider + OpenAIEmbeddingProvider + GeminiEmbeddingProvider + createEmbeddingProvider() (Wave 0)
-- [ ] 28-02-PLAN.md — Migration 0009: TRUNCATE + ALTER COLUMN TYPE vector(N) em embeddings/knowledge_chunks (Wave 1)
-- [ ] 28-03-PLAN.md — Wire IEmbeddingProvider em search-knowledge.ts/ingest.ts, delete packages/ai dead code (Wave 1)
-- [ ] 28-04-PLAN.md — BrainRunner DI: embeddingProvider em query-time/save-time + dimension fail-fast (Wave 2)
-- [ ] 28-05-PLAN.md — Batch re-embed tool: POST /api/v1/reembed (Wave 2)
+- [x] 28-01-PLAN.md — packages/embeddings: IEmbeddingProvider + OpenAIEmbeddingProvider + GeminiEmbeddingProvider + createEmbeddingProvider() (Wave 0)
+- [x] 28-02-PLAN.md — Migration 0009: TRUNCATE + ALTER COLUMN TYPE vector(N) em embeddings/knowledge_chunks (Wave 1)
+- [x] 28-03-PLAN.md — Wire IEmbeddingProvider em search-knowledge.ts/ingest.ts, delete packages/ai dead code (Wave 1)
+- [x] 28-04-PLAN.md — BrainRunner DI: embeddingProvider em query-time/save-time + dimension fail-fast (Wave 2)
+- [x] 28-05-PLAN.md — Batch re-embed tool: POST /api/v1/reembed (Wave 2)
 
 ### Phase 29: Brain Suporte Core
 **Goal**: `apps/brain-support` processa mensagens de suporte end-to-end — RAG sempre ativo, tools via MCP, histórico persistente e saída estruturada validada pelo SDK
@@ -167,7 +167,7 @@ Plans:
 | 25. FUP Activation Trigger | v1.4 | 3/3 | Complete | 2026-06-25 |
 | 26. FUP Next-At Init Fix | v1.4 | 1/1 | Complete | 2026-06-25 |
 | 27. Tech Debt Fixes | v1.5 | 3/3 | Complete    | 2026-06-30 |
-| 28. Embedding SDK | v1.5 | 0/5 | Planned | — |
+| 28. Embedding SDK | v1.5 | 5/5 | Complete    | 2026-07-01 |
 | 29. Brain Suporte Core | v1.5 | 0/? | Not started | — |
 | 30. Brain Suporte Docker | v1.5 | 0/? | Not started | — |
 

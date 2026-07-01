@@ -7,17 +7,17 @@
 
 ### Tech Debt
 
-- [ ] **TECH-01**: Developer pode controlar tools bound em `buildGraph()` via `BRAIN_TOOLS` whitelist (fix TD-03)
-- [ ] **TECH-02**: Existe teste de integração E2E do FUP rodando contra banco PostgreSQL real (fix FUP-02)
-- [ ] **TECH-03**: `GET /health` retorna status do transport (conectado/desconectado) junto com health geral (fix OBS-02)
+- [x] **TECH-01**: Developer pode controlar tools bound em `buildGraph()` via `BRAIN_TOOLS` whitelist (fix TD-03)
+- [x] **TECH-02**: Existe teste de integração E2E do FUP rodando contra banco PostgreSQL real (fix FUP-02)
+- [x] **TECH-03**: `GET /health` retorna status do transport (conectado/desconectado) junto com health geral (fix OBS-02)
 
 ### Embedding SDK
 
-- [ ] **EMBD-01**: Developer implementa `IEmbeddingProvider` para qualquer provider (interface: `embed(texts): Promise<number[][]>`, `dimensions: number`, `providerName: string`)
-- [ ] **EMBD-02**: `OpenAIEmbeddingProvider` disponível como adapter padrão em `packages/embeddings`
-- [ ] **EMBD-03**: Migration cria coluna `vector(N)` com N lido da ENV `EMBEDDING_DIMENSIONS` em runtime (fix D-16)
-- [ ] **EMBD-04**: Brain configura provider, modelo e dimensões via ENV sem alterar código TypeScript
-- [ ] **EMBD-05**: `BrainRunner` conecta semantic write path (`createEmbeddings`) ao `IEmbeddingProvider` (fix MEM-03)
+- [x] **EMBD-01**: Developer implementa `IEmbeddingProvider` para qualquer provider (interface: `embed(texts): Promise<number[][]>`, `dimensions: number`, `providerName: string`)
+- [x] **EMBD-02**: `OpenAIEmbeddingProvider` disponível como adapter padrão em `packages/embeddings`
+- [x] **EMBD-03**: Migration cria coluna `vector(N)` com N lido da ENV `EMBEDDING_DIMENSIONS` em runtime (fix D-16)
+- [x] **EMBD-04**: Brain configura provider, modelo e dimensões via ENV sem alterar código TypeScript
+- [x] **EMBD-05**: `BrainRunner` conecta semantic write path (`createEmbeddings`) ao `IEmbeddingProvider` (fix MEM-03)
 
 ### Brain Suporte
 
@@ -57,14 +57,14 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| TECH-01 | Phase 27 | Pending |
-| TECH-02 | Phase 27 | Pending |
-| TECH-03 | Phase 27 | Pending |
-| EMBD-01 | Phase 28 | Pending |
-| EMBD-02 | Phase 28 | Pending |
-| EMBD-03 | Phase 28 | Pending |
-| EMBD-04 | Phase 28 | Pending |
-| EMBD-05 | Phase 28 | Pending |
+| TECH-01 | Phase 27 | Complete |
+| TECH-02 | Phase 27 | Complete |
+| TECH-03 | Phase 27 | Complete |
+| EMBD-01 | Phase 28 | Complete |
+| EMBD-02 | Phase 28 | Complete |
+| EMBD-03 | Phase 28 | Complete (override — see 28-VERIFICATION.md) |
+| EMBD-04 | Phase 28 | Complete |
+| EMBD-05 | Phase 28 | Complete |
 | SUP-01 | Phase 29 | Pending |
 | SUP-02 | Phase 29 | Pending |
 | SUP-03 | Phase 29 | Pending |
