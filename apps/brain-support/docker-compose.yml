@@ -1,0 +1,45 @@
+# apps/brain-support/docker-compose.yml
+# Convenience local dev/test stack: Postgres (pgvector) + brain-support juntos.
+# Uso: docker compose -f apps/brain-support/docker-compose.yml up
+# Reproduz localmente o mesmo round-trip usado na validação e2e da Phase 30 (D-09):
+# build -> subir postgres efêmero -> subir brain-support -> testar /health e /api/v1/webhook.
+#
+# ATENÇÃO: este compose usa um volume nomeado isolado (brain_support_pgdata) — NUNCA aponta
+# para o Postgres de produção do host (db_postgres). Para descartar o estado de teste:
+# docker compose -f apps/brain-support/docker-compose.yml down -v
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg14
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-change-me-in-production}
+      POSTGRES_DB: ${DATABASE_NAME:-brain_suporte}
+    ports:
+      - "${DATABASE_PORT:-5433}:5432"
+    volumes:
+      - brain_support_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  brain-support:
+    build:
+      context: ../..
+      dockerfile: apps/brain-support/Dockerfile
+    image: brain-support:latest
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${PORT:-3002}:${PORT:-3002}"
+    env_file: .env
+    environment:
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+    restart: unless-stopped
+
+volumes:
+  brain_support_pgdata:
