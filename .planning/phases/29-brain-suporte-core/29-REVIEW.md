@@ -1,6 +1,6 @@
 ---
 phase: 29-brain-suporte-core
-reviewed: 2026-07-01T19:45:00Z
+reviewed: 2026-07-01T00:00:00Z
 depth: standard
 files_reviewed: 11
 files_reviewed_list:
@@ -18,59 +18,84 @@ files_reviewed_list:
 findings:
   critical: 0
   warning: 1
-  info: 2
-  total: 3
+  info: 3
+  total: 4
 status: issues_found
 ---
 
 # Phase 29: Code Review Report
 
-**Reviewed:** 2026-07-01T19:45:00Z
+**Reviewed:** 2026-07-01T00:00:00Z
 **Depth:** standard
-**Files Reviewed:** 11 (pnpm-lock.yaml excluded from findings — dependency lockfile, no logic to review)
+**Files Reviewed:** 11 (`pnpm-lock.yaml` excluded from findings — dependency lockfile, no logic to review)
 **Status:** issues_found
 
 ## Summary
 
-Reviewed the new `brain-support` app: entrypoint (`index.ts`), Hono server composition (`server.ts`), LangGraph implementation (`brain.ts`), the seed migration for the `system` prompt, and the accompanying unit tests. The app closely mirrors the proven `brain-sdr` implementation (same TenantPoolManager bootstrap, same Hono sub-app composition, same LangGraph ReAct pattern with `respond`/`tools` routing), which is intentional per the phase's design docs (D-01/D-02/D-04/D-06 in `29-CONTEXT.md`) and keeps risk low.
+This review covers the full current state of `brain-support` after the 29-03 gap-closure plan, which added a `RESERVED_TOOL_NAMES` filter in `apps/brain-support/src/brain.ts` to prevent MCP tools from colliding with reserved native tool names (`search_knowledge`, `pause_session`, `finish_conversation`, `respond`) before `bindTools()`/`ToolNode`. This output replaces the prior `29-REVIEW.md`.
 
-After `pnpm install`, all 15 unit tests pass (`bun test apps/brain-support/src/__tests__/unit`). No Dockerfile exists for `brain-support`, but this is explicitly deferred to Phase 30 per `29-CONTEXT.md` ("Fase 30 (Docker)... estão fora do escopo desta fase") and is not a defect of this phase.
+**Previously flagged WR-01 (search_knowledge collision with same-named MCP tool) is now fixed.** `safeMcpTools` filters `ctx.mcpTools` against `RESERVED_TOOL_NAMES` before concatenation with `nativeTools` (brain.ts:131-140), a warning is logged when a collision is dropped, and `boundSearchKnowledgeTool` is still appended by direct variable reference (not name lookup) after the `enabledTools` filter runs — so it can't be excluded via `BRAIN_TOOLS` or shadowed by a colliding MCP tool. `brain.test.ts` adds explicit regression tests for collisions on both `search_knowledge` and `pause_session`, asserting exactly one tool of each name reaches `bindTools()` and that the native tool's description (not the MCP tool's) wins. This closes the gap correctly.
 
-One warning-level structural gap was found around the `search_knowledge` tool's "always-on" guarantee when combined with MCP tools of the same name. Two minor info-level items round out the review — both inherited unchanged from `brain-sdr` and not introduced by this phase, but worth tracking since this is a good opportunity to fix them once for both Brains.
+One new residual Warning is raised below: the same "structurally required, never excludable" guarantee given to `search_knowledge` is not extended to the `respond` tool, even though `respond` is equally load-bearing (the graph cannot emit a normal response without it). This was true before 29-03 too (inherited from `brain-sdr`), but is being surfaced now because this review evaluates the full current file, and the fix pattern used for `search_knowledge` in this same phase makes the gap for `respond` more conspicuous by comparison. A few Info-level items round out the report. No Critical issues were found.
 
 ## Warnings
 
-### WR-01: `search_knowledge` "always enabled" guarantee can be defeated by a same-named MCP tool
+### WR-01: `respond` tool can be excluded via `BRAIN_TOOLS`, silently breaking the graph's only success-response path
 
-**File:** `apps/brain-support/src/brain.ts:106-122`
-**Issue:** D-04 states that `search_knowledge` "NUNCA pode ser filtrada por BRAIN_TOOLS" and is guaranteed to be present by appending `boundSearchKnowledgeTool` *after* the `ctx.enabledTools` filter runs. This holds for the `nativeTools` array, but `ctx.mcpTools` is concatenated into `allToolsExceptSearch` (line 116) *before* the append. If an operator configures an MCP server (`MCP_URL`) that exposes a tool literally named `search_knowledge`, that MCP-sourced tool instance survives the `enabledTools` filter (or is unfiltered when `enabledTools` is null) and is passed into `bindTools()` alongside the native `boundSearchKnowledgeTool` — producing **two distinct tool objects with the same name** in the same `bindTools()` call and in the `ToolNode`.
+**File:** `apps/brain-support/src/brain.ts:109-147`
+**Issue:** `respondTool` (line 110) is included in `nativeTools` (lines 122-126), which is subject to the `ctx.enabledTools` (`BRAIN_TOOLS` whitelist) filter at lines 142-144 — exactly like `pause_session`, `finish_conversation`, and MCP tools. Unlike `search_knowledge`, which this phase deliberately hardened to bypass `BRAIN_TOOLS` filtering entirely (D-04, lines 117-121, 145-147), `respond` has no equivalent protection.
 
-Depending on the LLM provider's schema serialization, this can silently shadow the RAG-backed `search_knowledge` tool with an MCP-provided one (undefined precedence), which breaks the explicit guarantee this code documents and tests (`toolsregistry-support.test.ts`, `brain.test.ts` "search_knowledge sempre ativa"). The current tests only check that a `search_knowledge` *name* is present in the `bindTools` call args, so this collision would not be caught.
+If an operator sets `BRAIN_TOOLS` to a value that omits `"respond"` (e.g. `BRAIN_TOOLS=pause_session,search_knowledge`, or simply a typo), the LLM is never bound the `respond` tool. Consequences:
+- `routeAfterLlm` (line 159) can never route to `"respond"`, since `toolCalls[0].name === "respond"` will never match.
+- `hasRespondCall` in the `llm` node (line 212) is always `false`.
+- Every turn falls into the `PITFALL-6` fallback branch (lines 224-237), setting `responseMode: "undefined"` on every single response instead of only on genuine LLM misbehavior.
 
-**Fix:** Filter out any MCP tool that collides with the reserved native tool names before binding, e.g.:
+This degrades the entire user-facing response contract silently in production — there is no fail-fast validation that `respond` remains bound after filtering. The same structural pattern (`nativeTools` includes `respondTool`, filtered by `enabledTools`) exists in `brain-sdr`'s `brain.ts`, so this is an inherited risk, not something newly introduced by the 29-03 diff. It's flagged here because this review evaluates the complete current state of `brain.ts`, and the reasoning that justified excluding `search_knowledge` from the `BRAIN_TOOLS` filter in this very phase (D-04: "never disableable") applies with equal force to `respond` — arguably more so, since without `respond` the Brain cannot produce a normal answer at all, whereas without `search_knowledge` it can still answer (just without RAG context).
+
+**Fix:** Extend the same "append after filter" treatment already used for `search_knowledge` to `respond`:
 ```ts
-const RESERVED_TOOL_NAMES = new Set(["search_knowledge", "pause_session", "finish_conversation", "respond"]);
+const nativeTools = [
+  boundPauseSessionTool,
+  boundFinishConversationTool,
+];
 const safeMcpTools = ctx.mcpTools.filter((t) => !RESERVED_TOOL_NAMES.has(t.name));
-const allToolsExceptSearch = [...nativeTools, ...safeMcpTools];
+const allToolsExceptReserved = [...nativeTools, ...safeMcpTools];
+const filteredExceptReserved = ctx.enabledTools
+  ? allToolsExceptReserved.filter((t) => ctx.enabledTools!.has(t.name))
+  : allToolsExceptReserved;
+// D-04-style guarantee extended to respond: structurally required for the graph's
+// only success-response path — must never be excludable via BRAIN_TOOLS.
+const filteredAllTools = [...filteredExceptReserved, respondTool, boundSearchKnowledgeTool];
 ```
-Optionally log a warning when a collision is dropped, so misconfigured MCP servers are visible in operator logs. This same pattern should probably be backported to `brain-sdr` since it shares the identical `allTools = [...nativeTools, ...ctx.mcpTools]` construction (though in `brain-sdr`, `search_knowledge` is part of `nativeTools` and thus not subject to the append-after-filter concern in quite the same way, MCP collisions with `qualify_lead`/`pause_session`/etc. are still possible there too).
+If broadening scope beyond phase 29 is undesirable, at minimum add a `buildGraph()`-time guard that throws (or logs at `error` level and refuses to start) when `ctx.enabledTools` is non-null and does not contain `"respond"`, so misconfiguration fails loudly rather than degrading every response silently. Consider filing this as a follow-up gap affecting both `brain-support` and `brain-sdr`.
 
 ## Info
 
-### IN-01: `EMBEDDING_DIMENSIONS` comment in `.env.example` references migration by number, will go stale
+### IN-01: `RESERVED_TOOL_NAMES` is a hardcoded literal, not derived from the actual tool instances it protects
 
-**File:** `apps/brain-support/.env.example:32-34`
-**Issue:** The comment says "EMBEDDING_DIMENSIONS deve bater com a coluna vector(N) migrada no banco deste Brain (migration 0009)." Migration `0009_embedding_dimensions_fix.sql` is a shared migration (applies to the common `embeddings`/`knowledge_chunks` tables used by every Brain via `packages/database`), not something scoped or numbered specifically for `brain-support`. If a future migration changes the vector dimension again (e.g., `0011_*`), this comment will silently point to the wrong migration number, misleading whoever edits `EMBEDDING_DIMENSIONS` next.
-**Fix:** Reference the table/column instead of a migration number, e.g.: "deve bater com a coluna `vector(N)` das tabelas `embeddings`/`knowledge_chunks` (ver packages/database/src/migrations para a migration mais recente que alterou essa dimensão)." This avoids the comment drifting out of sync with the migration history.
+**File:** `apps/brain-support/src/brain.ts:84-89`
+**Issue:** `RESERVED_TOOL_NAMES` hardcodes four string literals (`"search_knowledge"`, `"pause_session"`, `"finish_conversation"`, `"respond"`). These must stay in sync with the `.name` fields of `boundPauseSessionTool`, `boundFinishConversationTool`, `respondTool`, and `boundSearchKnowledgeTool`, all produced by factory functions defined in `@brain-pkg/core` — outside this file's control. If a future refactor in `packages/core` renames one of those tools, this set goes stale silently (no compile-time or runtime check ties the two together), reopening the exact collision class this phase's fix closes, for the renamed tool specifically.
+**Fix:** Derive the set at runtime from the actual tool instances instead of duplicating literals:
+```ts
+const nativeTools = [boundPauseSessionTool, boundFinishConversationTool, respondTool];
+const RESERVED_TOOL_NAMES = new Set([...nativeTools.map((t) => t.name), boundSearchKnowledgeTool.name]);
+```
+This requires moving the `RESERVED_TOOL_NAMES` declaration below tool construction, but removes the duplication risk entirely. If the literal set is kept for readability, consider adding a dedicated unit test asserting `RESERVED_TOOL_NAMES` equals `nativeTools.map(t => t.name)` plus `search_knowledge`, so a future rename in `packages/core` fails the test suite instead of silently reopening the gap.
 
-### IN-02: Duplicate `respond` tool-call lookup loop uses loose type guards inconsistently
+### IN-02: `getEmbeddingProvider()` module-level memoization is a process-lifetime singleton with no invalidation path
 
-**File:** `apps/brain-support/src/brain.ts:232-240`
-**Issue:** The lookup for the last AI message uses `msg.getType?.() === "ai" || (msg as any)._getType?.() === "ai"` — two different method names (`getType` vs `_getType`) checked with optional chaining, while `routeAfterLlm` (line 136) and the `llm` node (line 172) elsewhere in the same file consistently use `_getType()` without the `getType()` variant. This isn't a functional bug (LangChain messages implement `_getType()`), but the inconsistency suggests defensive coding added ad hoc rather than a deliberate contract, and makes it unclear whether `getType()` is ever expected to be the only method present on some message variant. This is inherited unchanged from `brain-sdr` and not introduced by this phase.
-**Fix:** Standardize on the same type-check helper used elsewhere in the file (`_getType()`), or if both are genuinely needed for compatibility with different message class versions, add a one-line comment explaining why two different accessor names are checked.
+**File:** `apps/brain-support/src/brain.ts:28-34`
+**Issue:** `embeddingProviderPromise` is a module-level singleton shared by every `LazyEmbeddingProvider` instance and every `buildGraph()` call within the process. This is intentional (per the existing D-02 Phase 28 comment) but means `EMBEDDING_PROVIDER`/`EMBEDDING_MODEL`/`EMBEDDING_DIMENSIONS` are effectively frozen for the process lifetime. There is a `/reload-prompts` endpoint (`createCoreApp`) that hot-reloads prompts at runtime, but no equivalent for embedding config — if one is added later, it must remember to reset this singleton, and nothing in the code currently signals that dependency.
+**Fix:** Add a one-line comment near the `embeddingProviderPromise` declaration noting that any future hot-reload feature touching `EMBEDDING_*` env vars must also reset this promise, to prevent a future maintainer from assuming `/reload-prompts`-style reloads already cover it.
+
+### IN-03: Duplicate/inconsistent AI-message type-guard pattern between `routeAfterLlm`/`llm` node and `respond` node
+
+**File:** `apps/brain-support/src/brain.ts:159-168, 260`
+**Issue:** `routeAfterLlm` uses `"tool_calls" in lastMessage` as its guard, while the `respond` node's backward scan (line 260) uses `msg.getType?.() === "ai" || (msg as any)._getType?.() === "ai"` — checking two differently-named accessor methods defensively. This is inherited unchanged from `brain-sdr` (not introduced by the 29-03 diff), so it's Info-only, but worth tracking: if a future LangChain major version drops one of `getType`/`_getType`, both Brains break identically since the pattern is duplicated rather than centralized.
+**Fix:** No action required this phase. Consider extracting a shared `isAIMessage(msg)` helper into `@brain-pkg/ai` used by all Brains, so the defensive check (and any future LangChain compatibility fix) lives in one place instead of being copy-pasted per Brain.
 
 ---
 
-_Reviewed: 2026-07-01T19:45:00Z_
+_Reviewed: 2026-07-01T00:00:00Z_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
