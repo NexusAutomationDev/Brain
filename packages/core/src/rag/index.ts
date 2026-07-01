@@ -3,3 +3,4 @@ export { splitText } from "./chunker.js";
 export { searchKnowledge } from "./search.js";
 export type { ChunkResult } from "./search.js";
 export { createIngestApp } from "./ingest.js";
+export { createReembedApp } from "./reembed.js";
