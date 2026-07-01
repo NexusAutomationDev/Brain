@@ -60,7 +60,13 @@ jobs:
           RESPONSE=$(curl -sf -X POST \
             -H "Authorization: Bearer $DOCKGATE_UPLOAD_TOKEN" \
             "$DOCKGATE_URL/apps/$APP_NAME/upload?version=${{ steps.version.outputs.VERSION }}")
-          echo "URL=$(echo $RESPONSE | jq -r .url)" >> $GITHUB_OUTPUT
+          URL=$(echo "$RESPONSE" | jq -r .url)
+          if [[ -z "$URL" || "$URL" == "null" ]]; then
+            echo "ERROR: DockGate upload URL request returned invalid response"
+            echo "Raw DockGate response: $RESPONSE"
+            exit 1
+          fi
+          echo "URL=$URL" >> $GITHUB_OUTPUT
 
       - name: Upload image to MinIO
         run: |
