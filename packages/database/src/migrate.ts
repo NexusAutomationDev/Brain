@@ -83,7 +83,11 @@ if (import.meta.main) {
     console.error('DATABASE_URL not set');
     process.exit(1);
   }
-  const sql = postgres(connectionString, { max: 1, prepare: false }); // D-01: PgBouncer-compatible
+  // D-01: PgBouncer-compatible (prepare: false). max: 2 — not 1 — because runMigrations()'s
+  // row-lock transaction (tx) and drizzle's internal migrate() each need their own connection
+  // concurrently; with max: 1 the single connection is held open by tx while migrate() blocks
+  // forever waiting for a second connection from the same pool (self-deadlock, found in 28-02).
+  const sql = postgres(connectionString, { max: 2, prepare: false });
   try {
     console.log('Starting migrations...');
     await runMigrations(sql, './src/migrations');
