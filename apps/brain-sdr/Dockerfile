@@ -39,6 +39,7 @@ RUN pnpm --filter @brain-pkg/observability build
 RUN pnpm --filter @brain-pkg/ai build
 RUN pnpm --filter @brain-pkg/transport build
 RUN pnpm --filter @brain-pkg/memory build
+RUN pnpm --filter @brain-pkg/embeddings build
 RUN pnpm --filter @brain-pkg/core build
 RUN pnpm --filter @brain-app/sdr build
 
@@ -62,6 +63,8 @@ COPY --from=builder /app/packages/core/dist ./packages/core/dist
 COPY --from=builder /app/packages/core/package.json ./packages/core/package.json
 COPY --from=builder /app/packages/database/dist ./packages/database/dist
 COPY --from=builder /app/packages/database/package.json ./packages/database/package.json
+COPY --from=builder /app/packages/embeddings/dist ./packages/embeddings/dist
+COPY --from=builder /app/packages/embeddings/package.json ./packages/embeddings/package.json
 COPY --from=builder /app/packages/memory/dist ./packages/memory/dist
 COPY --from=builder /app/packages/memory/package.json ./packages/memory/package.json
 COPY --from=builder /app/packages/observability/dist ./packages/observability/dist
@@ -75,6 +78,7 @@ COPY --from=builder /app/packages/transport/package.json ./packages/transport/pa
 COPY --from=builder /app/packages/ai/node_modules ./packages/ai/node_modules
 COPY --from=builder /app/packages/core/node_modules ./packages/core/node_modules
 COPY --from=builder /app/packages/database/node_modules ./packages/database/node_modules
+COPY --from=builder /app/packages/embeddings/node_modules ./packages/embeddings/node_modules
 COPY --from=builder /app/packages/memory/node_modules ./packages/memory/node_modules
 COPY --from=builder /app/packages/observability/node_modules ./packages/observability/node_modules
 COPY --from=builder /app/packages/shared/node_modules ./packages/shared/node_modules
