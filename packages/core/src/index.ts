@@ -37,6 +37,7 @@ export { createRespondTool } from "./tools/respond.js";
 // D-06: createSearchKnowledgeTool exportado para BrainRunner injetar via buildGraph()
 export { createSearchKnowledgeTool } from "./tools/search-knowledge.js";
 export { createIngestApp } from "./rag/index.js";
+export { createReembedApp } from "./rag/index.js";
 
 // EVT-01: EventPublisher — canal de saída para eventos de tools
 export type { IEventPublisher, ToolEvent } from "./events/event-publisher.js";
