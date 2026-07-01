@@ -70,7 +70,7 @@
 
 - [x] **Phase 27: Tech Debt Fixes** — BRAIN_TOOLS buildGraph coverage + FUP-02 E2E test + /health transport status (completed 2026-06-30)
 - [x] **Phase 28: Embedding SDK** — IEmbeddingProvider interface + OpenAI adapter + ENV-driven dimensions + semantic write path (completed 2026-07-01)
-- [ ] **Phase 29: Brain Suporte Core** — LangGraph graph + MCP tools + RAG obrigatório + transport + BrainOutput + leads + ToolsRegistry
+- [x] **Phase 29: Brain Suporte Core** — LangGraph graph + MCP tools + RAG obrigatório + transport + BrainOutput + leads + ToolsRegistry (completed 2026-07-01)
 - [ ] **Phase 30: Brain Suporte Docker** — Dockerfile multi-stage independente + validação end-to-end de deploy
 
 ## Phase Details
@@ -123,11 +123,11 @@ Plans:
   6. Gate `ia_ativada` bloqueia processamento silenciosamente; histórico de conversa por lead é recuperado do PostgresSaver via `thread_id = lead.uniqueId`
   7. `ToolsRegistry.registerBrainType("support", ...)` existe — habilitar tools por tipo funciona
 
-**Plans:** 0/2 plans complete
+**Plans:** 3/3 plans complete
 
 Plans:
-- [ ] 29-01-PLAN.md — apps/brain-support: supportBrain (buildGraph com pause_session/finish_conversation nativas + search_knowledge sempre-on) + index.ts + server.ts
-- [ ] 29-02-PLAN.md — Migration 0010 (seed prompt 'system' para brain_type='support') + .env.example + testes de ToolsRegistry/server
+- [x] 29-01-PLAN.md — apps/brain-support: supportBrain (buildGraph com pause_session/finish_conversation nativas + search_knowledge sempre-on) + index.ts + server.ts
+- [x] 29-02-PLAN.md — Migration 0010 (seed prompt 'system' para brain_type='support') + .env.example + testes de ToolsRegistry/server
 
 ### Phase 30: Brain Suporte Docker
 **Goal**: `apps/brain-support` tem imagem Docker independente que sobe, migra e atende mensagens — pronto para entrega a clientes
@@ -172,7 +172,7 @@ Plans:
 | 26. FUP Next-At Init Fix | v1.4 | 1/1 | Complete | 2026-06-25 |
 | 27. Tech Debt Fixes | v1.5 | 3/3 | Complete    | 2026-06-30 |
 | 28. Embedding SDK | v1.5 | 5/5 | Complete    | 2026-07-01 |
-| 29. Brain Suporte Core | v1.5 | 0/2 | Planned | — |
+| 29. Brain Suporte Core | v1.5 | 3/3 | Complete    | 2026-07-01 |
 | 30. Brain Suporte Docker | v1.5 | 0/? | Not started | — |
 
 ## Backlog
