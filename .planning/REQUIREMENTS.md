@@ -10,7 +10,7 @@
 - [x] **TECH-01**: Developer pode controlar tools bound em `buildGraph()` via `BRAIN_TOOLS` whitelist (fix TD-03)
 - [x] **TECH-02**: Existe teste de integração E2E do FUP rodando contra banco PostgreSQL real (fix FUP-02)
 - [x] **TECH-03**: `GET /health` retorna status do transport (conectado/desconectado) junto com health geral (fix OBS-02)
-- [ ] **TECH-04**: Fix de docker-compose.yml (porta 3003 para brain-support) está commitado e workflows de CI (`publish-brain-sdr.yml`, `publish-brain-support.yml`) fazem quote/validam saída do `jq` (fix v1.5 audit — integration finding)
+- [ ] **TECH-04**: Workflows de CI (`publish-brain-sdr.yml`, `publish-brain-support.yml`) fazem quote de `$RESPONSE` e `exit 1` se `jq -r .url` retornar vazio/nulo (fix v1.5 audit — CI shell hygiene; docker-compose port fix dropped from scope, already committed pre-audit in `3abf253`)
 - [ ] **TECH-05**: Tool `respond` tem proteção de append-after-filter equivalente a `search_knowledge`; `.env.example` do brain-sdr documenta ENVs de embedding; migration 0009 tem aviso inline sobre `vector(1536)` hardcoded (fix v1.5 audit — pre-client-onboarding items)
 - [ ] **TECH-06**: Achados warning/info de code review das fases 27-30 resolvidos e lacunas de documentação/teste (frontmatter, test ordering, test isolation) preenchidas (fix v1.5 audit — tech debt cleanup)
 

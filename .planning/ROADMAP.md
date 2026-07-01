@@ -72,7 +72,7 @@
 - [x] **Phase 28: Embedding SDK** — IEmbeddingProvider interface + OpenAI adapter + ENV-driven dimensions + semantic write path (completed 2026-07-01)
 - [x] **Phase 29: Brain Suporte Core** — LangGraph graph + MCP tools + RAG obrigatório + transport + BrainOutput + leads + ToolsRegistry (completed 2026-07-01)
 - [x] **Phase 30: Brain Suporte Docker** — Dockerfile multi-stage independente + validação end-to-end de deploy (completed 2026-07-01)
-- [ ] **Phase 31: Commit Staged Fix + Pre-Client Onboarding Hardening** — docker-compose port fix + CI shell hygiene + respond tool guard + .env.example docs + migration warning comment (gap closure, from v1.5 audit tech debt)
+- [ ] **Phase 31: Pre-Client Onboarding Hardening** — CI shell hygiene + respond tool guard + .env.example docs + migration warning comment (gap closure, from v1.5 audit tech debt; docker-compose port fix dropped — already committed pre-audit)
 - [ ] **Phase 32: Code Quality Cleanup — Accumulated Warnings & Test/Doc Hygiene** — resolve WR/IN findings from phases 27-30 + backfill SUMMARY frontmatter + fix test ordering/isolation issues (gap closure, from v1.5 audit tech debt)
 
 ## Phase Details
@@ -147,17 +147,17 @@ Plans:
 - [x] 30-02-PLAN.md — apps/brain-support/Dockerfile (multi-stage, embeddings included) + docker-compose.yml (D-01/D-02/D-04/D-05/D-09)
 - [x] 30-03-PLAN.md — .github/workflows/publish-brain-support.yml (D-10/D-11/D-12) + real e2e validation round-trip (D-07/D-08)
 
-### Phase 31: Commit Staged Fix + Pre-Client Onboarding Hardening
-**Goal**: O fix de porta já staged está commitado e os itens de tech debt marcados pela auditoria v1.5 como "worth a follow-up before onboarding a real client" estão fechados
+### Phase 31: Pre-Client Onboarding Hardening
+**Goal**: Os itens de tech debt marcados pela auditoria v1.5 como "worth a follow-up before onboarding a real client" estão fechados
 **Depends on**: Phase 30 (Brain Suporte Docker completo)
 **Requirements**: TECH-04, TECH-05
 **Gap Closure**: Fecha achados do `tech_debt` block em `.planning/v1.5-MILESTONE-AUDIT.md` (integration finding + tech debt highlights)
+**Scope correction (2026-07-01, found during /gsd-discuss-phase 31 codebase scout)**: o fix de porta em `apps/brain-support/docker-compose.yml` (3002→3003) que a auditoria reportou como "staged but not committed" já estava commitado em `3abf253` — antes do próprio commit do relatório de auditoria (`9768107`). Removido do escopo desta fase; nenhuma tarefa criada para ele.
 **Success Criteria** (what must be TRUE):
-  1. `apps/brain-support/docker-compose.yml` com porta host `3003` está commitado — sem colisão com `apps/brain-sdr` (porta `3002`)
-  2. `.github/workflows/publish-brain-support.yml` e `publish-brain-sdr.yml` fazem quote de `$RESPONSE` no pipe `jq` e validam que `jq -r .url` não retornou nulo antes do upload
-  3. Tool `respond` tem a mesma proteção de append-after-filter que `search_knowledge` já tem, em `brain-sdr` e `brain-support` — `BRAIN_TOOLS` mal configurado não degrada silenciosamente toda resposta
-  4. `apps/brain-sdr/.env.example` documenta `EMBEDDING_PROVIDER`/`EMBEDDING_MODEL`/`EMBEDDING_DIMENSIONS`
-  5. Migration `0009_embedding_dimensions_fix.sql` tem comentário inline avisando que `vector(1536)` é hardcoded para OpenAI e requer `TRUNCATE` manual ao regenerar com outra `EMBEDDING_DIMENSIONS`
+  1. `.github/workflows/publish-brain-support.yml` e `publish-brain-sdr.yml` fazem quote de `$RESPONSE` no pipe `jq` e `exit 1` com a resposta bruta impressa se `jq -r .url` retornar vazio ou `"null"`
+  2. Tool `respond` tem a mesma proteção de append-after-filter que `search_knowledge` já tem, em `brain-sdr` e `brain-support` — `BRAIN_TOOLS` mal configurado não degrada silenciosamente toda resposta
+  3. `apps/brain-sdr/.env.example` documenta `EMBEDDING_PROVIDER`/`EMBEDDING_MODEL`/`EMBEDDING_DIMENSIONS`
+  4. Migration `0009_embedding_dimensions_fix.sql` tem comentário inline avisando que `vector(1536)` é hardcoded para OpenAI e requer `TRUNCATE` manual ao regenerar com outra `EMBEDDING_DIMENSIONS`
 
 **Plans:** 0/? plans complete
 
@@ -209,7 +209,7 @@ Plans:
 | 28. Embedding SDK | v1.5 | 5/5 | Complete    | 2026-07-01 |
 | 29. Brain Suporte Core | v1.5 | 3/3 | Complete    | 2026-07-01 |
 | 30. Brain Suporte Docker | v1.5 | 3/3 | Complete    | 2026-07-01 |
-| 31. Commit Staged Fix + Pre-Client Onboarding Hardening | v1.5 | 0/? | Planned | — |
+| 31. Pre-Client Onboarding Hardening | v1.5 | 0/? | Planned | — |
 | 32. Code Quality Cleanup — Accumulated Warnings & Test/Doc Hygiene | v1.5 | 0/? | Planned | — |
 
 ## Backlog
