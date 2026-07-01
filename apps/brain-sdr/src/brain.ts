@@ -79,6 +79,18 @@ const searchKnowledgeToolSchema = tool(
   }
 );
 
+// WR-01 (31-REVIEW) / TECH-05 gap fix: MCP tools whose name collides with a reserved
+// native tool name must never reach bindTools()/ToolNode — an operator-configured MCP_URL
+// server exposing e.g. "respond" would otherwise create two same-named tool objects with
+// undefined precedence, silently defeating the "never disableable" guarantee.
+const RESERVED_TOOL_NAMES = new Set([
+  "respond",
+  "search_knowledge",
+  "pause_session",
+  "finish_conversation",
+  "qualify_lead",  // brain-sdr-specific
+]);
+
 export const sdrBrain: IBrain = {
   id: "brain-sdr",
   brainType: "sdr",
@@ -141,23 +153,43 @@ export const sdrBrain: IBrain = {
     if (!ctx.llm.bindTools) {
       throw new Error("LLM provider não suporta tool calling — configure um provider compatível (ex: OpenAI, Anthropic, Gemini)");
     }
+
     // D-03/TECH-01: Filtrar tools nativas pelo enabledTools whitelist.
     // ctx.enabledTools = null → sem filtro (BRAIN_TOOLS não setado).
     // ctx.enabledTools = Set<string> → apenas tools com nome no Set são vinculadas ao LLM.
-    // Aplica-se a closures nativas (boundQualifyTool, etc.) E a ctx.mcpTools injetadas.
+    // Aplica-se a closures nativas (boundQualifyTool, pause_session, finish_conversation)
+    // E a ctx.mcpTools injetadas.
+    //
+    // D-01/TECH-05: search_knowledge AND respond appended AFTER filter — never excludable
+    // by BRAIN_TOOLS (same pattern as brain-support's search_knowledge protection).
     const nativeTools = [
       boundQualifyTool,
       boundPauseSessionTool,
       boundFinishConversationTool,
-      boundSearchKnowledgeTool,  // D-01 (Phase 23): RAG-02/RAG-03
-      respondTool,               // D-09 (Fase 16): respond tool para responseMode dinâmico
+      // respondTool deliberately excluded — appended after filter
     ];
-    const allTools = [...nativeTools, ...ctx.mcpTools];
-    const filteredAllTools = ctx.enabledTools
-      ? allTools.filter((t) => ctx.enabledTools!.has(t.name))
-      : allTools;
 
-    // D-08 (Fase 12): bind com tools filtradas — LLM só pode chamar o que está no whitelist
+    // WR-01 fix: drop any MCP tool whose name collides with a reserved native tool name
+    // BEFORE concatenation — closes the gap where an MCP_URL server exposing "respond"
+    // (or other reserved tools) could shadow the native closure with undefined precedence.
+    const safeMcpTools = ctx.mcpTools.filter((t) => {
+      const collides = RESERVED_TOOL_NAMES.has(t.name);
+      if (collides) {
+        logger.warn(
+          { toolName: t.name },
+          "MCP tool nome colide com tool nativa reservada — descartada (WR-01/TECH-05)"
+        );
+      }
+      return !collides;
+    });
+
+    const allToolsExceptSearchAndRespond = [...nativeTools, ...safeMcpTools];
+    const filteredExceptSearchAndRespond = ctx.enabledTools
+      ? allToolsExceptSearchAndRespond.filter((t) => ctx.enabledTools!.has(t.name))
+      : allToolsExceptSearchAndRespond;
+    // D-01/TECH-05: search_knowledge AND respond appended AFTER filter — never excludable by BRAIN_TOOLS
+    const filteredAllTools = [...filteredExceptSearchAndRespond, boundSearchKnowledgeTool, respondTool];
+
     const llmWithTools = ctx.llm.bindTools(filteredAllTools);
 
     // HIST-03: context window — slice feito no nó, não no invoke() (Pitfall 3 do runner.ts)

@@ -115,14 +115,14 @@ export const supportBrain: IBrain = {
     }
 
     // D-04 (Phase 29, crítico): search_knowledge NUNCA pode ser filtrada por BRAIN_TOOLS.
-    // nativeTools exclui deliberadamente boundSearchKnowledgeTool — o filtro ctx.enabledTools
-    // roda apenas sobre nativeTools + mcpTools, e boundSearchKnowledgeTool é apendado DEPOIS,
-    // por referência direta de variável (não por lookup de nome) — não é spoofável via
-    // BRAIN_TOOLS nem via tool_calls do LLM (T-29-01).
+    // nativeTools exclui deliberadamente boundSearchKnowledgeTool E respondTool — o filtro
+    // ctx.enabledTools roda apenas sobre nativeTools + mcpTools, e boundSearchKnowledgeTool
+    // + respondTool são apendados DEPOIS, por referência direta de variável (não por lookup
+    // de nome) — não são spoofáveis via BRAIN_TOOLS nem via tool_calls do LLM (T-29-01, TECH-05).
     const nativeTools = [
       boundPauseSessionTool,
       boundFinishConversationTool,
-      respondTool,
+      // respondTool deliberately excluded — appended after filter
     ];
     // WR-01 fix: drop any MCP tool whose name collides with a reserved native tool name
     // BEFORE concatenation — closes the SUP-02 gap where an MCP_URL server exposing
@@ -138,13 +138,13 @@ export const supportBrain: IBrain = {
       }
       return !collides;
     });
-    const allToolsExceptSearch = [...nativeTools, ...safeMcpTools];
-    const filteredExceptSearch = ctx.enabledTools
-      ? allToolsExceptSearch.filter((t) => ctx.enabledTools!.has(t.name))
-      : allToolsExceptSearch;
-    // D-04/SUP-02: search_knowledge é apendada APÓS o filtro de enabledTools rodar —
-    // ela nunca pode ser excluída por BRAIN_TOOLS, diferente de qualquer outra tool.
-    const filteredAllTools = [...filteredExceptSearch, boundSearchKnowledgeTool];
+    const allToolsExceptSearchAndRespond = [...nativeTools, ...safeMcpTools];
+    const filteredExceptSearchAndRespond = ctx.enabledTools
+      ? allToolsExceptSearchAndRespond.filter((t) => ctx.enabledTools!.has(t.name))
+      : allToolsExceptSearchAndRespond;
+    // D-04/SUP-02 + TECH-05/D-01: search_knowledge AND respond appended AFTER filter —
+    // never excludable by BRAIN_TOOLS, unlike other tools.
+    const filteredAllTools = [...filteredExceptSearchAndRespond, boundSearchKnowledgeTool, respondTool];
 
     const llmWithTools = ctx.llm.bindTools(filteredAllTools);
 
