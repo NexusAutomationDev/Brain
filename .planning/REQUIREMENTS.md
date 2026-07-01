@@ -21,14 +21,14 @@
 
 ### Brain Suporte
 
-- [ ] **SUP-01**: Brain Suporte recebe mensagens via webhook e RabbitMQ configurável por ENV (mesma interface do SDR)
-- [ ] **SUP-02**: `search_knowledge` tool sempre ativa no grafo (RAG obrigatório — sem flag, sem ENV)
-- [ ] **SUP-03**: Tools do grafo (qualify, pause_session, finish_conversation) carregadas via MCP dinâmico, sem hardcode em `buildGraph()`
-- [ ] **SUP-04**: Brain Suporte usa `IEmbeddingProvider` com provider/modelo/dimensões configuráveis independentemente do SDR
-- [ ] **SUP-05**: Brain Suporte retorna `BrainOutput` estruturado (`fullResponse`, `responseMode`) validado pelo SDK
+- [x] **SUP-01**: Brain Suporte recebe mensagens via webhook e RabbitMQ configurável por ENV (mesma interface do SDR)
+- [x] **SUP-02**: `search_knowledge` tool sempre ativa no grafo (RAG obrigatório — sem flag, sem ENV)
+- [x] **SUP-03**: Tools do grafo (qualify, pause_session, finish_conversation) carregadas via MCP dinâmico, sem hardcode em `buildGraph()` (reinterpretado per D-01/D-02: `pause_session`/`finish_conversation` são closures nativas hardcoded, sem `qualify_lead` — desvio confirmado pelo usuário)
+- [x] **SUP-04**: Brain Suporte usa `IEmbeddingProvider` com provider/modelo/dimensões configuráveis independentemente do SDR
+- [x] **SUP-05**: Brain Suporte retorna `BrainOutput` estruturado (`fullResponse`, `responseMode`) validado pelo SDK
 - [ ] **SUP-06**: `Dockerfile` multi-stage independente e funcional para `apps/brain-support`
-- [ ] **SUP-07**: Gate `ia_ativada` + histórico de conversa persistente por lead via `PostgresSaver` (thread_id = lead.uniqueId)
-- [ ] **SUP-08**: Brain Suporte registrado no `ToolsRegistry` com tipo `"support"`
+- [x] **SUP-07**: Gate `ia_ativada` + histórico de conversa persistente por lead via `PostgresSaver` (thread_id = lead.uniqueId)
+- [x] **SUP-08**: Brain Suporte registrado no `ToolsRegistry` com tipo `"support"`
 
 ## Future Requirements
 
@@ -65,14 +65,14 @@
 | EMBD-03 | Phase 28 | Complete (override — see 28-VERIFICATION.md) |
 | EMBD-04 | Phase 28 | Complete |
 | EMBD-05 | Phase 28 | Complete |
-| SUP-01 | Phase 29 | Pending |
-| SUP-02 | Phase 29 | Pending |
-| SUP-03 | Phase 29 | Pending |
-| SUP-04 | Phase 29 | Pending |
-| SUP-05 | Phase 29 | Pending |
+| SUP-01 | Phase 29 | Complete |
+| SUP-02 | Phase 29 | Complete |
+| SUP-03 | Phase 29 | Complete (override — see 29-VERIFICATION.md D-01/D-02) |
+| SUP-04 | Phase 29 | Complete |
+| SUP-05 | Phase 29 | Complete |
 | SUP-06 | Phase 30 | Pending |
-| SUP-07 | Phase 29 | Pending |
-| SUP-08 | Phase 29 | Pending |
+| SUP-07 | Phase 29 | Complete |
+| SUP-08 | Phase 29 | Complete |
 
 **Coverage:**
 - v1.5 requirements: 16 total

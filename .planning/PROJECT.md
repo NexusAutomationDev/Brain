@@ -98,11 +98,23 @@ Uma infraestrutura de agentes modular onde novos Brains são criados definindo a
 - ✓ EMBD-04: Brain configura provider, modelo e dimensões via ENV sem alterar código TypeScript — Phase 28
 - ✓ EMBD-05: `BrainRunner` conecta semantic write path (`createEmbeddings`) ao `IEmbeddingProvider` — MEM-03 resolvido, escrita semântica deixou de ser dead code — Phase 28
 
+**v1.5 — Brain Suporte Core (Phase 29)**
+
+- ✓ SUP-01: Brain Suporte recebe mensagens via webhook e RabbitMQ configurável por ENV (mesma interface do SDR) — Phase 29
+- ✓ SUP-02: `search_knowledge` sempre ativa no grafo — `RESERVED_TOOL_NAMES` bloqueia colisão de nome vinda de `ctx.mcpTools` antes de `bindTools()`/`ToolNode` (gap SUP-02/D-04 fechado em 29-03) — Phase 29
+- ✓ SUP-03: Tools do grafo via MCP dinâmico, sem hardcode (reinterpretado per D-01/D-02: `pause_session`/`finish_conversation` são closures nativas hardcoded, sem `qualify_lead` — desvio confirmado pelo usuário) — Phase 29
+- ✓ SUP-04: `IEmbeddingProvider` configurável por ENV, independente do SDR — Phase 29
+- ✓ SUP-05: `BrainOutput` estruturado validado pelo SDK — Phase 29
+- ✓ SUP-07: Gate `ia_ativada` + histórico persistente via `PostgresSaver` (thread_id = lead.uniqueId) — Phase 29
+- ✓ SUP-08: Brain Suporte registrado no `ToolsRegistry` com tipo `"support"` — Phase 29
+- SUP-06 (`Dockerfile` multi-stage) deferido para Phase 30
+
 ### Active
 
 **Backlog (pós v1.4)**
 
-- [ ] Outros Brains: Suporte, Customer Success
+- [x] Brain Suporte (`apps/brain-support`) — Phase 29
+- [ ] Outros Brains: Customer Success
 - [ ] Sub-agente de qualificação avançada com SPIN/BANT completo
 - [ ] Brain SDR publicando respostas de volta ao RabbitMQ (canal de resposta async)
 - [x] Resolver TD-03: `BRAIN_TOOLS` whitelist agora cobre closures em buildGraph() via enabledTools — Phase 27
@@ -207,4 +219,4 @@ Este documento evolui nas transições de fase e marcos de milestone.
 4. Atualizar Context com estado atual
 
 ---
-*Last updated: 2026-07-01 — Phase 28 complete: `packages/embeddings` (IEmbeddingProvider + OpenAI/Gemini adapters), migration 0009 (ENV-driven vector(N)), BrainRunner semantic write path wired (MEM-03), D-16 resolved with pre-production override (see 28-VERIFICATION.md)*
+*Last updated: 2026-07-01 — Phase 29 complete: `apps/brain-support` (SUP-01/02/03/04/05/07/08) — ReAct graph com `search_knowledge` estruturalmente sempre ativo (gap SUP-02/D-04 fechado em 29-03 via `RESERVED_TOOL_NAMES` filter contra `ctx.mcpTools`), `pause_session`/`finish_conversation` nativas per D-01/D-02, prompt seed + `.env.example` completo (corrigindo gap do Phase 28). SUP-06 (Dockerfile) deferido para Phase 30. Ver 29-VERIFICATION.md (7/7 passed).
