@@ -87,6 +87,10 @@ Phase 30 ████████████████ 100%  Brain Suporte Do
 - `prepare: false` required in all postgres.js connections (PgBouncer transaction mode)
 - `bun:sql` has stuck-connection bug after constraint errors — use `postgres.js` driver
 
+### Pending Todos
+
+- Fix cross-test mock.module pollution in full suite runs (testing) — `.planning/todos/pending/2026-07-02-fix-cross-test-mock-module-pollution-in-full-suite-runs.md`
+
 ## Archived
 
 - `.planning/milestones/v1.4-ROADMAP.md`
