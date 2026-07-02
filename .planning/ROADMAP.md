@@ -169,14 +169,22 @@ Plans:
 **Depends on**: Phase 31
 **Requirements**: TECH-06
 **Gap Closure**: Fecha os itens restantes do `tech_debt` block em `.planning/v1.5-MILESTONE-AUDIT.md` (warnings + info-level findings, phases 27-30)
+**Scope correction (2026-07-02, found during /gsd-discuss-phase 32 codebase scout, confirmed during /gsd-plan-phase 32)**: dois achados da Phase 27 não reproduzem no código atual — "branch morto 503/500" (`performHealthCheck()`/`createHealthApp()` já mapeiam `error`→500 e `degraded`/db-failure→503 corretamente) e "`as any` para `RunnableConfig`" (`pause-session.ts`/`finish-conversation.ts` já usam o tipo `RunnableConfig` próprio, sem cast). Documentados como já-resolvidos em `32-01-PLAN.md`, sem task de fix. Também por decisão do usuário (32-CONTEXT.md D-05/D-10): `getEmbeddingProvider()` NÃO recebe caminho de invalidação — permanece singleton de vida do processo, com a justificativa documentada inline (ENVs de embedding são fixas por container, sem caso de uso de reload em runtime neste modelo de deployment).
 **Success Criteria** (what must be TRUE):
-  1. Achados WR/IN da Phase 27 resolvidos: branch morto 503/500, vazamento de handler SIGTERM em `BrainRunner.init()`, colisão de chave no retry map do RabbitMQ, `as any` substituído por tipo próprio de `RunnableConfig`, `WebhookTransport.getStatus()` reflete estado real após `stop()`
-  2. Achados WR/IN da Phase 28 resolvidos: comentário `ingest.ts` corrigido, `LazyEmbeddingProvider` sem valores placeholder antes da resolução, `reembed.ts` com limite de páginas, `runner.ts` com tratamento defensivo para dimension-mismatch, assunção de `atttypmod` documentada/corrigida, `search-knowledge.ts` escapa/trunca conteúdo de chunk, `EMBEDDING_DIMENSIONS` validado contra o valor fixo do Gemini (3072), checagem duplicada de `DATABASE_URL` em `_compileGraph()` removida
-  3. Achados IN da Phase 29 resolvidos: `RESERVED_TOOL_NAMES` derivado das instâncias de tool reais, `getEmbeddingProvider()` com caminho de invalidação, type-guard de mensagem AI unificado entre `routeAfterLlm`/`respond`
+  1. Achados WR/IN da Phase 27 resolvidos: vazamento de handler SIGTERM em `BrainRunner.init()`, colisão de chave no retry map do RabbitMQ, `WebhookTransport.getStatus()` reflete estado real após `stop()` (branch morto 503/500 e `as any` de `RunnableConfig` — confirmados já-resolvidos, ver scope correction acima)
+  2. Achados WR/IN da Phase 28 resolvidos: comentário `ingest.ts` corrigido, `LazyEmbeddingProvider` com placeholder documentado (não removido — ver 32-CONTEXT.md D-04), `reembed.ts` com limite de páginas, `runner.ts` com tratamento defensivo para dimension-mismatch, assunção de `atttypmod` documentada, `search-knowledge.ts` trunca conteúdo de chunk, `EMBEDDING_DIMENSIONS` validado contra o valor fixo do Gemini (3072), checagem duplicada de `DATABASE_URL` em `_compileGraph()` removida
+  3. Achados IN da Phase 29 resolvidos: `RESERVED_TOOL_NAMES` derivado das instâncias de tool reais, `getEmbeddingProvider()` com rationale de singleton documentado (sem caminho de invalidação — ver scope correction acima), type-guard de mensagem AI unificado entre `routeAfterLlm`/`respond`
   4. Naming da SUP-08 alinhado entre requisito e código (`ToolsRegistry.registerBrainType` vs `toolsRegistry.enableTool`)
-  5. Frontmatter `requirements-completed` retroativo em `27-02`, `27-03`, `29-01`, `29-02`; `fup-e2e.test.ts` sem dependência de ordem entre testes; causa raiz do cross-pollution de `mock.module` entre `brain-runner.test.ts` e `factory.test.ts` investigada e corrigida
+  5. Frontmatter `requirements-completed` retroativo em `27-02`, `27-03`, `29-01`, `29-02`; `fup-e2e.test.ts` sem dependência de ordem entre testes; causa raiz do cross-pollution de `mock.module` entre `brain-runner.test.ts` e `factory.test.ts` investigada e corrigida (confirmado reproduzindo — 3 falhas quando os dois arquivos rodam juntos — e corrigido)
 
-**Plans:** 0/? plans complete
+**Plans:** 0/5 plans complete
+
+Plans:
+- [ ] 32-01-PLAN.md — Runtime lifecycle hardening: SIGTERM idempotency, RabbitMQ retry-key collision, WebhookTransport stale status, atttypmod defensive query + doc, duplicate DATABASE_URL check removal, mock.module cross-pollution fix (Wave 1)
+- [ ] 32-02-PLAN.md — RAG/embeddings hardening: reembed.ts MAX_PAGES cap, ingest.ts comment fix, search-knowledge.ts content truncation, Gemini EMBEDDING_DIMENSIONS validation (Wave 1)
+- [ ] 32-03-PLAN.md — Shared abstractions: hasToolCall/getFirstToolCallName type-guards, RESERVED_TOOL_NAMES derivation, LazyEmbeddingProvider/getEmbeddingProvider() doc (Wave 1)
+- [ ] 32-04-PLAN.md — Test hygiene: fup-e2e.test.ts independent tests, REQUIREMENTS.md SUP-08 naming alignment (Wave 1)
+- [ ] 32-05-PLAN.md — SUMMARY.md requirements-completed frontmatter backfill (27-02, 27-03, 29-01, 29-02) (Wave 1)
 
 ## Progress
 
@@ -213,7 +221,7 @@ Plans:
 | 29. Brain Suporte Core | v1.5 | 3/3 | Complete    | 2026-07-01 |
 | 30. Brain Suporte Docker | v1.5 | 3/3 | Complete    | 2026-07-01 |
 | 31. Pre-Client Onboarding Hardening | v1.5 | 1/1 | Complete    | 2026-07-02 |
-| 32. Code Quality Cleanup — Accumulated Warnings & Test/Doc Hygiene | v1.5 | 0/? | Planned | — |
+| 32. Code Quality Cleanup — Accumulated Warnings & Test/Doc Hygiene | v1.5 | 0/5 | Planned | — |
 
 ## Backlog
 
