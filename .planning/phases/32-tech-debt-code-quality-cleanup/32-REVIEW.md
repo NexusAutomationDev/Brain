@@ -1,8 +1,8 @@
 ---
 phase: 32-tech-debt-code-quality-cleanup
-reviewed: 2026-07-02T02:04:57Z
+reviewed: 2026-07-02T15:00:32Z
 depth: standard
-files_reviewed: 20
+files_reviewed: 22
 files_reviewed_list:
   - apps/brain-sdr/src/__tests__/unit/brain.test.ts
   - apps/brain-sdr/src/brain.ts
@@ -19,6 +19,7 @@ files_reviewed_list:
   - packages/core/src/runner/runner.ts
   - packages/core/src/tools/__tests__/search-knowledge.test.ts
   - packages/core/src/tools/search-knowledge.ts
+  - packages/embeddings/src/__tests__/unit/factory.test.ts
   - packages/embeddings/src/__tests__/unit/gemini-provider.test.ts
   - packages/embeddings/src/gemini-provider.ts
   - packages/transport/src/__tests__/unit/rabbitmq/consumer.test.ts
@@ -35,57 +36,174 @@ status: issues_found
 
 # Phase 32: Code Review Report
 
-**Reviewed:** 2026-07-02T02:04:57Z
+**Reviewed:** 2026-07-02T15:00:32Z
 **Depth:** standard
-**Files Reviewed:** 20
+**Files Reviewed:** 22
 **Status:** issues_found
 
 ## Summary
 
-Reviewed the tech-debt/code-quality cleanup phase files: brain-sdr and brain-support graph builders, core RAG (ingest/reembed/search-knowledge), BrainRunner lifecycle, the new shared `type-guards.ts`, the Gemini embedding provider, and the RabbitMQ/webhook transports (plus their test suites). No security vulnerabilities, injection risks, or crash-causing bugs were found — the existing patterns (fail-closed auth, Bearer-token checks, Zod validation, MCP tool-name collision guards, pagination hard caps) are consistently applied and well-tested. The main opportunities are (1) a real duplication of the `LazyEmbeddingProvider` class and its singleton wiring between `brain-sdr/brain.ts` and `brain-support/brain.ts`, which is exactly the kind of cross-Brain reusable code the project's own `packages/` vs `apps/` convention says should be shared, and (2) a couple of minor robustness/consistency gaps that are worth flagging but do not currently cause incorrect behavior.
+This is a re-review of Phase 32 (tech-debt/code-quality cleanup) after the gap-closure plan
+32-06 landed (test-only fix pinning `EMBEDDING_DIMENSIONS` in `brain-runner.test.ts` and
+`factory.test.ts` to remove ambient-`.env.test` drift). I diffed every changed source file
+against the phase's base commit (`f5c7a28`) and confirmed each intended fix landed correctly:
+`RESERVED_TOOL_NAMES` is now derived from live tool instances instead of a hand-maintained
+literal (brain-sdr, brain-support); the duplicated inline `tool_calls` checks were extracted
+into `packages/core/src/brain/type-guards.ts` (`hasToolCall`/`getFirstToolCallName`); a
+`MAX_PAGES` hard cap was added to the `/api/v1/reembed` pagination loop; `GeminiEmbeddingProvider`
+now fails fast on a dimension mismatch instead of surfacing a cryptic Postgres error later;
+`search-knowledge.ts` now truncates oversized chunk content; `BrainRunner.init()` guards
+against a zero-row `pg_attribute` dimension query; SIGTERM listeners no longer accumulate
+across repeated `init()` calls; and `WebhookTransport.getStatus()` now correctly reflects
+`.stop()`. I ran the directly-affected unit test files (49 tests across 5 files) and all pass.
+
+No new bugs, security vulnerabilities, or dangerous patterns (secrets, `eval`/`innerHTML`-class
+sinks, empty catches) were introduced by this phase's changes. The findings below are carried
+forward from the prior review pass (still valid against the current code — none were in scope
+for 32-06's test-only fix) plus a small number of new observations from this pass.
 
 ## Warnings
 
-### WR-01: `LazyEmbeddingProvider` and its singleton wiring are duplicated verbatim across brain-sdr and brain-support
+### WR-01: `LazyEmbeddingProvider`, `getContextWindow()`, the date-injection block, and the `respond` node body are duplicated verbatim across brain-sdr and brain-support
 
-**File:** `apps/brain-sdr/src/brain.ts:37-80`, `apps/brain-support/src/brain.ts:36-79`
-**Issue:** The `embeddingProviderPromise` module-level singleton, `getEmbeddingProvider()`, the full `LazyEmbeddingProvider` class (with its `providerName`/`dimensions`/`embed`/`embedQuery` implementation and accompanying doc comments), `lazyEmbeddingProvider()`, and the static `searchKnowledgeToolSchema` tool definition are byte-for-byte identical between the two files (~80 lines each). Per this repo's own convention ("packages/ vs apps/ — onde colocar código": *"outro Brain poderia usar isso?"*), this is exactly reusable infrastructure that belongs in `packages/core` or `packages/embeddings`, not duplicated per-Brain. Today this is "just" duplication, but it is a correctness risk going forward: any future fix to `LazyEmbeddingProvider` (e.g. a bug in how it resolves/memoizes the provider) must be applied in two places, and it is easy to patch one copy and forget the other — which silently reintroduces the bug in one Brain while looking fixed in the other.
-**Fix:** Extract `LazyEmbeddingProvider`, `getEmbeddingProvider()`/`lazyEmbeddingProvider()`, and `searchKnowledgeToolSchema` into a shared helper in `packages/core` (e.g. `packages/core/src/embeddings/lazy-provider.ts` and `packages/core/src/tools/search-knowledge-schema.ts`), and export them from `packages/core/src/index.ts` for both `brain-sdr` and `brain-support` to import. This also shrinks the diff surface the next time this logic needs a fix.
+**File:** `apps/brain-sdr/src/brain.ts:37-80,213-264,318-350` and `apps/brain-support/src/brain.ts:36-79,166-217,268-300`
+**Issue:** `apps/brain-sdr/src/brain.ts` and `apps/brain-support/src/brain.ts` contain
+near-identical (diff shows only comment/wording deltas) implementations of:
+- `embeddingProviderPromise` / `getEmbeddingProvider()` (process-lifetime singleton) and the
+  full `LazyEmbeddingProvider` class + `lazyEmbeddingProvider()`
+- `searchKnowledgeToolSchema` (static Zod schema-as-tool placeholder)
+- `getContextWindow()` (parses `CONTEXT_WINDOW_MESSAGES`)
+- The "inject current date/time into the last HumanMessage" block (`Intl.DateTimeFormat` +
+  `<informacoes>` wrapper)
+- The `respond` node body (extracting the last AIMessage's `respond` tool_call, mapping
+  `mediaType: "file" → "document"`, emitting the parity `ToolMessage`)
 
-### WR-02: `reembed.ts` re-embeds all pages before applying the `MAX_PAGES` truncation warning, but does not cap total work started per call
+This is roughly 150 lines of drift-prone duplicate code across two files. This phase's own
+`packages/core/src/brain/type-guards.ts` extraction (`hasToolCall`/`getFirstToolCallName`)
+demonstrates the correct pattern for exactly this situation — its own doc comment cites
+"duplicated inline `tool_calls` checks" as the reason to extract, and the same rationale
+applies here at a larger scale. Per CLAUDE.md's own "packages/ vs apps/" guidance
+("outro Brain poderia usar isso?" → `packages/` if yes), none of this code is SDR- or
+Support-specific: `LazyEmbeddingProvider`/`getEmbeddingProvider` is pure embeddings
+infrastructure, `getContextWindow()`/the date-injection block are pure LangGraph-node
+helpers, and the `respond` node body is provably identical in both Brains today. Any future
+third Brain (this project's stated multi-Brain roadmap) will either re-duplicate this a third
+time or diverge silently — e.g. a future fix to the Gemini embed-partial-failure fallback
+inside `LazyEmbeddingProvider` would need to be applied in three places to stay consistent.
+**Fix:** Extract into `packages/embeddings` (for `LazyEmbeddingProvider`/`getEmbeddingProvider`,
+since it only depends on `@brain-pkg/embeddings`) and `packages/core/src/brain/` (for
+`getContextWindow()`, the date-injection helper, and the `respond` node factory), mirroring
+the `type-guards.ts` pattern, then import from both `buildGraph()` implementations. This is a
+mechanical refactor with no behavior change — the existing `brain.test.ts` suites for both
+apps already assert the exact behavior this refactor would need to preserve.
+
+### WR-02: `/api/v1/reembed`'s pagination loop can perform up to 500 sequential embedding-provider round trips synchronously within a single HTTP request
 
 **File:** `packages/core/src/rag/reembed.ts:74-119`
-**Issue:** The `MAX_PAGES` guard (documented as a "100k row ceiling per POST /api/v1/reembed call") correctly stops the loop after 500 pages, but each page still performs a full `embed()` call (network/API round trip to the embedding provider) for up to `PAGE_SIZE=200` rows before the `pages >= MAX_PAGES` check is evaluated. This is fine functionally (the test `Test 9` confirms exactly `MAX_PAGES` SELECTs), but note that the total embedding-provider calls per invocation (500) is unbounded by request timeout — a synchronous HTTP handler doing up to 500 sequential embed-provider round trips can run for a very long time (potentially triggering upstream gateway/proxy timeouts) before returning a response. This isn't a bug in the reviewed code path itself, but it's a correctness-adjacent risk worth calling out since a caller waiting on this synchronous endpoint could see a network-level timeout well before `truncated: true` is ever returned.
-**Fix:** Consider surfacing this as an explicit operational note (e.g., in the doc comment) recommending callers invoke `/api/v1/reembed` asynchronously or via a job queue for large collections, or reduce `MAX_PAGES`/`PAGE_SIZE` defaults for synchronous HTTP contexts. No code change strictly required if this is already an accepted tradeoff — flagging for visibility.
+**Issue:** The `MAX_PAGES` guard (added this phase, "100k row ceiling per POST
+/api/v1/reembed call") correctly bounds the loop to 500 pages, and `Test 9` in
+`reembed.test.ts` confirms exactly `MAX_PAGES` SELECTs are issued. However, each of those
+pages still performs a full `embed()` call (a network round trip to the configured embedding
+provider) for up to `PAGE_SIZE=200` rows before the `pages >= MAX_PAGES` check is evaluated.
+The total worst-case embedding-provider calls per single synchronous HTTP request is therefore
+up to 500 sequential round trips — this can run for a very long time and risks tripping an
+upstream gateway/reverse-proxy timeout well before the handler ever returns a response
+(with or without `truncated: true`). This is not a bug in the reviewed logic itself (the cap
+does what it says — bounds total rows, not wall-clock time), but it's a correctness-adjacent
+operational risk since `MAX_PAGES` was introduced specifically to bound a "single call
+becoming an unbounded/runaway job," and 500 sequential embedding-API calls in one HTTP
+request can itself become a runaway *duration* even though it's no longer a runaway *row
+count*. Separately, note the boundary case where total matching rows are exactly
+`MAX_PAGES * PAGE_SIZE` (100,000): the loop reports `truncated: true` even though there is, in
+fact, no more data — a harmless false-positive (a client re-invoking the same `collection`
+simply gets `updated: 0, truncated: false`), flagged here only for completeness.
+**Fix:** Consider surfacing the duration risk as an explicit operational note in the doc
+comment (recommending callers invoke `/api/v1/reembed` asynchronously or via a job queue for
+large collections), or lowering `MAX_PAGES`/`PAGE_SIZE` defaults for synchronous HTTP
+contexts. No code change is strictly required if the current 100k-row/request-timeout
+tradeoff is an accepted operational constraint — flagging for visibility since this endpoint
+is new-ish infrastructure (D-16) that operators will need to know the limits of.
 
 ## Info
 
-### IN-01: `routeAfterLlm` and llm-node response-classification logic duplicated between brain-sdr and brain-support
+### IN-01: `_compileGraph()`'s `DATABASE_URL` fail-fast was removed from the SDK layer, now relies solely on each Brain app's own guard
 
-**File:** `apps/brain-sdr/src/brain.ts:220-228, 266-306`, `apps/brain-support/src/brain.ts:173-181, 218-257`
-**Issue:** Beyond the embedding-provider duplication (WR-01), the `routeAfterLlm()` router function, the `getContextWindow()` closure, the system-prompt "now" enrichment block (date/weekday formatting via `Intl.DateTimeFormat`), and the entire `llm` node body (fallback/`respond`-detection logic) are structurally identical between the two Brains, differing only in brain-sdr's extra `qualify_lead`/other-tool-call branch comments. This was likely an intentional/pragmatic choice to keep each Brain's `buildGraph()` self-contained and inspectable, but it does mean date-enrichment or context-window bugs must be fixed in two places.
-**Fix:** No immediate action required — this is lower urgency than WR-01 since the logic is smaller and Brain-specific tool wiring differs around it. If a future phase extracts `LazyEmbeddingProvider` (WR-01), consider also extracting `getContextWindow()` and the "now" message-enrichment helper into a shared `packages/ai` or `packages/core` utility as a follow-up.
+**File:** `packages/core/src/runner/runner.ts:509-520`
+**Issue:** This phase removed the explicit `if (!dbUrl) { ...; process.exit(1); }` guard in
+`BrainRunner._compileGraph()` (replaced with a bare `dbUrl!` non-null assertion), on the
+documented rationale (IN-04/TECH-06 from 28-REVIEW) that `apps/brain-sdr/src/index.ts` and
+`apps/brain-support/src/index.ts` already validate `DATABASE_URL` before calling
+`runner.init()`. Verified both apps do perform this check today (`index.ts:44` and
+`index.ts:47` respectively). However, `BrainRunner` is exported from `@brain-pkg/core`
+(`packages/core/src/index.ts`) as public SDK surface for any future Brain app, and the
+CLAUDE.md "Como Criar um Novo Brain" checklist does not list this app-level `DATABASE_URL`
+guard as a required step — a future Brain author who omits it loses the previous clean
+`process.exit(1)` + descriptive log and instead hits whatever `createCheckpointer(undefined as
+unknown as string)` throws internally (likely a less clear, deeper error).
+**Fix:** Low priority given the documented tradeoff (avoiding a genuinely redundant
+same-process re-check), but consider either (a) restoring a lightweight defensive check in
+`_compileGraph()` since the SDK layer can't assume every future Brain app replicates the
+app-level guard, or (b) adding the `DATABASE_URL` check explicitly to the "Novo Brain"
+checklist / ENVs mínimas obrigatórias section in CLAUDE.md so the contract is documented
+where new Brain authors will actually read it.
 
-### IN-02: `fup-e2e.test.ts` module import of `postgres` used only for typing `sql`, but no explicit teardown guard if `beforeAll` throws before `sql` assignment
+### IN-02: `ctx.sql!` non-null assertions in both Brains' `buildGraph()` rely on caller discipline, not a type-level guarantee
 
-**File:** `packages/core/src/__tests__/integration/fup-e2e.test.ts:129-198, 200-216`
-**Issue:** If `beforeAll` throws partway through (e.g., `runMigrations` fails after `sql = postgres(...)` succeeds but before the `fup_config`/`prompts` inserts complete), `afterAll` still runs and calls `sql.end()` safely since `sql` was already assigned — this part is fine. However, if `postgres(DATABASE_URL!, ...)` itself throws (malformed URL), `sql` remains `null` and `afterAll`'s `if (!sql) return;` correctly no-ops. This is actually handled correctly; no fix needed. Flagging only because the pattern is worth preserving as-is in any future refactor of this test file — a naive "always call `sql.end()`" refactor without the `if (!sql) return;` guard would throw on teardown.
-**Fix:** No action needed. Documented here as a regression trap for future editors of this file.
+**File:** `apps/brain-sdr/src/brain.ts:143-144,151`, `apps/brain-support/src/brain.ts:111-112,115`
+**Issue:** `ctx.sql!` is used repeatedly with non-null assertions, justified by comments
+("ctx.sql! é seguro: index.ts passa sql no construtor do BrainRunner"). This is a correct
+runtime guarantee today (`BrainRunner._compileGraph()` always sets `ctx.sql = this.sql`), but
+`BrainBuildContext.sql` is typed as optional (`sql?: Sql` in
+`packages/core/src/brain/interface.ts:25`), so the type system does not enforce the invariant
+the comments describe. A future refactor of `BrainRunnerOptions`/`_compileGraph()` that stops
+always passing `sql` (e.g. to support a hypothetical sql-less Brain) would compile without
+error and only fail at runtime inside `buildGraph()` with a non-null-assertion crash instead
+of a clear message.
+**Fix:** If `sql` is effectively always required for any Brain using DB-backed tools (which is
+every Brain today), consider narrowing the type or adding an explicit runtime check with a
+clear error message (`if (!ctx.sql) throw new Error(...)`) instead of the bare `!` assertion.
+Low priority — behavior is correct today, this is a maintainability/type-safety suggestion,
+not a live bug.
 
-### IN-03: Non-null assertions on `ctx.sql!` in both Brain `buildGraph()` implementations rely on caller discipline, not type-level guarantees
+### IN-03: `hasToolCall` (any-match) and `getFirstToolCallName` (first-match) encode different tool_calls-ordering assumptions used inconsistently within the same `llm` node
 
-**File:** `apps/brain-sdr/src/brain.ts:143-144, 151`, `apps/brain-support/src/brain.ts:111-112, 115`
-**Issue:** `ctx.sql!` is used repeatedly with non-null assertions justified by code comments ("ctx.sql! é seguro: index.ts passa sql no construtor do BrainRunner"). This is a correct runtime guarantee today, but `BrainBuildContext.sql` is apparently typed as optional (`sql?: Sql`), meaning the type system does not enforce the invariant the comments describe — a future change to `BrainRunnerOptions`/`_compileGraph()` that stops always passing `sql` would compile without error and only fail at runtime inside `buildGraph()`.
-**Fix:** If `sql` is truly always required for both current Brains, consider narrowing `BrainBuildContext.sql` to non-optional in `packages/core/src/brain/interface.ts` (if any Brain genuinely doesn't need `sql`, keep it optional but add a runtime check with a clear error message instead of a bare `!` assertion). Low priority — behavior is correct today, this is a maintainability/type-safety suggestion.
+**File:** `apps/brain-sdr/src/brain.ts:220-228,272-274`, `apps/brain-support/src/brain.ts:173-181,224-226`
+**Issue:** `routeAfterLlm()` routes based on `getFirstToolCallName(lastMessage) === "respond"`
+(first tool call only), while the `llm` node's own classification uses
+`hasToolCall(response, "respond")` (true if *any* tool call is named "respond", not
+necessarily the first). If the configured LLM provider ever emitted multiple tool calls in a
+single turn where "respond" is present but not first, `hasRespondCall` in the `llm` node would
+be `true` (taking the "respond tool will be called" branch, not setting `brainOutput`) while
+`routeAfterLlm` would route to `"tools"` (since the first tool call isn't "respond") —
+producing a state where the graph goes into the ReAct tool loop while the `llm` node had
+already assumed the `respond` node would run. In practice, the two supported provider
+integrations used by this project consistently emit a single tool call per turn in normal
+ReAct usage here, so this is unlikely to trigger, but the two shared type-guard functions
+(introduced this phase specifically to prevent this kind of drift) encode different semantics
+and are mixed within the same function.
+**Fix:** No urgent action — this is a latent inconsistency, not a reproduced bug. If
+multi-tool-call responses are ever expected from the configured LLM providers, align both call
+sites to use `getFirstToolCallName(response) === "respond"` consistently instead of mixing
+`hasToolCall` (any-match) and `getFirstToolCallName` (first-match) semantics in the same node.
 
-### IN-04: `hasOtherToolCall` variable name in the `llm` node is slightly misleading
+### IN-04: RabbitMQ retry-key `:channel` suffix (`:rabbitmq`) is currently a no-op constant for every message this transport processes
 
-**File:** `apps/brain-sdr/src/brain.ts:274`, `apps/brain-support/src/brain.ts:226`
-**Issue:** `const hasOtherToolCall = !hasRespondCall && toolCalls.length > 0;` — the name suggests "has a tool call other than respond," which is correct, but combined with `hasRespondCall` (computed via `hasToolCall(response, "respond")`, which only checks if *any* tool call named "respond" exists, not necessarily the *first* one) there's a subtle asymmetry with `routeAfterLlm`'s use of `getFirstToolCallName`, which only inspects the first tool call. If the LLM ever emitted multiple tool calls where "respond" is present but not first, `hasRespondCall` would be `true` (used in the `llm` node) while `routeAfterLlm` would route based on the first tool call's name — which could disagree if the first call isn't "respond" but a later one is. In practice LangChain tool-calling models emit a single tool call per turn in normal ReAct usage here, so this is very unlikely to trigger, but the two functions (`hasToolCall` vs `getFirstToolCallName`) encode different assumptions about tool_calls ordering.
-**Fix:** No urgent action — call out as a latent inconsistency. If multi-tool-call responses are ever expected from the configured LLM providers, align both code paths to use `getFirstToolCallName(response) === "respond"` consistently instead of mixing `hasToolCall` (any-match) and `getFirstToolCallName` (first-match) semantics.
+**File:** `packages/transport/src/rabbitmq/consumer.ts:116`
+**Issue:** The retry-map key was changed this phase from `${IDLead}:${Numero}` to
+`${IDLead}:${Numero}:rabbitmq`, with the stated rationale of "prevents collision between
+different message types sharing the same IDLead:Numero pair." `retryMap` is a private
+per-`RabbitMQTransport`-instance field, and this transport only ever produces messages with
+channel `"rabbitmq"` — so for any given `RabbitMQTransport` instance, every key today gets the
+exact same suffix, making the change behaviorally a no-op versus the prior key format (just
+longer). This is not a bug — it's harmless forward-looking prep — but the comment presents it
+as fixing a collision that cannot currently occur in this codebase (no shared cross-transport
+`retryMap`, no multi-channel `RabbitMQTransport` today).
+**Fix:** No action required; consider tightening the comment to say "prepares for a future
+multi-channel scenario" rather than implying an existing collision this fixes, so a future
+reader doesn't go looking for the collision case that doesn't yet exist.
 
 ---
 
-_Reviewed: 2026-07-02T02:04:57Z_
+_Reviewed: 2026-07-02T15:00:32Z_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
