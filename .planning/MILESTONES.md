@@ -1,5 +1,30 @@
 # Milestones
 
+## v1.5 Embedding SDK + Brain Suporte + Tech Debt (Shipped: 2026-07-02)
+
+**Phases completed:** 6 phases (27-32), 21 plans, 140 commits
+**Timeline:** 2026-06-29 → 2026-07-02 (~3 days)
+**Files changed:** 158 files, +21.037 / -493 linhas
+
+**Key accomplishments:**
+
+1. **Tech Debt Fixes** (Phase 27): `BRAIN_TOOLS` whitelist agora cobre closures bound diretamente em `buildGraph()` via `enabledTools` em `BrainBuildContext`; teste de integração E2E do FupScheduler contra PostgreSQL real; `GET /health` expõe `transport: connected/disconnected` (TECH-01, TECH-02, TECH-03)
+2. **Embedding SDK** (Phase 28): `packages/embeddings` com `IEmbeddingProvider` (adapters OpenAI + Gemini), migration `0009` deriva `vector(N)` de `EMBEDDING_DIMENSIONS`, `BrainRunner` conecta o semantic write path via `embeddingProvider.embed()`/`embedQuery()` — fecha MEM-03 e D-16 de v1.4 (EMBD-01..EMBD-05)
+3. **Brain Suporte Core** (Phase 29): segundo Brain real (`apps/brain-support`) — webhook + RabbitMQ, `search_knowledge` estruturalmente sempre ativo, `pause_session`/`finish_conversation` nativas em `buildGraph()`, `RESERVED_TOOL_NAMES` protegendo contra shadowing por MCP, `BrainOutput` validado, histórico via PostgresSaver (SUP-01..SUP-05, SUP-07, SUP-08)
+4. **Brain Suporte Docker** (Phase 30): Dockerfile multi-stage independente com `packages/embeddings` incluído, `docker-compose.yml` próprio, CI/CD (`publish-brain-support.yml`) e validação e2e real (build → migrate → /health → /api/v1/webhook) (SUP-06)
+5. **Pre-Client Onboarding Hardening** (Phase 31, gap closure): CI shell hygiene (quote `$RESPONSE` + validação de URL) e proteção append-after-filter para a tool `respond` em ambos os Brains — fecha os achados do audit v1.5 marcados como bloqueadores para onboarding real (TECH-04, TECH-05)
+6. **Code Quality Cleanup** (Phase 32, gap closure): zera o ledger de tech debt do v1.5 — SIGTERM idempotency, RabbitMQ retry-key collision, `WebhookTransport` stale status, `reembed.ts` MAX_PAGES cap, truncamento em `search-knowledge.ts`, validação de dimensão Gemini, `RESERVED_TOOL_NAMES` derivado, type-guards unificados, frontmatter retroativo e fix de `mock.module` cross-pollution entre testes (TECH-06)
+
+### Known Gaps (Tech Debt)
+
+Nenhum item de tech debt aberto ao final do milestone — v1.5 incluiu dois ciclos de gap-closure (Phases 31-32) especificamente para zerar os achados do próprio audit (`milestones/v1.5-MILESTONE-AUDIT.md`). Itens residuais não-bloqueantes:
+
+- `fup-e2e.test.ts` não roda contra o sandbox DB local devido a um problema pré-existente e não-relacionado de estado de schema Postgres (`relation "agent_state" already exists`) — isolamento de teste confirmado via inspeção de código
+- Cobertura de Nyquist validation permanece parcial entre as fases do v1.5 (só Phase 28 tem `VALIDATION.md`)
+- EMBD-03 (migration `0009` com `vector(1536)` hardcoded no momento do `generate`) e SUP-03 (tools nativas em vez de MCP dinâmico) permanecem como overrides aceitos, documentados em 28-VERIFICATION.md e 29-VERIFICATION.md
+
+---
+
 ## v1.4 RAG + Eventos de Tools + FUP Automático (Shipped: 2026-06-25)
 
 **Phases completed:** 8 phases (19-26), 18 plans, 157 commits

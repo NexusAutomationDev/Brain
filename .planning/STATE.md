@@ -1,54 +1,44 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.5
-milestone_name: Embedding SDK + Brain Suporte + Tech Debt
-status: Ready to plan
-last_updated: "2026-07-02T15:08:48.470Z"
+milestone: none
+milestone_name: null
+status: Milestone shipped — awaiting next milestone
+last_updated: "2026-07-02T15:20:00.000Z"
 last_activity: 2026-07-02
 progress:
-  total_phases: 8
-  completed_phases: 6
-  total_plans: 21
-  completed_plans: 21
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-06-29 after v1.5 milestone started)
+See: .planning/PROJECT.md (updated 2026-07-02 after v1.5 milestone shipped)
 
 **Core value:** Infraestrutura de agentes modular onde novos Brains são criados definindo apenas prompts, tools, embeddings e fluxos — sem reescrever a base
 
-**Current focus:** Phase 32 — tech-debt-code-quality-cleanup
+**Current focus:** Nenhum — v1.5 shipped 2026-07-02. Rode `/gsd-new-milestone` para iniciar v1.6.
 
 ## Current Position
 
-Phase: 999.1
-Plan: Not started
-| Field | Value |
-|-------|-------|
-| Milestone | v1.5 Embedding SDK + Brain Suporte + Tech Debt |
-| Phase | 30 — Brain Suporte Docker (complete) |
-| Status | Phases 27-30 complete — v1.5 milestone phases done |
-| Progress | 4/4 phases complete |
+No active phase. v1.5 milestone complete and archived.
 
-```
-Phase 27 ████████████████ 100%  Tech Debt Fixes
-Phase 28 ████████████████ 100%  Embedding SDK
-Phase 29 ████████████████ 100%  Brain Suporte Core
-Phase 30 ████████████████ 100%  Brain Suporte Docker
-```
+## Milestone v1.5 Summary — SHIPPED 2026-07-02
 
-## v1.5 Phases
+| Phase | Plans | Status | Completed |
+|-------|-------|--------|-----------|
+| 27 Tech Debt Fixes | 3/3 | COMPLETE | 2026-06-30 |
+| 28 Embedding SDK | 5/5 | COMPLETE | 2026-07-01 |
+| 29 Brain Suporte Core | 3/3 | COMPLETE | 2026-07-01 |
+| 30 Brain Suporte Docker | 3/3 | COMPLETE | 2026-07-01 |
+| 31 Pre-Client Onboarding Hardening | 1/1 | COMPLETE | 2026-07-02 |
+| 32 Code Quality Cleanup | 6/6 | COMPLETE | 2026-07-02 |
 
-| Phase | Name | Requirements | Status |
-|-------|------|--------------|--------|
-| 27 | Tech Debt Fixes | TECH-01, TECH-02, TECH-03 | Complete (2026-06-30) |
-| 28 | Embedding SDK | EMBD-01, EMBD-02, EMBD-03, EMBD-04, EMBD-05 | Complete (2026-07-01) |
-| 29 | Brain Suporte Core | SUP-01, SUP-02, SUP-03, SUP-04, SUP-05, SUP-07, SUP-08 | Complete (2026-07-01) |
-| 30 | Brain Suporte Docker | SUP-06 | Complete (2026-07-01) |
+**140 commits | 158 files changed | +21.037 / -493 lines | ~3 days**
 
 ## Milestone v1.4 Summary — SHIPPED 2026-06-25
 
@@ -65,41 +55,36 @@ Phase 30 ████████████████ 100%  Brain Suporte Do
 
 **157 commits | 181 files changed | +24.233 / -12.268 lines | 3 days**
 
-## Tech Debt (carry-over para v1.5)
+## Tech Debt
 
-- ~~**TD-03** (Baixo): `BRAIN_TOOLS` whitelist inerte para tools bound diretamente em `buildGraph()` → TECH-01~~ RESOLVIDO (Phase 27)
-- ~~**D-16** (Baixo): `vector(1536)` hardcoded na migration → EMBD-03~~ RESOLVIDO (Phase 28, com override pré-produção — ver 28-VERIFICATION.md)
-- ~~**FUP-02** human verification pendente → TECH-02~~ RESOLVIDO (Phase 27)
-- ~~**MEM-03** semantic write path (dead code) → EMBD-05~~ RESOLVIDO (Phase 28)
-- ~~**OBS-02** transport status ausente no GET /health → TECH-03~~ RESOLVIDO (Phase 27)
+Ledger v1.5 zerado no ship (ver `milestones/v1.5-MILESTONE-AUDIT.md` e Phases 31-32). Nenhum item bloqueante em aberto.
 
 ## Accumulated Context
 
-### Decisions
-
-- IEmbeddingProvider comes BEFORE Brain Suporte (SUP-04 depends on it)
-- Brain Suporte Docker is its own phase (deploy boundary, independent Dockerfile validation)
-- TECH-01/02/03 grouped in Phase 27 — small isolated fixes, no inter-dependencies
-
-### Known Pitfalls (carry-forward from v1.3/v1.4)
+### Known Pitfalls (carry-forward)
 
 - MCP transport must use `"streamable_http"` with underscore (not hyphen) — ValueError without clear message
 - `prepare: false` required in all postgres.js connections (PgBouncer transaction mode)
 - `bun:sql` has stuck-connection bug after constraint errors — use `postgres.js` driver
+- `bun test`'s `mock.module()` is process-global — a mock registered in one test file can leak into unrelated test files when the whole package's suite runs together (fixed for `brain-runner.test.ts`/`factory.test.ts` in Phase 32; same class of bug remains open in `packages/observability` and other `packages/core` test files — see Pending Todos)
 
 ### Pending Todos
 
-- Fix cross-test mock.module pollution in full suite runs (testing) — `.planning/todos/pending/2026-07-02-fix-cross-test-mock-module-pollution-in-full-suite-runs.md`
+- Fix cross-test mock.module pollution in `packages/observability` (`server.test.ts` → `health-transport.test.ts`) and `packages/core` (`event-publisher.test.ts`, `lead-service-fup.test.ts`) full-suite runs — `.planning/todos/pending/2026-07-02-fix-cross-test-mock-module-pollution-in-full-suite-runs.md`
 
 ## Archived
 
+- `.planning/milestones/v1.5-ROADMAP.md`
+- `.planning/milestones/v1.5-REQUIREMENTS.md`
+- `.planning/milestones/v1.5-MILESTONE-AUDIT.md`
+- `.planning/milestones/v1.5-phases/` (Phases 27-32)
 - `.planning/milestones/v1.4-ROADMAP.md`
 - `.planning/milestones/v1.4-REQUIREMENTS.md`
 - `.planning/milestones/v1.4-MILESTONE-AUDIT.md`
 
 ## Next Steps
 
-Run `/gsd-plan-phase 29` to plan Phase 29: Brain Suporte Core.
+Run `/gsd-new-milestone` to start v1.6.
 
 ### Quick Tasks Completed
 

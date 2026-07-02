@@ -10,18 +10,13 @@ O primeiro Brain real (SDR) foi entregue no v1.1 — atende leads no WhatsApp co
 
 Uma infraestrutura de agentes modular onde novos Brains são criados definindo apenas prompts, tools, embeddings e fluxos — sem reescrever a base.
 
-## Current Milestone: v1.5 Embedding SDK + Brain Suporte + Tech Debt
+## Current Milestone
 
-**Goal:** Padronizar a camada de embeddings com abstração de provider, entregar o segundo Brain real (Suporte via WhatsApp com MCP dinâmico e RAG obrigatório) e quitar o tech debt acumulado do v1.4.
+Nenhum milestone ativo — v1.5 foi entregue em 2026-07-02. Rode `/gsd-new-milestone` para iniciar o próximo ciclo (v1.6).
 
-**Target features:**
-- Tech Debt Cleanup (TD-03, FUP-02, MEM-03, OBS-02)
-- Embedding SDK (`packages/embeddings`): IEmbeddingProvider + adapter OpenAI + fix D-16 (dimensions via ENV)
-- Brain de Suporte (`apps/brain-support`): tools via MCP dinâmico, RAG sempre ativo, embedding próprio (provider/dimensions configurável por Brain), transport WhatsApp idêntico ao SDR
+## Last Milestone: v1.5 Embedding SDK + Brain Suporte + Tech Debt — SHIPPED 2026-07-02
 
-## Last Milestone: v1.4 RAG + Eventos de Tools + FUP Automático — SHIPPED 2026-06-25
-
-8 fases (19-26), 18 planos, 157 commits, 181 arquivos, +24.233 / -12.268 linhas. RAG semântico + Canal de eventos de tools + FUP Automático com scheduler e geração LLM entregues.
+6 fases (27-32), 21 planos, 140 commits, 158 arquivos, +21.037 / -493 linhas, ~3 dias. Embedding SDK (`packages/embeddings` com IEmbeddingProvider) + segundo Brain real (`apps/brain-support` com RAG obrigatório e MCP) + dois ciclos de gap-closure (Phases 31-32) que zeraram o ledger de tech debt do próprio audit v1.5.
 
 ## Requirements
 
@@ -146,6 +141,8 @@ Uma infraestrutura de agentes modular onde novos Brains são criados definindo a
 
 ## Context
 
+**v1.5 (shipped 2026-07-02):** 6 fases (27-32), 21 planos, 140 commits, 158 arquivos (+21.037 / -493 linhas), ~3 dias. `packages/embeddings` com `IEmbeddingProvider` (adapters OpenAI + Gemini) desacoplando embeddings do core; segundo Brain real `apps/brain-support` com RAG estruturalmente obrigatório, `pause_session`/`finish_conversation` nativas e `RESERVED_TOOL_NAMES` protegendo contra shadowing por MCP; Dockerfile + CI/CD independentes validados end-to-end. Dois ciclos de gap-closure (Phases 31-32) nasceram do próprio audit do milestone e zeraram o ledger de tech debt antes do ship.
+
 **v1.4 (shipped 2026-06-25):** 8 fases (19-26), 18 planos, 157 commits, 181 arquivos (+24.233 / -12.268 linhas), 3 dias. RAG com pgvector (POST /api/v1/ingest + search_knowledge tool); canal de eventos de tools (IEventPublisher webhook+RabbitMQ fire-and-forget); FupScheduler background com SELECT FOR UPDATE SKIP LOCKED, geração LLM one-shot via PostgresSaver.getTuple(), IANA timezone slot calculation e retry até 3x. upsertLead() ativa fup_enabled automaticamente via fup_config e calcula fupNextAt no INSERT.
 
 **v1.3 (shipped 2026-06-16):** 4 fases (14-17), 9 planos, 92 commits, 145 arquivos (+14.132 / -1.051 linhas), 2 dias. MCP Integration via `@langchain/mcp-adapters`; schema-as-tool pattern para responseMode dinâmico; token usage acumulado via BrainStateAnnotation (sum reducer) e exposto em HTTP + RabbitMQ log.
@@ -162,15 +159,17 @@ O Brain SDR tem uma arquitetura com sub-agente de qualificação stateless: o Br
 
 Brains planejados para o futuro: Suporte, Customer Success, Cobrança, RH, Jurídico, E-commerce, Agendamento.
 
-**Tech debt acumulado (carry-over para v1.5+):**
+**Tech debt (v1.5 — ledger zerado no ship, ver `milestones/v1.5-MILESTONE-AUDIT.md`):**
 - ~~TD-03~~: ✓ Resolvido em Phase 27 — `enabledTools` cobre closures em buildGraph()
 - ~~OBS-02~~: ✓ Resolvido em Phase 27 — GET /health expõe TransportStatus
 - ~~FUP-02~~: ✓ Resolvido em Phase 27 — E2E integration test contra PostgreSQL real
 - ~~MEM-03~~: ✓ Resolvido em Phase 28 — `BrainRunner` chama `embeddingProvider.embed()`/`embedQuery()` em query/save time; semantic write path deixou de ser dead code
 - ~~D-16~~: ✓ Resolvido em Phase 28 (com ressalva) — migration `0009` deriva `vector(N)` de `EMBEDDING_DIMENSIONS` em generate-time; TRUNCATE deve ser re-adicionado manualmente na regeneração e o valor commitado (1536) é OpenAI-specific — aceito como tradeoff pré-produção, ver 28-VERIFICATION.md
-- TD-04: `LeadService.setFullpp()` / `setIaAtivada()` sem callers de produção
-- brain-echo `hasOtherToolCall` guard ausente no nó LLM — non-fatal
-- `apps/brain-sdr/.env.example` não documenta `EMBEDDING_PROVIDER`/`EMBEDDING_MODEL`/`EMBEDDING_DIMENSIONS` (gap de documentação, Phase 28 code review WR-01/IN-03)
+- ~~`apps/brain-sdr/.env.example` sem doc de embedding ENVs~~: ✓ Resolvido em Phase 31
+- ~~respond tool sem append-after-filter guard~~: ✓ Resolvido em Phase 31 (TECH-05)
+- ~~22 achados warning/info de code review das fases 27-30~~: ✓ Resolvidos em Phase 32 (TECH-06)
+- TD-04 (não relacionado a v1.5, carry-over antigo): `LeadService.setFullpp()` / `setIaAtivada()` sem callers de produção
+- brain-echo `hasOtherToolCall` guard ausente no nó LLM — non-fatal, brain-echo é validation-only
 
 ## Constraints
 
@@ -210,6 +209,11 @@ Brains planejados para o futuro: Suporte, Customer Success, Cobrança, RH, Jurí
 | EVT-03 ownership → Phase 22 (não Phase 20) (v1.4) | FUP events não têm tool_call_id — o campo event_id foi redefinido como exceção documentada (D-17) | ✓ Good — traceability corrigida em Phase 24; gap fechado sem regressão |
 | fupNextAt calculado no INSERT em lead-service (v1.4) | Alternativa era calcular no scheduler tick — inserir no INSERT garante que o lead é elegível imediatamente sem race condition | ✓ Good — Phase 26 fechou gap FUP-02; getNextValidSlot() importado diretamente de fup-scheduler.ts |
 | getNextValidSlot compartilhado via import direto (v1.4) | Evita duplicação de lógica de slot entre FupScheduler e LeadService — mesma função, mesmo comportamento | ✓ Good — D-05 Opção A validada em Phase 26 |
+| IEmbeddingProvider com embed()/embedQuery()/dimensions/providerName (v1.5) | Provider-agnostic desde o design; OpenAI como adapter padrão, Gemini como segunda implementação real para provar a generalização da interface | ✓ Good — Brain Suporte usa provider/modelo/dimensões independentes do SDR sem tocar core |
+| vector(N) derivado de EMBEDDING_DIMENSIONS em generate-time, não runtime (v1.5, D-16) | drizzle-kit generate não suporta ENV dinâmica em DDL — TRUNCATE necessário na regeneração para trocar dimensão | ⚠️ Revisit — aceito como tradeoff pré-produção; requer TRUNCATE manual documentado inline na migration 0009 se EMBEDDING_DIMENSIONS mudar |
+| pause_session/finish_conversation nativas no Brain Suporte, não MCP dinâmico (v1.5, D-01/D-02) | Mesmo padrão do SDR — tools de gestão como closures no buildGraph(); MCP dinâmico genérico do core continua disponível para tools externas | ✓ Good — desvio confirmado pelo usuário; SUP-03 reinterpretado sem bloquear requirement |
+| RESERVED_TOOL_NAMES derivado das instâncias de tool reais, não literal hardcoded (v1.5, Phase 32) | Evitar drift silencioso se um novo core refactor renomear uma tool nativa — a lista deriva de `instances.map(t => t.name)` | ✓ Good — brain-sdr e brain-support alinhados sem duplicação |
+| getEmbeddingProvider() singleton de vida do processo, sem invalidação (v1.5, D-05/D-10) | ENVs de embedding são fixas por container neste modelo de deployment — sem caso de uso de reload em runtime | ✓ Good — decisão documentada inline; nenhum caller precisou de invalidação |
 | resetFup() preserva fupEnabled (v1.4) | Ao receber mensagem, apenas fupNextAt e fupStep são zerados — fup_enabled permanece true para futuros FUPs | ✓ Good — D-19 da Phase 22; lead que responde continua elegível para próximos FUPs |
 | brainType como 4° parâmetro opcional em upsertLead (v1.4) | Backward compatible com callers existentes — brainType só é necessário para ativar FUP automaticamente | ✓ Good — Phase 25 integrou sem quebrar callers anteriores |
 
@@ -231,4 +235,4 @@ Este documento evolui nas transições de fase e marcos de milestone.
 4. Atualizar Context com estado atual
 
 ---
-*Last updated: 2026-07-02 (Phase 32 complete — tech debt ledger v1.5 zerado)
+*Last updated: 2026-07-02 após v1.5 milestone (shipped — Phases 27-32, tech debt ledger zerado)

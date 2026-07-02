@@ -261,6 +261,56 @@
 
 ---
 
+## Milestone: v1.5 — Embedding SDK + Brain Suporte + Tech Debt
+
+**Shipped:** 2026-07-02
+**Phases:** 6 (27-32) | **Plans:** 21 | **Timeline:** ~3 dias (2026-06-29 → 2026-07-02)
+**Commits:** 140 | **Files changed:** 158 | **Lines:** +21.037 / -493
+
+### What Was Built
+
+- Tech Debt Fixes (Phase 27): `BRAIN_TOOLS` whitelist cobrindo closures em `buildGraph()` via `enabledTools`, teste E2E do FupScheduler contra PostgreSQL real, `GET /health` expondo `transport` status — fecha TD-03, FUP-02, OBS-02 carregados de v1.4
+- Embedding SDK (Phase 28): `packages/embeddings` com `IEmbeddingProvider` (`embed()`, `embedQuery()`, `dimensions`, `providerName`), adapters OpenAI e Gemini, migration 0009 derivando `vector(N)` de `EMBEDDING_DIMENSIONS`, `BrainRunner` conectado ao semantic write path (fecha MEM-03), batch re-embed tool
+- Brain Suporte Core (Phase 29): segundo Brain real (`apps/brain-support`) — webhook + RabbitMQ, `search_knowledge` estruturalmente sempre ativo, `pause_session`/`finish_conversation` nativas, `RESERVED_TOOL_NAMES` bloqueando shadowing por MCP, `BrainOutput` validado, histórico via PostgresSaver
+- Brain Suporte Docker (Phase 30): Dockerfile multi-stage independente (com `packages/embeddings` desde o início), `docker-compose.yml` próprio, `publish-brain-support.yml`, validação e2e real (build → migrate → /health → /api/v1/webhook)
+- Pre-Client Onboarding Hardening (Phase 31, gap closure): CI shell hygiene (quote `$RESPONSE` + validação de URL), proteção append-after-filter para `respond`, docs de embedding ENV, comentário inline na migration 0009
+- Code Quality Cleanup (Phase 32, gap closure): 22 achados warning/info das fases 27-30 resolvidos — SIGTERM idempotency, RabbitMQ retry-key collision, `WebhookTransport` stale status, `reembed.ts` MAX_PAGES, truncamento em `search-knowledge.ts`, validação de dimensão Gemini, `RESERVED_TOOL_NAMES` derivado, type-guards unificados, frontmatter retroativo, fix de `mock.module` cross-pollution
+
+### What Worked
+
+- **Gap closure como fases dependentes explícitas, não retrabalho nas fases originais**: em vez de reabrir Phases 27-30, o audit v1.5 gerou Phase 31 (bloqueadores de onboarding) e Phase 32 (warnings/info + doc hygiene) como fases novas com dependência declarada — histórico de execução das fases originais permanece intacto
+- **Segundo Brain real validou a abstração do Brain SDK sem refatoração**: `apps/brain-support` reusou `IBrain`, `BrainRunner`, `ToolsRegistry` e `IEmbeddingProvider` sem tocar `packages/core` além de extensões aditivas — a hipótese central do projeto ("novo Brain = só prompts/tools/embeddings/fluxos") se confirmou na prática
+- **IEmbeddingProvider com dois adapters reais (OpenAI + Gemini) desde o início**: provar a interface com uma segunda implementação (não só a "óbvia" OpenAI) capturou cedo a assunção de dimensão fixa do Gemini (3072), que virou validação fail-fast em vez de bug de produção
+- **RESERVED_TOOL_NAMES como guard estrutural, não convenção documentada**: o gap SUP-02 (MCP shadowing de tool nativa) foi fechado com um filtro em código antes de `bindTools()`/`ToolNode`, não com uma nota de "não faça isso" — e depois generalizado (Phase 32) para derivar da lista real de instâncias em vez de um literal hardcoded
+- **Re-verificação dentro da própria fase (32-06) em vez de nova fase**: quando a primeira verification de Phase 32 retornou `gaps_found` (6/8), o gap foi fechado com um plano adicional (32-06) na mesma fase, não uma Phase 33 — manteve o escopo do gap-closure ledger coeso
+
+### What Was Inefficient
+
+- **REQUIREMENTS.md checkbox lag se repetiu (TECH-04/TECH-05)**: mesmo padrão de v1.4 (FUP-02) — fase implementada e verificada (31-VERIFICATION.md) mas o checkbox em REQUIREMENTS.md ficou `[ ]`/"Pending" até a auditoria de encerramento deste milestone notar a divergência. O tracker por fase (Phase 24 em v1.4, Phase 32/32-05 aqui) ajuda mas não elimina o lag — falta um passo de "fechar o loop" no fim de cada fase, não só nas fases de tech-debt dedicadas
+- **`mock.module` cross-pollution era conhecido mas só parcialmente corrigido**: Phase 32 fechou o caso `brain-runner.test.ts`/`factory.test.ts`, mas o mesmo padrão de bug já existia em `packages/observability` e outros arquivos de `packages/core` (descoberto rodando o full regression gate) — ficou como novo pending todo em vez de fechado, porque o escopo de Phase 32 era as fases 27-30 especificamente
+- **Dois ciclos de gap-closure (31, 32) aumentaram o milestone de 4 para 6 fases**: assim como em v1.4 (Phases 23/25/26), o audit gerou trabalho não previsto no roadmap original — o padrão já é conhecido (documentado como lição em v1.4) mas o roadmap de v1.5 ainda não incluiu buffer explícito para isso
+
+### Patterns Established
+
+- **Gap-closure phases com scope correction documentado inline**: tanto Phase 31 quanto Phase 32 documentaram no próprio ROADMAP.md quando um achado do audit não reproduzia mais no código atual (ex: "branch morto 503/500" já resolvido) — evita retrabalho fantasma
+- **`accepted override` como status de primeira classe em VERIFICATION.md**: EMBD-03 e SUP-03 foram fechados como "satisfied com override aceito pelo usuário", não como gaps — desvios de escopo deliberados agora têm um lugar formal na traceability em vez de virarem tech debt implícito
+- **Provider adapter validado com 2+ implementações antes de considerar a interface estável**: mesmo padrão que deveria se repetir para futuras abstrações de provider (ex: se um dia houver múltiplos LLM providers formalizados)
+
+### Key Lessons
+
+1. **Todo "fim de fase" deveria fechar REQUIREMENTS.md checkbox como task explícita, não só nas fases de tech-debt**: é a 2ª vez consecutiva (v1.4 FUP-02, v1.5 TECH-04/05) que o código está correto e verificado mas o tracker fica dessincronizado até um audit ou milestone-completion notar. Candidato a virar checklist item padrão em `gsd-executor`/`gsd-verifier`, não depender de uma fase de cleanup dedicada
+2. **Bugs de classe conhecida (`mock.module` global) deveriam gerar uma busca ampla no momento em que são descobertos, não só o fix pontual**: Phase 32 corrigiu 1 de N ocorrências confirmadas do mesmo padrão porque o escopo da fase era restrito às fases 27-30 — o todo criado em seguida é o mecanismo certo, mas vale considerar rodar `grep -r "mock.module"` assim que o padrão é identificado pela primeira vez, para dimensionar o problema completo de uma vez
+3. **Planejar buffer para gap-closure é a lição de v1.4 que ainda não virou prática**: v1.5 repetiu a mesma dinâmica (roadmap original de 4 fases virou 6) pela mesma razão já documentada no milestone anterior — a lição precisa ser aplicada no próximo `/gsd-new-milestone`, não só registrada
+4. **Segundo Brain real é o teste de estresse mais forte da arquitetura core**: mais do que qualquer suíte de testes, construir `apps/brain-support` reusando 100% do SDK sem fork nem refatoração validou a decisão de v1.0 ("Brain SDK no core desde v1") de forma mais convincente do que os 4 milestones anteriores combinados
+
+### Cost Observations
+
+- ~3 dias para 6 fases (21 planos) — comparável em densidade a v1.4 (3 dias/8 fases/18 planos), mas com 2 fases de gap-closure em vez de 4, refletindo um escopo original mais bem definido
+- Sem substituições de library: stack de v1.0 continua 100% válido após v1.5
+- Phase 32 teve o maior número de planos de qualquer fase do milestone (6, incluindo o gap-closure 32-06) — reflete o volume real de achados acumulados (22) de 4 fases anteriores sendo pago de uma vez
+
+---
+
 ## Cross-Milestone Trends
 
 | Milestone | Phases | Plans | Timeline | Requirements | E2E |
@@ -270,11 +320,12 @@
 | v1.2 Output Parser | 4 | 11 | 2 dias | 8/8 (100%) | 2/2 ✅ |
 | v1.3 MCP + responseMode | 4 | 9 | 2 dias | 9/9 (100%) | 4/5 ✅ (1 flow com intermediate state pollution não-fatal) |
 | v1.4 RAG + EVT + FUP | 8 (4 planejadas + 4 gap closure) | 18 | 3 dias | 15/16 checkboxes (16/16 código) | 5/5 ✅ (Flow C E2E runtime pendente — human) |
+| v1.5 Embedding SDK + Suporte + Tech Debt | 6 (4 planejadas + 2 gap closure) | 21 | ~3 dias | 19/19 (100%, checkbox lag corrigido no archive) | Todas as fases verified/passed; ledger de tech debt zerado |
 
 **Trends:**
-- Velocidade: 23 dias (v1.0) → ~2 dias/milestone (v1.1-v1.3) → 3 dias (v1.4, +4 gap closure phases não planejadas)
-- Cobertura de requisitos: 93% → 85% → 100% → 100% → 15/16 checkbox (16/16 código) — baseline de 100% implementação mantida
-- REQUIREMENTS.md tracking: 0/4 milestones (v1.0-v1.3) com checkboxes atualizados durante execução → v1.4 resolveu via Phase 24 dedicada; ainda não sistematizado por phase
-- Nyquist compliance: 0% (v1.0) → parcial (v1.1/v1.2) → 3/4 (v1.3) → **8/8 (v1.4)** — maturidade atingida
-- Gap closure phases: orgânicas mas não planejadas — 4/8 phases de v1.4 foram gap closure; necessita de buffer explícito no roadmap de v1.5
-- Tech debt carry-over: v1.3→v1.4 (TD-03, TD-04, brain-echo guard) → v1.4→v1.5 (TD-03, TD-04, D-16, FUP-02 human verify)
+- Velocidade: 23 dias (v1.0) → ~2 dias/milestone (v1.1-v1.3) → 3 dias (v1.4, +4 gap closure phases não planejadas) → ~3 dias (v1.5, +2 gap closure phases)
+- Cobertura de requisitos: 93% → 85% → 100% → 100% → 15/16 checkbox (16/16 código) → **19/19 (100%)** — baseline de 100% implementação mantida, mas checkbox lag ainda se repete (ver Key Lessons v1.5)
+- REQUIREMENTS.md tracking: 0/4 milestones (v1.0-v1.3) com checkboxes atualizados durante execução → v1.4 resolveu via Phase 24 dedicada; v1.5 teve backfill em Phase 32 (32-05/32-06) mas TECH-04/05 ainda vazaram para o milestone-completion audit — ainda não sistematizado por phase
+- Nyquist compliance: 0% (v1.0) → parcial (v1.1/v1.2) → 3/4 (v1.3) → **8/8 (v1.4)** → parcial novamente (v1.5: só Phase 28 com VALIDATION.md) — regressão a investigar em v1.6
+- Gap closure phases: orgânicas mas não planejadas — 4/8 phases de v1.4 e 2/6 phases de v1.5 foram gap closure; a lição de "planejar buffer" foi documentada em v1.4 mas ainda não aplicada no roadmap de um milestone seguinte
+- Tech debt carry-over: v1.3→v1.4 (TD-03, TD-04, brain-echo guard) → v1.4→v1.5 (TD-03, TD-04, D-16, FUP-02 human verify) → v1.5→v1.6: ledger zerado, único item real é TD-04 (não relacionado) + mock.module pollution em observability/core (novo pending todo)
