@@ -31,7 +31,7 @@
 - [x] **SUP-05**: Brain Suporte retorna `BrainOutput` estruturado (`fullResponse`, `responseMode`) validado pelo SDK
 - [x] **SUP-06**: `Dockerfile` multi-stage independente e funcional para `apps/brain-support`
 - [x] **SUP-07**: Gate `ia_ativada` + histórico de conversa persistente por lead via `PostgresSaver` (thread_id = lead.uniqueId)
-- [x] **SUP-08**: Brain Suporte registrado no `ToolsRegistry` com tipo `"support"`
+- [x] **SUP-08**: Brain Suporte registrado no `ToolsRegistry` via `toolsRegistry.enableTool("support", ...)` — cada chamada registra implicitamente o brainType `"support"` (fix v1.5 audit — cosmetic naming alignment, código usa `enableTool()`, não `registerBrainType()` diretamente; `registerBrainType()` continua disponível no `ToolsRegistry` para brains que usam `tools: []` sem nenhuma tool habilitada)
 
 ## Future Requirements
 
