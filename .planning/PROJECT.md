@@ -117,6 +117,10 @@ Uma infraestrutura de agentes modular onde novos Brains são criados definindo a
 - ✓ TECH-04: CI workflows quote shell variables and validate DockGate API responses — prevents misleading error messages from unquoted variables and invalid URLs — Phase 31
 - ✓ TECH-05: Respond tool structurally protected from BRAIN_TOOLS misconfiguration via append-after-filter pattern + RESERVED_TOOL_NAMES guard; embedding ENV documentation in brain-sdr .env.example; migration 0009 inline warning about hardcoded vector dimensions — Phase 31
 
+**v1.5 — Tech Debt Code Quality Cleanup (Phase 32)**
+
+- ✓ TECH-06: Achados warning/info de code review das fases 27-30 resolvidos (SIGTERM idempotency, RabbitMQ retry-key collision, WebhookTransport stale status, reembed MAX_PAGES cap, search-knowledge truncation, Gemini dimension validation, RESERVED_TOOL_NAMES derivado, type-guards de mensagem AI unificados) + lacunas de documentação/teste preenchidas (frontmatter retroativo, fup-e2e.test.ts isolamento de teste, mock.module cross-pollution entre brain-runner.test.ts/factory.test.ts corrigido) — Phase 32
+
 ### Active
 
 **Backlog (pós v1.4)**
@@ -227,4 +231,4 @@ Este documento evolui nas transições de fase e marcos de milestone.
 4. Atualizar Context com estado atual
 
 ---
-*Last updated: 2026-07-02
+*Last updated: 2026-07-02 (Phase 32 complete — tech debt ledger v1.5 zerado)
