@@ -112,6 +112,11 @@ Uma infraestrutura de agentes modular onde novos Brains são criados definindo a
 
 - ✓ SUP-06: `Dockerfile` multi-stage independente para `apps/brain-support`, incluindo `packages/embeddings` desde o início; `docker-compose.yml` de produção espelhando `apps/brain-sdr` (Postgres externo via `host.docker.internal`); CI/CD (`publish-brain-support.yml`) e validação e2e real (build → migrations → /health → /api/v1/webhook) — Phase 30
 
+**v1.5 — Tech Debt Onboarding Hardening (Phase 31)**
+
+- ✓ TECH-04: CI workflows quote shell variables and validate DockGate API responses — prevents misleading error messages from unquoted variables and invalid URLs — Phase 31
+- ✓ TECH-05: Respond tool structurally protected from BRAIN_TOOLS misconfiguration via append-after-filter pattern + RESERVED_TOOL_NAMES guard; embedding ENV documentation in brain-sdr .env.example; migration 0009 inline warning about hardcoded vector dimensions — Phase 31
+
 ### Active
 
 **Backlog (pós v1.4)**
@@ -222,4 +227,4 @@ Este documento evolui nas transições de fase e marcos de milestone.
 4. Atualizar Context com estado atual
 
 ---
-*Last updated: 2026-07-01 — Phase 30 complete: `apps/brain-support` tem imagem Docker independente (multi-stage, `packages/embeddings` incluído desde o início), `docker-compose.yml` de produção espelhando o padrão de `apps/brain-sdr` (Postgres externo via `host.docker.internal`, sem banco bundlado — corrigido pós-Wave-1 a pedido do usuário), CI/CD via `publish-brain-support.yml` e validação e2e real contra Docker daemon (build → migrations → /health → /api/v1/webhook). SUP-06 fechado. Todas as 4 fases do v1.5 (27-30) completas. Ver 30-VERIFICATION.md (6/6 passed).
+*Last updated: 2026-07-02
