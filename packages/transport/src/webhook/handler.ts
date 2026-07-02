@@ -125,6 +125,8 @@ export function createWebhookApp(runner?: IBrainRunnerLike): Hono {
  */
 export class WebhookTransport implements ITransport {
   private server: ReturnType<typeof Bun.serve> | undefined;
+  // D-03/IN-03: tracks whether .stop() has been called — getStatus() must reflect this.
+  private stopped = false;
 
   constructor(private readonly runner?: IBrainRunnerLike) {}
 
@@ -142,6 +144,7 @@ export class WebhookTransport implements ITransport {
       port,
       fetch: app.fetch,
     });
+    this.stopped = false;
   }
 
   async stop(): Promise<void> {
@@ -149,13 +152,15 @@ export class WebhookTransport implements ITransport {
       this.server.stop();
       this.server = undefined;
     }
+    this.stopped = true;
   }
 
   /**
-   * D-12/TECH-03: HTTP server não tem estado de conexão separado — sempre connected.
-   * Servidor Bun para de aceitar requests apenas quando stop() é chamado (gerenciado externamente).
+   * D-03/IN-03/TECH-06: getStatus() now reflects stop() — connected:false once .stop()
+   * has been called. Before the first stop() (including before start()), connected:true
+   * (unchanged baseline — HTTP server accepting requests is the default assumption).
    */
   getStatus(): TransportStatus {
-    return { type: 'webhook', connected: true };
+    return { type: 'webhook', connected: !this.stopped };
   }
 }

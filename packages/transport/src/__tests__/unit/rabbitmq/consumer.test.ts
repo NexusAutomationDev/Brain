@@ -188,6 +188,31 @@ describe("RabbitMQTransport (TRP-03, TRP-04, TRP-05)", () => {
     expect(statusFinal).toBe(0); // ConsumerStatus.ACK (mensagem removida da fila principal)
   });
 
+  // D-02/WR-03: retry-map key agora inclui sufixo de channel (IDLead:Numero:channel)
+  it("D-02: retry counter usa chave IDLead:Numero:rabbitmq — falhas de duas mensagens com IDLead:Numero iguais mas processadas nesta unica channel continuam compartilhando o mesmo contador (comportamento preservado dentro do mesmo channel)", async () => {
+    (mockRunner.run as ReturnType<typeof mock>).mockRejectedValue(new Error("processing failed"));
+
+    const transport = new RabbitMQTransport(mockRunner);
+    await transport.start();
+
+    const handler = mockHandlerRef.fn;
+    expect(handler).not.toBeNull();
+
+    // Duas mensagens distintas (deliveryTag diferente) mas mesmo IDLead:Numero — mesma
+    // channel "rabbitmq" (unica existente neste transport) — devem compartilhar o contador,
+    // atingindo DLQ na 3a falha combinada (comportamento de retry por par IDLead:Numero preservado).
+    const msgA = makeMsg(validBody, BigInt(1));
+    const msgB = makeMsg(validBody, BigInt(2));
+
+    await handler!(msgA); // attempt 1
+    await handler!(msgB); // attempt 2
+    const statusFinal = await handler!(msgA); // attempt 3 -> DLQ + ACK
+
+    expect(mockRunner.run).toHaveBeenCalledTimes(3);
+    expect(mockPubSend).toHaveBeenCalledTimes(1);
+    expect(statusFinal).toBe(0); // ConsumerStatus.ACK
+  });
+
   it("stop() fecha sub, pub e connection", async () => {
     const transport = new RabbitMQTransport(mockRunner);
     await transport.start();

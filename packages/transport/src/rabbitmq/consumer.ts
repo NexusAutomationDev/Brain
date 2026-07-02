@@ -5,7 +5,9 @@
 // D-15: prefetch=1 — uma mensagem por consumer por vez
 // D-16: MAX_ATTEMPTS=3 — após 3 falhas, mensagem vai para DLQ
 // D-19: DLQ via Publisher explícito + ACK da mensagem original (sem dependência de DLX broker)
-// Pitfall RESEARCH.md: chave de retry = IDLead:Numero (não deliveryTag — muda após REQUEUE)
+// Pitfall RESEARCH.md: chave de retry = IDLead:Numero:channel (não deliveryTag — muda após REQUEUE)
+// D-02/WR-03: sufixo de channel evita colisão de retry-count entre tipos de mensagem
+// diferentes que compartilhem o mesmo par IDLead:Numero.
 
 import { Connection, ConsumerStatus } from "rabbitmq-client";
 import { ConfigurationError } from "@brain-pkg/shared";
@@ -37,7 +39,7 @@ export class RabbitMQTransport implements ITransport {
   private rabbit?: InstanceType<typeof Connection>;
   private sub?: ReturnType<InstanceType<typeof Connection>["createConsumer"]>;
   private pub?: ReturnType<InstanceType<typeof Connection>["createPublisher"]>;
-  // Pitfall RESEARCH.md: chave por IDLead:Numero — sobrevive a deliveryTag reset após REQUEUE
+  // Pitfall RESEARCH.md: chave por IDLead:Numero:channel — sobrevive a deliveryTag reset após REQUEUE
   private readonly retryMap = new Map<string, number>();
   private readonly logger = createLogger();
   // D-13/TECH-03: flag de estado real da conexão RabbitMQ — setado no evento 'connection', resetado no stop()
@@ -107,8 +109,11 @@ export class RabbitMQTransport implements ITransport {
           return ConsumerStatus.ACK; // ack mensagem original (já está na DLQ)
         }
 
-        // T-07-07: chave de retry por conteúdo (IDLead:Numero) — robusta contra deliveryTag reset
-        const msgKey = `${parsed.data.IDLead}:${parsed.data.Numero}`;
+        // T-07-07: chave de retry por conteúdo (IDLead:Numero:channel) — robusta contra deliveryTag reset
+        // D-02/WR-03: append channel suffix to prevent key collision between different
+        // message types sharing the same IDLead:Numero pair. "rabbitmq" is this transport's
+        // fixed channel — keeps the key human-readable in logs (not a content hash).
+        const msgKey = `${parsed.data.IDLead}:${parsed.data.Numero}:rabbitmq`;
         const attempt = (this.retryMap.get(msgKey) ?? 0) + 1;
         this.retryMap.set(msgKey, attempt);
 
