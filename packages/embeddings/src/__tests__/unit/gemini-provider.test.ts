@@ -78,4 +78,26 @@ describe("GeminiEmbeddingProvider (D-03/D-18)", () => {
     // a secret never throws — the real guarantee (no logging) is a static source property.
     expect(() => new GeminiEmbeddingProvider({ apiKey: "secret-key" })).not.toThrow();
   });
+
+  describe("IN-03 (28-REVIEW)/D-18: fail-fast EMBEDDING_DIMENSIONS validation", () => {
+    it("Test 11: throws ConfigurationError when constructed with dimensions=1536 (mismatch)", () => {
+      expect(() => new GeminiEmbeddingProvider({ dimensions: 1536 })).toThrow();
+      try {
+        new GeminiEmbeddingProvider({ dimensions: 1536 });
+        throw new Error("should have thrown");
+      } catch (err) {
+        expect((err as Error).name).toBe("ConfigurationError");
+        expect((err as Error).message).toContain("1536");
+        expect((err as Error).message).toContain("3072");
+      }
+    });
+
+    it("Test 12: does not throw when constructed with dimensions=3072 (explicit match)", () => {
+      expect(() => new GeminiEmbeddingProvider({ dimensions: 3072 })).not.toThrow();
+    });
+
+    it("Test 13: does not throw when constructed with no override (default 3072)", () => {
+      expect(() => new GeminiEmbeddingProvider()).not.toThrow();
+    });
+  });
 });

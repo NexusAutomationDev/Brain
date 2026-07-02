@@ -14,6 +14,12 @@ import type { Sql } from "postgres";
 
 const logger = createLogger();
 const PAGE_SIZE = 200; // conservative — under OpenAI batchSize=512 and Gemini maxBatchSize=100
+// D-06/WR-03: hard ceiling on pagination — PAGE_SIZE=200 * MAX_PAGES=500 = 100k row ceiling per
+// POST /api/v1/reembed call. Prevents a single call from becoming an unbounded/runaway job if a
+// `collection` filter unexpectedly matches most of the table. Re-invoke the endpoint (same
+// `collection`) to resume — rows already re-embedded are skipped by the `ne(embeddingModel, ...)`
+// filter on the next call.
+const MAX_PAGES = 500;
 
 /**
  * D-16: Cria sub-app Hono para re-embedding em batch de knowledge_chunks existentes.
@@ -62,6 +68,8 @@ export function createReembedApp(sql: Sql, embeddingProvider: IEmbeddingProvider
     let offset = 0;
     let updated = 0;
     let skipped = 0;
+    let pages = 0;
+    let truncated = false;
 
     for (;;) {
       const rows = await db
@@ -99,13 +107,22 @@ export function createReembedApp(sql: Sql, embeddingProvider: IEmbeddingProvider
       }
 
       offset += PAGE_SIZE;
+      pages++;
+      if (pages >= MAX_PAGES) {
+        truncated = true;
+        logger.warn(
+          { collection, pages, MAX_PAGES, updated, skipped },
+          "Re-embed hit MAX_PAGES cap — stopping early. Re-invoke with the same collection to resume."
+        );
+        break;
+      }
     }
 
     logger.info(
-      { collection, updated, skipped, providerName: embeddingProvider.providerName },
+      { collection, updated, skipped, truncated, providerName: embeddingProvider.providerName },
       "Re-embed complete"
     );
-    return c.json({ status: "ok", collection, updated, skipped });
+    return c.json({ status: "ok", collection, updated, skipped, truncated });
   });
 
   return app;
