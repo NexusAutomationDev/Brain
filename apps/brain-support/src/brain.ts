@@ -13,7 +13,7 @@ import { StateGraph, END } from "@langchain/langgraph";
 import { ToolNode } from "@langchain/langgraph/prebuilt";
 import { BrainStateAnnotation, extractTokenUsage } from "@brain-pkg/ai";
 import type { IBrain, BrainBuildContext } from "@brain-pkg/core";
-import { createPauseSessionTool, createFinishConversationTool, createRespondTool, createSearchKnowledgeTool } from "@brain-pkg/core";
+import { createPauseSessionTool, createFinishConversationTool, createRespondTool, createSearchKnowledgeTool, hasToolCall, getFirstToolCallName } from "@brain-pkg/core";
 import { createEmbeddingProvider } from "@brain-pkg/embeddings";
 import type { IEmbeddingProvider } from "@brain-pkg/embeddings";
 import { createLogger } from "@brain-pkg/observability";
@@ -159,11 +159,10 @@ export const supportBrain: IBrain = {
     function routeAfterLlm(state: typeof BrainStateAnnotation.State): "respond" | "tools" | typeof END {
       const messages = state.messages;
       const lastMessage = messages[messages.length - 1];
-      if (!lastMessage || !("tool_calls" in lastMessage)) return END;
-      const toolCalls = (lastMessage as AIMessage).tool_calls ?? [];
-      if (toolCalls.length === 0) return END;
+      const firstToolCallName = getFirstToolCallName(lastMessage);
+      if (firstToolCallName === undefined) return END;
       // respond tool → nó respond; qualquer outra tool → ReAct loop
-      if (toolCalls[0].name === "respond") return "respond";
+      if (firstToolCallName === "respond") return "respond";
       return "tools";
     }
 
@@ -208,8 +207,8 @@ export const supportBrain: IBrain = {
         ]);
         // Lógica dual — caminho normal (respond tool) vs fallback D-10 (texto plano)
         const fullResponse = typeof response.content === "string" ? response.content : "";
+        const hasRespondCall = hasToolCall(response, "respond");
         const toolCalls = (response as AIMessage).tool_calls ?? [];
-        const hasRespondCall = toolCalls.some((tc: any) => tc.name === "respond");
         const hasOtherToolCall = !hasRespondCall && toolCalls.length > 0;
 
         if (hasOtherToolCall) {
