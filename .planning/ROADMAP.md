@@ -73,7 +73,7 @@
 - [x] **Phase 29: Brain Suporte Core** — LangGraph graph + MCP tools + RAG obrigatório + transport + BrainOutput + leads + ToolsRegistry (completed 2026-07-01)
 - [x] **Phase 30: Brain Suporte Docker** — Dockerfile multi-stage independente + validação end-to-end de deploy (completed 2026-07-01)
 - [x] **Phase 31: Pre-Client Onboarding Hardening** — CI shell hygiene + respond tool guard + .env.example docs + migration warning comment (gap closure, from v1.5 audit tech debt; docker-compose port fix dropped — already committed pre-audit) (completed 2026-07-01)
-- [ ] **Phase 32: Code Quality Cleanup — Accumulated Warnings & Test/Doc Hygiene** — resolve WR/IN findings from phases 27-30 + backfill SUMMARY frontmatter + fix test ordering/isolation issues (gap closure, from v1.5 audit tech debt) — 5/5 plans complete, gaps_found at verification (see 32-VERIFICATION.md)
+- [ ] **Phase 32: Code Quality Cleanup — Accumulated Warnings & Test/Doc Hygiene** — resolve WR/IN findings from phases 27-30 + backfill SUMMARY frontmatter + fix test ordering/isolation issues (gap closure, from v1.5 audit tech debt) — 5/6 plans complete, gap-closure plan 32-06 added to close 2 verification gaps (see 32-VERIFICATION.md)
 
 ## Phase Details
 
@@ -177,7 +177,7 @@ Plans:
   4. Naming da SUP-08 alinhado entre requisito e código (`ToolsRegistry.registerBrainType` vs `toolsRegistry.enableTool`)
   5. Frontmatter `requirements-completed` retroativo em `27-02`, `27-03`, `29-01`, `29-02`; `fup-e2e.test.ts` sem dependência de ordem entre testes; causa raiz do cross-pollution de `mock.module` entre `brain-runner.test.ts` e `factory.test.ts` investigada e corrigida (confirmado reproduzindo — 3 falhas quando os dois arquivos rodam juntos — e corrigido)
 
-**Plans:** 5/5 plans complete
+**Plans:** 5/6 plans complete
 
 Plans:
 - [x] 32-01-PLAN.md — Runtime lifecycle hardening: SIGTERM idempotency, RabbitMQ retry-key collision, WebhookTransport stale status, atttypmod defensive query + doc, duplicate DATABASE_URL check removal, mock.module cross-pollution fix (Wave 1)
@@ -185,6 +185,7 @@ Plans:
 - [x] 32-03-PLAN.md — Shared abstractions: hasToolCall/getFirstToolCallName type-guards, RESERVED_TOOL_NAMES derivation, LazyEmbeddingProvider/getEmbeddingProvider() doc (Wave 1)
 - [x] 32-04-PLAN.md — Test hygiene: fup-e2e.test.ts independent tests, REQUIREMENTS.md SUP-08 naming alignment (Wave 1)
 - [x] 32-05-PLAN.md — SUMMARY.md requirements-completed frontmatter backfill (27-02, 27-03, 29-01, 29-02) (Wave 1)
+- [ ] 32-06-PLAN.md — Gap closure: pin EMBEDDING_DIMENSIONS in brain-runner.test.ts (32-VERIFICATION.md Gap 1) + mark TECH-06 complete in REQUIREMENTS.md (Gap 2) (Wave 1)
 
 ## Progress
 
@@ -221,7 +222,7 @@ Plans:
 | 29. Brain Suporte Core | v1.5 | 3/3 | Complete    | 2026-07-01 |
 | 30. Brain Suporte Docker | v1.5 | 3/3 | Complete    | 2026-07-01 |
 | 31. Pre-Client Onboarding Hardening | v1.5 | 1/1 | Complete    | 2026-07-02 |
-| 32. Code Quality Cleanup — Accumulated Warnings & Test/Doc Hygiene | v1.5 | 5/5 | Complete   | 2026-07-02 |
+| 32. Code Quality Cleanup — Accumulated Warnings & Test/Doc Hygiene | v1.5 | 5/6 | Executing gap closure | 2026-07-02 |
 
 ## Backlog
 
