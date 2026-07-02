@@ -23,11 +23,22 @@ const NO_RESULTS_MSG =
  * Formato: "[Coleção: {collection}] chunk {chunkIndex+1}/{totalChunks}\n{content}"
  * Separador entre chunks: "\n---\n"
  */
+// IN-02 (28-REVIEW): defensive cap on per-chunk content length in the LLM-facing tool
+// output. Chunks from the standard ingest path (chunker.ts CHUNK_SIZE=1000) never hit
+// this, but rows written by other paths (manual DB edits, future ingestion code) could
+// exceed it — this prevents a single oversized chunk from blowing up LLM context budget.
+const MAX_CHUNK_DISPLAY_CHARS = 2000;
+
+function truncateContent(content: string): string {
+  if (content.length <= MAX_CHUNK_DISPLAY_CHARS) return content;
+  return `${content.slice(0, MAX_CHUNK_DISPLAY_CHARS)}... [truncated]`;
+}
+
 function formatResults(results: ChunkResult[]): string {
   return results
     .map(
       (r) =>
-        `[Coleção: ${r.collection}] chunk ${r.chunkIndex + 1}/${r.totalChunks}\n${r.content}`
+        `[Coleção: ${r.collection}] chunk ${r.chunkIndex + 1}/${r.totalChunks}\n${truncateContent(r.content)}`
     )
     .join("\n---\n");
 }

@@ -1,4 +1,5 @@
 import type { GoogleGenerativeAIEmbeddings } from "@langchain/google-genai";
+import { ConfigurationError } from "@brain-pkg/shared";
 import type { IEmbeddingProvider } from "./provider.interface.js";
 
 /**
@@ -20,6 +21,16 @@ export class GeminiEmbeddingProvider implements IEmbeddingProvider {
   constructor(options?: { model?: string; dimensions?: number; apiKey?: string }) {
     this.model = options?.model ?? process.env.EMBEDDING_MODEL ?? "gemini-embedding-001";
     this.dimensions = options?.dimensions ?? parseInt(process.env.EMBEDDING_DIMENSIONS ?? "3072", 10);
+    // IN-03 (28-REVIEW)/D-18: gemini-embedding-001 always outputs 3072 dimensions — the
+    // installed @langchain/google-genai wrapper exposes no parameter to reduce this.
+    // Fail fast here instead of letting a misconfigured EMBEDDING_DIMENSIONS surface as
+    // a cryptic Postgres "expected N dimensions, got 3072" error on the first embed call.
+    if (this.dimensions !== 3072) {
+      throw new ConfigurationError(
+        `EMBEDDING_DIMENSIONS=${this.dimensions} is incompatible with Gemini — gemini-embedding-001 always outputs 3072 dimensions. Set EMBEDDING_DIMENSIONS=3072 or switch EMBEDDING_PROVIDER.`,
+        { configuredDimensions: this.dimensions, requiredDimensions: 3072 }
+      );
+    }
     // T-2-03: apiKey read but never logged/thrown
     this.apiKey = options?.apiKey ?? process.env.API_KEY;
   }

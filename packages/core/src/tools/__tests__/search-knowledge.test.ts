@@ -152,4 +152,33 @@ describe("createSearchKnowledgeTool (RAG-02, RAG-03, D-11)", () => {
       ).rejects.toBeDefined();
     });
   });
+
+  describe("IN-02 (28-REVIEW): truncamento defensivo de chunk content", () => {
+    it("trunca content acima de MAX_CHUNK_DISPLAY_CHARS (2000) com marcador '... [truncated]'", async () => {
+      const longContent = "x".repeat(5000);
+      mockSearchKnowledge.mockImplementationOnce(async () => [
+        { id: "c1", content: longContent, collection: "faq", chunkIndex: 0, totalChunks: 1, similarity: 0.9 },
+      ]);
+      const tool = createSearchKnowledgeTool({} as never, mockEmbeddingProvider as never, mockSearchKnowledge as never);
+      const result = await tool.invoke({ query: "busca", collections: ["faq"] }) as string;
+
+      expect(result).toContain("... [truncated]");
+      expect(result).not.toContain(longContent);
+      // O bloco de conteúdo truncado deve ter no máximo 2000 chars + marcador
+      const contentBlock = result.split("\n").slice(1).join("\n");
+      expect(contentBlock.length).toBeLessThanOrEqual(2000 + "... [truncated]".length);
+    });
+
+    it("não trunca content igual ou abaixo do limite — retorna byte-idêntico ao input", async () => {
+      const shortContent = "y".repeat(2000);
+      mockSearchKnowledge.mockImplementationOnce(async () => [
+        { id: "c1", content: shortContent, collection: "faq", chunkIndex: 0, totalChunks: 1, similarity: 0.9 },
+      ]);
+      const tool = createSearchKnowledgeTool({} as never, mockEmbeddingProvider as never, mockSearchKnowledge as never);
+      const result = await tool.invoke({ query: "busca", collections: ["faq"] }) as string;
+
+      expect(result).not.toContain("[truncated]");
+      expect(result).toContain(shortContent);
+    });
+  });
 });
