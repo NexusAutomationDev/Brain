@@ -1,6 +1,6 @@
 // SDK-02: BrainRunner — lifecycle init() + run() returning BrainOutput | null
 // Uses MemorySaver in tests (AI-01 allows MemorySaver ONLY in *.test.ts)
-import { describe, test, expect, mock, spyOn, beforeEach, afterEach } from "bun:test";
+import { describe, test, expect, mock, spyOn, beforeEach, afterEach, afterAll } from "bun:test";
 // NOTE: BrainEvent type defined inline to avoid loading @brain-pkg/transport at test startup.
 // Loading transport causes zod to initialize partially (via events.ts BrainEventSchema) before
 // schema.ts in core is loaded, triggering zod v4 "cached value already set" panic in bun 1.3.2.
@@ -102,8 +102,9 @@ mock.module("drizzle-orm/postgres-js", () => ({
 // real factory implementation). Mocking @langchain/openai instead is safe: it is also mocked
 // (identically) in factory.test.ts and openai-provider.test.ts, so there is no behavior mismatch,
 // and it lets the REAL createEmbeddingProvider()/OpenAIEmbeddingProvider run in these tests —
-// resolving to providerName: "openai", dimensions: 1536 (EMBEDDING_PROVIDER/EMBEDDING_DIMENSIONS
-// are not set in this test file, so factory.ts's default resolution applies).
+// resolving to providerName: "openai", dimensions: 1536 (EMBEDDING_DIMENSIONS is explicitly
+// pinned to "1536" below, before BrainRunner is imported — see the D-13 gap fix comment near
+// the other env overrides — so this is deterministic regardless of ambient env).
 mock.module("@langchain/openai", () => ({
   OpenAIEmbeddings: class MockOpenAIEmbeddings {
     async embedQuery(_text: string): Promise<number[]> {
@@ -158,6 +159,28 @@ process.env.MIGRATIONS_FOLDER = "/tmp/test-migrations";
 // Satisfy DATABASE_URL check in _compileGraph() — prevents process.exit(1) when createCheckpointer is called
 // The value is fake but the mock of @brain-pkg/ai.createCheckpointer intercepts before any real connection.
 process.env.DATABASE_URL = "postgresql://test:test@localhost:5432/testdb";
+// D-13 gap fix (32-VERIFICATION.md Gap 1): pin EMBEDDING_DIMENSIONS to the value this file's
+// makeMockSql() hardcodes (1536, see line 130) BEFORE the real createEmbeddingProvider()/
+// OpenAIEmbeddingProvider chain resolves it in runner.ts's init(). Without this override, this
+// test file's outcome silently depends on whatever EMBEDDING_DIMENSIONS the executing
+// environment's .env.test (gitignored, local-only, auto-loaded by `bun test`) happens to set —
+// any mismatch with the mock SQL's hardcoded 1536 trips runner.ts's genuine, unmocked
+// process.exit(1) dimension-mismatch guard, silently killing the whole bun test worker with
+// zero printed results. Pinning here makes the test deterministic in every environment.
+// The original value is saved and restored via afterAll below so this module-level
+// process.env mutation (unlike mock.module(), which is file-scoped) does not leak into
+// other test files sharing the same `bun test` worker process — e.g.
+// packages/embeddings/src/__tests__/unit/factory.test.ts's Gemini tests, which require
+// EMBEDDING_DIMENSIONS to be unset so it defaults to 3072.
+const originalEmbeddingDimensions = process.env.EMBEDDING_DIMENSIONS;
+process.env.EMBEDDING_DIMENSIONS = "1536";
+afterAll(() => {
+  if (originalEmbeddingDimensions === undefined) {
+    delete process.env.EMBEDDING_DIMENSIONS;
+  } else {
+    process.env.EMBEDDING_DIMENSIONS = originalEmbeddingDimensions;
+  }
+});
 
 // Mock LeadService — LEAD-03: gate ia_ativada controlled per test
 const mockUpsertLead = mock(async () => ({
