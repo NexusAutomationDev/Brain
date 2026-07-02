@@ -1,6 +1,7 @@
 ---
 phase: 29-brain-suporte-core
 plan: 02
+requirements-completed: [SUP-01, SUP-08]
 subsystem: brain-support
 tags: [migrations, env-config, testing, tools-registry, hono]
 dependency_graph:

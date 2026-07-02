@@ -1,6 +1,7 @@
 ---
 phase: 29-brain-suporte-core
 plan: 01
+requirements-completed: [SUP-01, SUP-03, SUP-04, SUP-05, SUP-07]
 subsystem: brain-support
 tags: [brain-support, ibrain, react-graph, rag, tools-registry]
 dependency-graph:

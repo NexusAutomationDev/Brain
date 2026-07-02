@@ -1,6 +1,7 @@
 ---
 phase: 27-tech-debt-fixes
 plan: "03"
+requirements-completed: [TECH-03]
 subsystem: transport,observability,brain-sdr
 tags: [tech-debt, health-check, transport-status, obs-02, tech-03]
 dependency_graph:

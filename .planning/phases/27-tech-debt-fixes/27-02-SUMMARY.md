@@ -1,6 +1,7 @@
 ---
 phase: 27-tech-debt-fixes
 plan: "02"
+requirements-completed: [TECH-02]
 subsystem: packages/core
 tags: [testing, fup, integration, e2e, postgresql]
 dependency_graph:
