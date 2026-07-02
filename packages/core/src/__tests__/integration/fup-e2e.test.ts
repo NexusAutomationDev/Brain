@@ -10,6 +10,10 @@
  * Requer PostgreSQL real via DATABASE_URL. Todos os testes são skipados graciosamente
  * quando DATABASE_URL não está configurado no ambiente.
  *
+ * D-12: cada teste é totalmente independente — cria seu próprio lead com um unique_id
+ * exclusivo e estado inicial explícito. Nenhum teste depende de outro ter rodado antes
+ * nem de estado deixado por um teste anterior — podem rodar em qualquer ordem ou isolados.
+ *
  * Para executar:
  *   DATABASE_URL=postgres://user:pass@localhost:5432/dbname \
  *   MIGRATIONS_FOLDER=packages/database/src/migrations \
@@ -33,16 +37,23 @@ const MIGRATIONS_FOLDER =
 
 // Identificadores únicos para não colidir com dados de produção
 const BRAIN_TYPE = "sdr-fup-e2e";
-const LEAD_UNIQUE_ID = "fup-e2e-lead-1";
 const LEAD_NUMERO = "5511000000001";
 const FUP_WEBHOOK_URL = "http://localhost:19999/fup-test";
 
-// Estado compartilhado entre testes
+function makeLeadId(suffix: string): string {
+  return `fup-e2e-lead-${suffix}`;
+}
+
+// Estado compartilhado entre testes (infraestrutura estateless/idempotente,
+// não a origem do bug de ordenação — ver D-12)
 let sql: ReturnType<typeof postgres> | null = null;
 let scheduler: FupScheduler | null = null;
 let fetchCallCount = 0;
 let lastFetchBody: Record<string, unknown> | null = null;
 let originalFetch: typeof globalThis.fetch;
+
+// Tracked lead IDs criados pelos testes — limpos individualmente no afterAll
+const createdLeadIds: string[] = [];
 
 // --- Mock do checkpointer ---
 const mockCheckpointer = {
@@ -61,6 +72,58 @@ const mockEventPublisher = {
   close: mock(async () => {}),
 };
 
+/**
+ * D-12: Insere (ou atualiza, se já existir) um lead de teste com estado inicial explícito.
+ * Cada teste chama esta função com seu próprio uniqueId — nenhum lead é compartilhado
+ * entre testes, então cada teste pode rodar em qualquer ordem ou em isolamento.
+ */
+async function insertLead(
+  uniqueId: string,
+  overrides: {
+    fupStep?: number;
+    iaAtivada?: boolean;
+    fupEnabled?: boolean;
+    fupNextAtPast?: boolean;
+  } = {}
+): Promise<void> {
+  const {
+    fupStep = 0,
+    iaAtivada = true,
+    fupEnabled = true,
+    fupNextAtPast = true,
+  } = overrides;
+
+  createdLeadIds.push(uniqueId);
+
+  if (fupNextAtPast) {
+    await sql!`
+      INSERT INTO leads (unique_id, nome, numero, brain_type, fup_enabled, ia_ativada, fup_step, fup_next_at)
+      VALUES (
+        ${uniqueId}, 'E2E Test Lead', ${LEAD_NUMERO}, ${BRAIN_TYPE},
+        ${fupEnabled}, ${iaAtivada}, ${fupStep},
+        NOW() - INTERVAL '1 minute'
+      )
+      ON CONFLICT (unique_id) DO UPDATE SET
+        fup_enabled = ${fupEnabled}, ia_ativada = ${iaAtivada}, fup_step = ${fupStep},
+        fup_next_at = NOW() - INTERVAL '1 minute',
+        fup_failure_count = 0, updated_at = NOW()
+    `;
+  } else {
+    await sql!`
+      INSERT INTO leads (unique_id, nome, numero, brain_type, fup_enabled, ia_ativada, fup_step, fup_next_at)
+      VALUES (
+        ${uniqueId}, 'E2E Test Lead', ${LEAD_NUMERO}, ${BRAIN_TYPE},
+        ${fupEnabled}, ${iaAtivada}, ${fupStep},
+        NULL
+      )
+      ON CONFLICT (unique_id) DO UPDATE SET
+        fup_enabled = ${fupEnabled}, ia_ativada = ${iaAtivada}, fup_step = ${fupStep},
+        fup_next_at = NULL,
+        fup_failure_count = 0, updated_at = NOW()
+    `;
+  }
+}
+
 // ----------------------------------------------------------------
 describe("FupScheduler E2E — banco PostgreSQL real (FUP-02, FUP-05)", () => {
   beforeAll(async () => {
@@ -74,6 +137,8 @@ describe("FupScheduler E2E — banco PostgreSQL real (FUP-02, FUP-05)", () => {
 
     // 3. Inserir fup_config para brain_type='sdr-fup-e2e'
     //    intervals_seconds=[1, 2] = 2 steps; min_hour=0, max_hour=23 = sempre elegível
+    //    Compartilhado/idempotente entre testes — read-only durante _tick(), não é
+    //    a origem do bug de ordenação (D-12).
     await sql`
       INSERT INTO fup_config (brain_type, enabled, intervals_seconds, min_hour, max_hour, allowed_days, timezone)
       VALUES (
@@ -104,29 +169,7 @@ describe("FupScheduler E2E — banco PostgreSQL real (FUP-02, FUP-05)", () => {
         updated_at = NOW()
     `;
 
-    // 5. Inserir lead elegível: fup_next_at no passado (NOW() - 1 minute)
-    await sql`
-      INSERT INTO leads (unique_id, nome, numero, brain_type, fup_enabled, ia_ativada, fup_step, fup_next_at)
-      VALUES (
-        ${LEAD_UNIQUE_ID},
-        'E2E Test Lead',
-        ${LEAD_NUMERO},
-        ${BRAIN_TYPE},
-        true,
-        true,
-        0,
-        NOW() - INTERVAL '1 minute'
-      )
-      ON CONFLICT (unique_id) DO UPDATE SET
-        fup_enabled = true,
-        ia_ativada = true,
-        fup_step = 0,
-        fup_next_at = NOW() - INTERVAL '1 minute',
-        fup_failure_count = 0,
-        updated_at = NOW()
-    `;
-
-    // 6. Substituir globalThis.fetch para capturar chamadas do scheduler._sendFupWebhook()
+    // 5. Substituir globalThis.fetch para capturar chamadas do scheduler._sendFupWebhook()
     originalFetch = globalThis.fetch;
     globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
       fetchCallCount++;
@@ -140,7 +183,7 @@ describe("FupScheduler E2E — banco PostgreSQL real (FUP-02, FUP-05)", () => {
       return new Response(null, { status: 200 });
     };
 
-    // 7. Construir o scheduler com todas as dependências mockadas
+    // 6. Construir o scheduler com todas as dependências mockadas
     scheduler = new FupScheduler({
       sql: sql,
       brainType: BRAIN_TYPE,
@@ -149,7 +192,7 @@ describe("FupScheduler E2E — banco PostgreSQL real (FUP-02, FUP-05)", () => {
       fupWebhookUrl: FUP_WEBHOOK_URL,
     });
 
-    // 8. Monkey-patch _generateFupMessage para evitar chamada real ao LLM
+    // 7. Monkey-patch _generateFupMessage para evitar chamada real ao LLM
     (scheduler as unknown as Record<string, unknown>)._generateFupMessage = async () =>
       "Mensagem de follow-up de teste E2E";
   });
@@ -162,18 +205,23 @@ describe("FupScheduler E2E — banco PostgreSQL real (FUP-02, FUP-05)", () => {
       globalThis.fetch = originalFetch;
     }
 
-    // Limpar registros inseridos pelo teste
-    await sql`DELETE FROM leads WHERE unique_id = ${LEAD_UNIQUE_ID}`;
+    // Limpar todos os leads criados pelos testes (D-12: cada teste rastreia seu próprio ID)
+    for (const id of createdLeadIds) {
+      await sql`DELETE FROM leads WHERE unique_id = ${id}`;
+    }
     await sql`DELETE FROM fup_config WHERE brain_type = ${BRAIN_TYPE}`;
     await sql`DELETE FROM prompts WHERE brain_type = ${BRAIN_TYPE}`;
 
     await sql.end();
   });
 
-  // ---- Teste 1: Step 0 → Step 1 ----
+  // ---- Teste A: Step 0 → Step 1 ----
   test.skipIf(!RUN_FUP)(
     "Step 0 → Step 1: lead elegível é processado, fup_step avança e fup_next_at atualizado",
     async () => {
+      const leadId = makeLeadId("step1");
+      await insertLead(leadId, { fupStep: 0, iaAtivada: true, fupEnabled: true, fupNextAtPast: true });
+
       const fetchCallsBefore = fetchCallCount;
 
       // Acionar _tick() diretamente (sem timer)
@@ -183,7 +231,7 @@ describe("FupScheduler E2E — banco PostgreSQL real (FUP-02, FUP-05)", () => {
       const [lead] = await sql!`
         SELECT fup_step, fup_next_at, ia_ativada, fup_enabled
         FROM leads
-        WHERE unique_id = ${LEAD_UNIQUE_ID}
+        WHERE unique_id = ${leadId}
       ` as { fup_step: number; fup_next_at: Date | null; ia_ativada: boolean; fup_enabled: boolean }[];
 
       expect(lead).toBeDefined();
@@ -200,32 +248,29 @@ describe("FupScheduler E2E — banco PostgreSQL real (FUP-02, FUP-05)", () => {
       expect(fetchCallCount - fetchCallsBefore).toBe(1);
       // Verificar payload do webhook: IDLead deve ser o unique_id do lead
       expect(lastFetchBody).not.toBeNull();
-      expect(lastFetchBody!.IDLead).toBe(LEAD_UNIQUE_ID);
+      expect(lastFetchBody!.IDLead).toBe(leadId);
     }
   );
 
-  // ---- Teste 2: Step 1 → Último step (ia_ativada=false) ----
+  // ---- Teste B: último step (lead já no penúltimo fup_step é processado e desativado) ----
   test.skipIf(!RUN_FUP)(
-    "Step 1 → último step: ia_ativada=false e fup_enabled=false após último FUP (FUP-05)",
+    "último step: lead já no penúltimo fup_step é processado e desativado (FUP-05)",
     async () => {
-      // Tornar o lead elegível novamente (fup_next_at no passado)
-      await sql!`
-        UPDATE leads
-        SET fup_next_at = NOW() - INTERVAL '1 minute',
-            updated_at = NOW()
-        WHERE unique_id = ${LEAD_UNIQUE_ID}
-      `;
+      // D-12: este teste cria seu PRÓPRIO lead já em fup_step=1 — não depende do
+      // Teste A ter rodado antes nem de ter deixado o lead nesse estado.
+      const leadId = makeLeadId("laststep");
+      await insertLead(leadId, { fupStep: 1, iaAtivada: true, fupEnabled: true, fupNextAtPast: true });
 
       const fetchCallsBefore = fetchCallCount;
 
-      // Acionar _tick() novamente para processar o segundo (e último) step
+      // Acionar _tick() para processar o último step
       await scheduler!._tick();
 
       // Verificar estado no banco após último step
       const [lead] = await sql!`
         SELECT fup_step, fup_next_at, ia_ativada, fup_enabled
         FROM leads
-        WHERE unique_id = ${LEAD_UNIQUE_ID}
+        WHERE unique_id = ${leadId}
       ` as { fup_step: number; fup_next_at: Date | null; ia_ativada: boolean; fup_enabled: boolean }[];
 
       expect(lead).toBeDefined();
@@ -237,23 +282,21 @@ describe("FupScheduler E2E — banco PostgreSQL real (FUP-02, FUP-05)", () => {
       // fup_next_at deve ser NULL após último step
       expect(lead.fup_next_at).toBeNull();
 
-      // Verificar que fetch foi chamado pela segunda vez
+      // Verificar que fetch foi chamado uma vez
       expect(fetchCallCount - fetchCallsBefore).toBe(1);
     }
   );
 
-  // ---- Teste 3: _tick() não processa lead desativado ----
+  // ---- Teste C: _tick() não processa lead desativado ----
   test.skipIf(!RUN_FUP)(
     "_tick() não processa lead com ia_ativada=false (lead já finalizado)",
     async () => {
-      // Lead está com ia_ativada=false após teste anterior
-      // Tornar elegível por data, mas verificar que não é processado (ia_ativada=false)
-      await sql!`
-        UPDATE leads
-        SET fup_next_at = NOW() - INTERVAL '1 minute',
-            updated_at = NOW()
-        WHERE unique_id = ${LEAD_UNIQUE_ID}
-      `;
+      // D-12: este teste cria seu PRÓPRIO lead já desativado — não depende do
+      // Teste B ter rodado antes nem de ter deixado o lead nesse estado.
+      // fup_next_at no passado prova que é o guard clause (ia_ativada=false), não a
+      // elegibilidade por data, o que bloqueia o processamento.
+      const leadId = makeLeadId("idle");
+      await insertLead(leadId, { fupStep: 2, iaAtivada: false, fupEnabled: false, fupNextAtPast: true });
 
       const fetchCallsBefore = fetchCallCount;
 
@@ -266,7 +309,7 @@ describe("FupScheduler E2E — banco PostgreSQL real (FUP-02, FUP-05)", () => {
       const [lead] = await sql!`
         SELECT ia_ativada, fup_enabled
         FROM leads
-        WHERE unique_id = ${LEAD_UNIQUE_ID}
+        WHERE unique_id = ${leadId}
       ` as { ia_ativada: boolean; fup_enabled: boolean }[];
 
       expect(lead.ia_ativada).toBe(false);
