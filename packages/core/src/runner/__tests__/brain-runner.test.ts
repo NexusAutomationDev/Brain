@@ -235,6 +235,27 @@ describe("BrainRunner", () => {
     expect(mockLoadPrompts).toHaveBeenCalledWith(mockSql, "test", ["system"]);
   });
 
+  test("D-01: calling init() twice on the same instance does not increase SIGTERM listener count", async () => {
+    const brain = makeBrain(["system"]);
+    const runner = new BrainRunner({
+      brain,
+      sql: mockSql,
+      toolsRegistry: registry,
+    });
+
+    await runner.init();
+    const countAfterFirstInit = process.listenerCount("SIGTERM");
+
+    await runner.init();
+    const countAfterSecondInit = process.listenerCount("SIGTERM");
+
+    expect(countAfterSecondInit).toBe(countAfterFirstInit);
+
+    // Cleanup: remove the listener registered by this test's runner so it doesn't leak
+    // into other tests' process.listenerCount("SIGTERM") assertions.
+    await runner.close();
+  });
+
   test("init() calls process.exit(1) when MIGRATIONS_FOLDER ENV is not set and migrationsFolder option is absent (D-11, T-06-07)", async () => {
     const savedFolder = process.env.MIGRATIONS_FOLDER;
     delete process.env.MIGRATIONS_FOLDER;
@@ -877,6 +898,35 @@ describe("EMBD-05: embeddingProvider injection + dimension fail-fast", () => {
     // and the dimension query both happen after it in the source; assert relative ordering
     // between provider resolution and the dimension query.
     expect(callOrder).toEqual(["createEmbeddingProvider", "dimension-query"]);
+  });
+
+  test("D-07: init() throws a clear error (not a raw destructure crash) when the atttypmod query returns zero rows", async () => {
+    // One-off mock sql that resolves to an empty array (zero rows) ONLY for this test —
+    // does not change the shared mockSql/makeMockSql default used by other tests.
+    const emptyRowsSql = mock(async () => []) as unknown as import("postgres").Sql;
+
+    const originalExit = process.exit;
+    const mockExit = mock((_code: number) => { throw new Error("process.exit called"); });
+    process.exit = mockExit as never;
+
+    const brain = makeBrain(["system"]);
+    const runner = new BrainRunner({
+      brain,
+      sql: emptyRowsSql,
+      toolsRegistry: registry,
+    });
+
+    try {
+      await runner.init();
+      expect.unreachable("init() should have called process.exit(1) on zero-row atttypmod query");
+    } catch (e) {
+      // Must be the clear process.exit(1) path, NOT a raw "Cannot destructure property" TypeError
+      expect((e as Error).message).toBe("process.exit called");
+      expect((e as Error).message).not.toContain("Cannot destructure");
+      expect(mockExit).toHaveBeenCalledWith(1);
+    } finally {
+      process.exit = originalExit;
+    }
   });
 
   test("Test 4: dimension mismatch — logger.error with 'EMBEDDING_DIMENSIONS mismatch' + process.exit(1)", async () => {

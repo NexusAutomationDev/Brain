@@ -152,13 +152,27 @@ export class BrainRunner {
 
     // D-15: fail-fast se a dimensão do provider não bate com a coluna vector(N) já migrada.
     // Roda APÓS runMigrations() (coluna já existe) e APÓS embeddingProvider resolvido.
-    const [{ dimensions: columnDim }] = await this.sql<{ dimensions: number }[]>`
+    // atttypmod cross-version note: for pgvector's `vector(N)` column type, atttypmod stores N
+    // (the configured dimension count) directly — unlike PostgreSQL's built-in varchar(N)/numeric(N),
+    // which store typmod with an internal offset (e.g. varchar's atttypmod = N + 4). This direct
+    // 1:1 mapping is defined by pgvector's own type modifier implementation (vector_typmod_in/out in
+    // the extension source) and has been stable across pgvector 0.5.x-0.8.x — no offset math needed
+    // here. If a future pgvector major version changes this, this query would need adjustment.
+    const dimensionRows = await this.sql<{ dimensions: number }[]>`
       SELECT atttypmod AS dimensions
       FROM pg_attribute
       WHERE attrelid = 'knowledge_chunks'::regclass
         AND attname = 'embedding'
         AND attnum > 0
     `;
+    if (dimensionRows.length === 0) {
+      this.logger.error(
+        { brainId: this.brain.id },
+        "knowledge_chunks.embedding column not found in pg_attribute — migrations may not have run yet"
+      );
+      process.exit(1);
+    }
+    const columnDim = dimensionRows[0].dimensions;
     if (columnDim !== this.embeddingProvider.dimensions) {
       this.logger.error(
         {
@@ -228,6 +242,11 @@ export class BrainRunner {
     // Registrado APÓS _compileGraph() para garantir que mcpClient está pronto quando SIGTERM chegar.
     // Apps (index.ts) NÃO precisam adicionar SIGTERM handlers.
     // WR-03: handler salvo como campo para remoção em close() — evita acúmulo de listeners
+    // D-01/WR-02: remove any previously-registered handler from an earlier init() call
+    // before registering a new one — prevents listener accumulation on repeated init().
+    if (this._sigtermHandler) {
+      process.off('SIGTERM', this._sigtermHandler);
+    }
     this._sigtermHandler = async () => {
       this.logger.info({ brainId: this.brain.id }, 'SIGTERM received — shutting down cleanly');
       await this.close();
@@ -488,17 +507,16 @@ export class BrainRunner {
 
   /** Internal: compile the graph with checkpointer and inject context */
   private async _compileGraph(): Promise<void> {
-    // D-06: Fail-fast if DATABASE_URL missing — avoids cryptic downstream connection errors
+    // IN-04 (28-REVIEW)/TECH-06: DATABASE_URL presence is already validated at startup by each
+    // Brain app's index.ts (apps/brain-sdr, apps/brain-support) BEFORE runner.init() is called —
+    // re-checking here was redundant (same process, same ENV snapshot). createCheckpointer()
+    // will still fail loudly if DATABASE_URL is somehow empty/malformed at call time.
     const dbUrl = process.env.DATABASE_URL;
-    if (!dbUrl) {
-      this.logger.error({ brainId: this.brain.id }, "DATABASE_URL is not set — cannot create checkpointer");
-      process.exit(1);
-    }
     const checkpointer = await createCheckpointer(
       // TenantPoolManager provides the connection string; for v1 single-tenant,
       // BrainRunner receives the Sql directly and uses it for all queries.
       // PostgresSaver needs a connection string — derive from env.
-      dbUrl
+      dbUrl!
     );
     // D-12/Pitfall 6: salvar instância para injetar no FupScheduler em init()
     this.checkpointer = checkpointer;
