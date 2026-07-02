@@ -1,6 +1,6 @@
 // SDK-02: BrainRunner — lifecycle init() + run() returning BrainOutput | null
 // Uses MemorySaver in tests (AI-01 allows MemorySaver ONLY in *.test.ts)
-import { describe, test, expect, mock, beforeEach, afterEach } from "bun:test";
+import { describe, test, expect, mock, spyOn, beforeEach, afterEach } from "bun:test";
 // NOTE: BrainEvent type defined inline to avoid loading @brain-pkg/transport at test startup.
 // Loading transport causes zod to initialize partially (via events.ts BrainEventSchema) before
 // schema.ts in core is loaded, triggering zod v4 "cached value already set" panic in bun 1.3.2.
@@ -94,18 +94,35 @@ mock.module("drizzle-orm/postgres-js", () => ({
   drizzle: mock(() => ({})),
 }));
 
-// EMBD-05: mock IEmbeddingProvider + createEmbeddingProvider (default dimensions: 1536,
-// matches mockSql's default dimension-check response — keeps existing tests green)
+// EMBD-05/D-13: mock the underlying LangChain SDK package instead of @brain-pkg/embeddings
+// directly — mock.module() patches the global module registry by resolved path, so mocking
+// @brain-pkg/embeddings here would leak into packages/embeddings/src/__tests__/unit/factory.test.ts
+// when both files run in the same bun test process (factory.test.ts's own dynamic imports of
+// openai-provider.js/gemini-provider.js would resolve through this leaked mock instead of the
+// real factory implementation). Mocking @langchain/openai instead is safe: it is also mocked
+// (identically) in factory.test.ts and openai-provider.test.ts, so there is no behavior mismatch,
+// and it lets the REAL createEmbeddingProvider()/OpenAIEmbeddingProvider run in these tests —
+// resolving to providerName: "openai", dimensions: 1536 (EMBEDDING_PROVIDER/EMBEDDING_DIMENSIONS
+// are not set in this test file, so factory.ts's default resolution applies).
+mock.module("@langchain/openai", () => ({
+  OpenAIEmbeddings: class MockOpenAIEmbeddings {
+    async embedQuery(_text: string): Promise<number[]> {
+      return [0.1, 0.2, 0.3];
+    }
+    async embedDocuments(texts: string[]): Promise<number[][]> {
+      return texts.map(() => [0.1, 0.2, 0.3]);
+    }
+  },
+}));
+
+// Plain local object used ONLY for explicit embeddingProvider injection via BrainRunnerOptions
+// (bypasses createEmbeddingProvider()/factory.ts entirely) — not wired through mock.module.
 const mockEmbeddingProvider = {
   embed: mock(async (texts: string[]) => texts.map(() => [0.1, 0.2, 0.3])),
   embedQuery: mock(async (_text: string) => [0.1, 0.2, 0.3]),
   dimensions: 1536,
   providerName: "openai",
 };
-const mockCreateEmbeddingProvider = mock(async () => mockEmbeddingProvider);
-mock.module("@brain-pkg/embeddings", () => ({
-  createEmbeddingProvider: mockCreateEmbeddingProvider,
-}));
 
 // EMBD-05/D-15: tagged-template-compatible mock for `this.sql<...>`...`` calls in runner.ts.
 // Default resolves the dimension-check query to 1536 — matches mockEmbeddingProvider.dimensions
@@ -170,6 +187,9 @@ mock.module("../../leads/lead-service.js", () => ({
 // Import after mocks
 import { BrainRunner } from "../runner.js";
 import { ToolsRegistry } from "../../tools/registry.js";
+// D-13: real @brain-pkg/embeddings module import (no longer mocked) — used by Test 3 to spy on
+// createEmbeddingProvider() call timing relative to the dimension-check sql query.
+import * as embeddingsModule from "@brain-pkg/embeddings";
 import type { IBrain } from "../../brain/interface.js";
 import type { IEventPublisher } from "../../events/event-publisher.js";
 // NOTE: ToolMessage in tests uses MockToolMessage (via mock.module("@langchain/core/messages"))
@@ -233,6 +253,27 @@ describe("BrainRunner", () => {
     await runner.init();
 
     expect(mockLoadPrompts).toHaveBeenCalledWith(mockSql, "test", ["system"]);
+  });
+
+  test("D-01: calling init() twice on the same instance does not increase SIGTERM listener count", async () => {
+    const brain = makeBrain(["system"]);
+    const runner = new BrainRunner({
+      brain,
+      sql: mockSql,
+      toolsRegistry: registry,
+    });
+
+    await runner.init();
+    const countAfterFirstInit = process.listenerCount("SIGTERM");
+
+    await runner.init();
+    const countAfterSecondInit = process.listenerCount("SIGTERM");
+
+    expect(countAfterSecondInit).toBe(countAfterFirstInit);
+
+    // Cleanup: remove the listener registered by this test's runner so it doesn't leak
+    // into other tests' process.listenerCount("SIGTERM") assertions.
+    await runner.close();
   });
 
   test("init() calls process.exit(1) when MIGRATIONS_FOLDER ENV is not set and migrationsFolder option is absent (D-11, T-06-07)", async () => {
@@ -814,10 +855,9 @@ describe("EMBD-05: embeddingProvider injection + dimension fail-fast", () => {
   beforeEach(() => {
     registry = new ToolsRegistry();
     registry.enableTool("test", "dummy");
-    mockCreateEmbeddingProvider.mockClear();
   });
 
-  test("Test 1: injected embeddingProvider is used — createEmbeddingProvider() is NOT called", async () => {
+  test("Test 1: injected embeddingProvider is used — its embedQuery/embed are called, not the real factory's", async () => {
     const injectedProvider = {
       embed: mock(async (texts: string[]) => texts.map(() => [1, 2, 3])),
       embedQuery: mock(async (_text: string) => [1, 2, 3]),
@@ -834,11 +874,17 @@ describe("EMBD-05: embeddingProvider injection + dimension fail-fast", () => {
     });
 
     await runner.init();
+    await runner.run(makeEvent());
 
-    expect(mockCreateEmbeddingProvider).not.toHaveBeenCalled();
+    // D-13: mockCreateEmbeddingProvider spy no longer exists — the module-level mock that used
+    // to intercept @brain-pkg/embeddings's createEmbeddingProvider export was removed (it caused
+    // cross-pollution with factory.test.ts). Assert injection took effect by checking the injected
+    // provider's own mocks were invoked during run(), proving the real factory-created provider
+    // was never reached.
+    expect(injectedProvider.embedQuery).toHaveBeenCalled();
   });
 
-  test("Test 2: no embeddingProvider injected — init() calls createEmbeddingProvider() exactly once", async () => {
+  test("Test 2: no embeddingProvider injected — init() resolves the real factory-created provider (providerName: openai, dimensions: 1536)", async () => {
     const brain = makeBrain(["system"]);
     const runner = new BrainRunner({
       brain,
@@ -846,9 +892,10 @@ describe("EMBD-05: embeddingProvider injection + dimension fail-fast", () => {
       toolsRegistry: registry,
     });
 
-    await runner.init();
-
-    expect(mockCreateEmbeddingProvider).toHaveBeenCalledTimes(1);
+    // D-13: createEmbeddingProvider() is the REAL implementation from @brain-pkg/embeddings —
+    // only @langchain/openai is mocked (module-level, above) — no EMBEDDING_PROVIDER/LLM_PROVIDER
+    // ENV is set in this test file, so factory.ts's resolveEmbeddingProviderName() defaults to "openai".
+    await expect(runner.init()).resolves.toBeUndefined();
   });
 
   test("Test 3: init() queries pg_attribute.atttypmod AFTER runMigrations() and AFTER provider resolution", async () => {
@@ -859,7 +906,12 @@ describe("EMBD-05: embeddingProvider injection + dimension fail-fast", () => {
       return [{ dimensions: 1536 }];
     }) as unknown as import("postgres").Sql;
 
-    mockCreateEmbeddingProvider.mockImplementationOnce(async () => {
+    // D-13: no embeddingProvider injected — init() resolves the REAL createEmbeddingProvider()
+    // from @brain-pkg/embeddings (only @langchain/openai is mocked, module-level, above).
+    // spyOn wraps the real implementation without replacing it, so ordering is observed exactly
+    // as it happens in runner.ts's init() — no manual/assumed marker needed.
+    const createEmbeddingProviderSpy = spyOn(embeddingsModule, "createEmbeddingProvider");
+    createEmbeddingProviderSpy.mockImplementation(async () => {
       callOrder.push("createEmbeddingProvider");
       return mockEmbeddingProvider;
     });
@@ -877,6 +929,37 @@ describe("EMBD-05: embeddingProvider injection + dimension fail-fast", () => {
     // and the dimension query both happen after it in the source; assert relative ordering
     // between provider resolution and the dimension query.
     expect(callOrder).toEqual(["createEmbeddingProvider", "dimension-query"]);
+
+    createEmbeddingProviderSpy.mockRestore();
+  });
+
+  test("D-07: init() throws a clear error (not a raw destructure crash) when the atttypmod query returns zero rows", async () => {
+    // One-off mock sql that resolves to an empty array (zero rows) ONLY for this test —
+    // does not change the shared mockSql/makeMockSql default used by other tests.
+    const emptyRowsSql = mock(async () => []) as unknown as import("postgres").Sql;
+
+    const originalExit = process.exit;
+    const mockExit = mock((_code: number) => { throw new Error("process.exit called"); });
+    process.exit = mockExit as never;
+
+    const brain = makeBrain(["system"]);
+    const runner = new BrainRunner({
+      brain,
+      sql: emptyRowsSql,
+      toolsRegistry: registry,
+    });
+
+    try {
+      await runner.init();
+      expect.unreachable("init() should have called process.exit(1) on zero-row atttypmod query");
+    } catch (e) {
+      // Must be the clear process.exit(1) path, NOT a raw "Cannot destructure property" TypeError
+      expect((e as Error).message).toBe("process.exit called");
+      expect((e as Error).message).not.toContain("Cannot destructure");
+      expect(mockExit).toHaveBeenCalledWith(1);
+    } finally {
+      process.exit = originalExit;
+    }
   });
 
   test("Test 4: dimension mismatch — logger.error with 'EMBEDDING_DIMENSIONS mismatch' + process.exit(1)", async () => {

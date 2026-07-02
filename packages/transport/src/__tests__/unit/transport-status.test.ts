@@ -22,11 +22,16 @@ describe("WebhookTransport.getStatus()", () => {
     expect(status).toEqual({ type: "webhook", connected: true });
   });
 
-  it("Test 2: retorna { type: 'webhook', connected: true } após stop() — HTTP server sem estado de conexão separado", async () => {
+  it("Test 2 (D-03): retorna { type: 'webhook', connected: false } após stop() — getStatus() reflete estado do stop()", async () => {
     const transport = new WebhookTransport(stubRunner);
-    await transport.stop(); // stop sem start — sem efeito
+    await transport.stop(); // stop sem start — não deve lançar, deve marcar stopped=true mesmo assim
     const status = transport.getStatus();
-    expect(status).toEqual({ type: "webhook", connected: true });
+    expect(status).toEqual({ type: "webhook", connected: false });
+  });
+
+  it("Test 2b (D-03): stop() antes de start() não lança erro", async () => {
+    const transport = new WebhookTransport(stubRunner);
+    await expect(transport.stop()).resolves.toBeUndefined();
   });
 });
 
