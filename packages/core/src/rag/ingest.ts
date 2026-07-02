@@ -71,10 +71,12 @@ export function createIngestApp(sql: Sql, embeddingProvider: IEmbeddingProvider)
     // D-02: Chunk recursivo do texto
     const chunks = await splitText(text);
 
-    // D-16: EMBEDDING_DIMENSIONS=768 garante compatibilidade OpenAI/Gemini na mesma coluna pgvector.
-    // embeddingProvider já lê EMBEDDING_DIMENSIONS automaticamente via createEmbeddingProvider().
-    // Sem código adicional necessário aqui — compatibilidade é responsabilidade do operador
-    // configurar EMBEDDING_DIMENSIONS=768 quando usar múltiplos providers na mesma coleção.
+    // D-16/WR-01 (28): embeddingProvider já lê EMBEDDING_DIMENSIONS automaticamente via
+    // createEmbeddingProvider(). Sem código adicional necessário aqui — compatibilidade é
+    // responsabilidade do operador: EMBEDDING_DIMENSIONS deve bater com a coluna vector(N)
+    // migrada (migration 0009) E com o provider configurado (OpenAI default 1536, Gemini
+    // fixo em 3072 — GeminiEmbeddingProvider valida isso em runtime, ver gemini-provider.ts).
+    // Não existe um valor único (ex: 768) que funcione para ambos os providers na mesma coluna.
     // Gerar embeddings em batch
     const vectors = await embeddingProvider.embed(chunks);
 

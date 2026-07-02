@@ -333,4 +333,81 @@ describe("POST /api/v1/reembed (D-16)", () => {
       expect(neClause?.val).toBe("openai");
     });
   });
+
+  describe("Test 9 (D-06/WR-03): MAX_PAGES cap interrompe loop em tabela unbounded/runaway", () => {
+    beforeEach(() => {
+      process.env.INGEST_TOKEN = "secret-ingest-token";
+    });
+
+    it("interrompe o loop após exatamente MAX_PAGES=500 SELECTs e retorna truncated:true", async () => {
+      const PAGE_SIZE = 200;
+      const MAX_PAGES = 500;
+      // Mock que sempre retorna uma página cheia — simula tabela unbounded/runaway
+      const fullPage = Array.from({ length: PAGE_SIZE }, (_, i) => makeRow(`id-${i}`, `content ${i}`));
+
+      const originalMockOffset = mockLimit.getMockImplementation();
+      mockLimit.mockImplementation(() => ({
+        offset: () => Promise.resolve(fullPage),
+      }));
+
+      mockEmbed.mockImplementation(async (contents: string[]) => contents.map(() => [0.1, 0.2, 0.3]));
+
+      const app = createReembedApp({} as never, mockEmbeddingProvider as never);
+      const res = await app.fetch(
+        makeRequest({ collection: "faq" }, { Authorization: "Bearer secret-ingest-token" })
+      );
+
+      expect(res.status).toBe(200);
+      // Loop nunca vê rows.length === 0 — só para via MAX_PAGES cap
+      expect(mockSelect).toHaveBeenCalledTimes(MAX_PAGES);
+      const body = (await res.json()) as { updated: number; skipped: number; truncated: boolean };
+      expect(body.truncated).toBe(true);
+      expect(body.updated).toBe(MAX_PAGES * PAGE_SIZE);
+
+      // restore
+      if (originalMockOffset) mockLimit.mockImplementation(originalMockOffset);
+    });
+  });
+
+  describe("Test 10: dataset pequeno (< MAX_PAGES * PAGE_SIZE) completa normalmente sem truncated", () => {
+    beforeEach(() => {
+      process.env.INGEST_TOKEN = "secret-ingest-token";
+    });
+
+    it("processa 3 páginas e termina via rows.length===0 antes do cap, truncated:false", async () => {
+      const PAGE_SIZE = 200;
+      let call = 0;
+      const pages = [
+        Array.from({ length: PAGE_SIZE }, (_, i) => makeRow(`p1-${i}`)),
+        Array.from({ length: PAGE_SIZE }, (_, i) => makeRow(`p2-${i}`)),
+        Array.from({ length: 50 }, (_, i) => makeRow(`p3-${i}`)),
+      ];
+
+      const originalMockOffset = mockLimit.getMockImplementation();
+      mockLimit.mockImplementation(() => ({
+        offset: () => {
+          const page = pages[call] ?? [];
+          call++;
+          return Promise.resolve(page);
+        },
+      }));
+
+      mockEmbed.mockImplementation(async (contents: string[]) => contents.map(() => [0.1, 0.2, 0.3]));
+
+      const app = createReembedApp({} as never, mockEmbeddingProvider as never);
+      const res = await app.fetch(
+        makeRequest({ collection: "faq" }, { Authorization: "Bearer secret-ingest-token" })
+      );
+
+      expect(res.status).toBe(200);
+      // 3 páginas com dados + 1 página vazia final = 4 SELECTs, bem abaixo de MAX_PAGES=500
+      expect(mockSelect).toHaveBeenCalledTimes(4);
+      const body = (await res.json()) as { updated: number; skipped: number; truncated: boolean };
+      expect(body.updated).toBe(PAGE_SIZE + PAGE_SIZE + 50);
+      expect(body.truncated).toBe(false);
+
+      // restore
+      if (originalMockOffset) mockLimit.mockImplementation(originalMockOffset);
+    });
+  });
 });
