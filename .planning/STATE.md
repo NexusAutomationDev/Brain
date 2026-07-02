@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Embedding SDK + Brain Suporte + Tech Debt
 status: Ready to plan
-last_updated: "2026-07-01T22:17:40.827Z"
-last_activity: 2026-07-01
+last_updated: "2026-07-02T01:08:26.957Z"
+last_activity: 2026-07-02
 progress:
-  total_phases: 6
-  completed_phases: 4
-  total_plans: 14
-  completed_plans: 14
+  total_phases: 8
+  completed_phases: 5
+  total_plans: 15
+  completed_plans: 15
   percent: 100
 ---
 
@@ -21,10 +21,12 @@ See: .planning/PROJECT.md (updated 2026-06-29 after v1.5 milestone started)
 
 **Core value:** Infraestrutura de agentes modular onde novos Brains são criados definindo apenas prompts, tools, embeddings e fluxos — sem reescrever a base
 
-**Current focus:** v1.5 — Tech Debt + Embedding SDK + Brain Suporte
+**Current focus:** Phase 31 — tech-debt-onboarding-hardening
 
 ## Current Position
 
+Phase: 32
+Plan: Not started
 | Field | Value |
 |-------|-------|
 | Milestone | v1.5 Embedding SDK + Brain Suporte + Tech Debt |
@@ -101,4 +103,4 @@ Run `/gsd-plan-phase 29` to plan Phase 29: Brain Suporte Core.
 |---|-------------|------|--------|-----------|
 | 260630-ssd | Melhorar a seção Git Commit Guidelines do CLAUDE.md (scope, breaking changes, formatação, idioma) | 2026-06-30 | 3647768 | [260630-ssd-melhorar-a-secao-git-commit-guidelines-d](./quick/260630-ssd-melhorar-a-secao-git-commit-guidelines-d/) |
 
-Last activity: 2026-07-01
+Last activity: 2026-07-02

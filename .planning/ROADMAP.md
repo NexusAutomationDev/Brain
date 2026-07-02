@@ -72,7 +72,7 @@
 - [x] **Phase 28: Embedding SDK** — IEmbeddingProvider interface + OpenAI adapter + ENV-driven dimensions + semantic write path (completed 2026-07-01)
 - [x] **Phase 29: Brain Suporte Core** — LangGraph graph + MCP tools + RAG obrigatório + transport + BrainOutput + leads + ToolsRegistry (completed 2026-07-01)
 - [x] **Phase 30: Brain Suporte Docker** — Dockerfile multi-stage independente + validação end-to-end de deploy (completed 2026-07-01)
-- [ ] **Phase 31: Pre-Client Onboarding Hardening** — CI shell hygiene + respond tool guard + .env.example docs + migration warning comment (gap closure, from v1.5 audit tech debt; docker-compose port fix dropped — already committed pre-audit)
+- [x] **Phase 31: Pre-Client Onboarding Hardening** — CI shell hygiene + respond tool guard + .env.example docs + migration warning comment (gap closure, from v1.5 audit tech debt; docker-compose port fix dropped — already committed pre-audit) (completed 2026-07-01)
 - [ ] **Phase 32: Code Quality Cleanup — Accumulated Warnings & Test/Doc Hygiene** — resolve WR/IN findings from phases 27-30 + backfill SUMMARY frontmatter + fix test ordering/isolation issues (gap closure, from v1.5 audit tech debt)
 
 ## Phase Details
@@ -159,10 +159,10 @@ Plans:
   3. `apps/brain-sdr/.env.example` documenta `EMBEDDING_PROVIDER`/`EMBEDDING_MODEL`/`EMBEDDING_DIMENSIONS`
   4. Migration `0009_embedding_dimensions_fix.sql` tem comentário inline avisando que `vector(1536)` é hardcoded para OpenAI e requer `TRUNCATE` manual ao regenerar com outra `EMBEDDING_DIMENSIONS`
 
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 
 Plans:
-- [ ] 31-01-PLAN.md — CI shell hygiene (quote $RESPONSE, validate URL) + respond tool append-after-filter (brain-sdr + brain-support) + .env.example embedding docs + migration inline comment
+- [x] 31-01-PLAN.md — CI shell hygiene (quote $RESPONSE, validate URL) + respond tool append-after-filter (brain-sdr + brain-support) + .env.example embedding docs + migration inline comment
 
 ### Phase 32: Code Quality Cleanup — Accumulated Warnings & Test/Doc Hygiene
 **Goal**: Achados warning/info de code review acumulados nas fases 27-30 estão resolvidos e as lacunas de documentação/teste estão preenchidas, zerando o ledger de tech debt do v1.5
@@ -212,7 +212,7 @@ Plans:
 | 28. Embedding SDK | v1.5 | 5/5 | Complete    | 2026-07-01 |
 | 29. Brain Suporte Core | v1.5 | 3/3 | Complete    | 2026-07-01 |
 | 30. Brain Suporte Docker | v1.5 | 3/3 | Complete    | 2026-07-01 |
-| 31. Pre-Client Onboarding Hardening | v1.5 | 0/? | Planned | — |
+| 31. Pre-Client Onboarding Hardening | v1.5 | 1/1 | Complete    | 2026-07-02 |
 | 32. Code Quality Cleanup — Accumulated Warnings & Test/Doc Hygiene | v1.5 | 0/? | Planned | — |
 
 ## Backlog
