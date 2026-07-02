@@ -32,6 +32,10 @@ export { createPauseSessionTool } from "./tools/pause-session.js";
 export { createFinishConversationTool } from "./tools/finish-conversation.js";
 export { createRespondTool } from "./tools/respond.js";
 
+// D-08/IN-03 (29-REVIEW): shared AI-message type-guards — used by brain-sdr/brain-support's
+// routeAfterLlm and respond-detection logic instead of duplicated inline tool_calls checks.
+export { hasToolCall, getFirstToolCallName } from "./brain/type-guards.js";
+
 // RAG-01/RAG-02: RAG tools and ingest endpoint
 // D-05: createIngestApp exportado para Brain apps montarem explicitamente no server.ts
 // D-06: createSearchKnowledgeTool exportado para BrainRunner injetar via buildGraph()
