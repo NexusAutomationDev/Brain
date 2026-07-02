@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Embedding SDK + Brain Suporte + Tech Debt
-status: Ready to plan
-last_updated: "2026-07-02T01:08:26.957Z"
+status: Executing Phase 32
+last_updated: "2026-07-02T01:50:00.078Z"
 last_activity: 2026-07-02
 progress:
   total_phases: 8
   completed_phases: 5
-  total_plans: 15
+  total_plans: 20
   completed_plans: 15
-  percent: 100
+  percent: 75
 ---
 
 # Project State
@@ -21,12 +21,12 @@ See: .planning/PROJECT.md (updated 2026-06-29 after v1.5 milestone started)
 
 **Core value:** Infraestrutura de agentes modular onde novos Brains são criados definindo apenas prompts, tools, embeddings e fluxos — sem reescrever a base
 
-**Current focus:** Phase 31 — tech-debt-onboarding-hardening
+**Current focus:** Phase 32 — tech-debt-code-quality-cleanup
 
 ## Current Position
 
-Phase: 32
-Plan: Not started
+Phase: 32 (tech-debt-code-quality-cleanup) — EXECUTING
+Plan: 1 of 5
 | Field | Value |
 |-------|-------|
 | Milestone | v1.5 Embedding SDK + Brain Suporte + Tech Debt |
