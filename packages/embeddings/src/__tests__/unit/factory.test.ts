@@ -30,7 +30,14 @@ mock.module("@langchain/google-genai", () => ({
 
 const { createEmbeddingProvider, resolveEmbeddingProviderName } = await import("../../factory.js");
 
-const ENV_KEYS = ["EMBEDDING_PROVIDER", "LLM_PROVIDER"] as const;
+// D-13 gap fix (32-06, follow-on from 32-VERIFICATION.md Gap 1): EMBEDDING_DIMENSIONS is
+// reset/restored alongside EMBEDDING_PROVIDER/LLM_PROVIDER because this repo's gitignored,
+// local-only .env.test sets EMBEDDING_DIMENSIONS=128 (auto-loaded by `bun test`), which trips
+// GeminiEmbeddingProvider's fail-fast "!== 3072" ConfigurationError guard in Test 1 and Test 3
+// (both resolve to the gemini provider). Without this reset, those two tests fail in ANY
+// environment where the ambient EMBEDDING_DIMENSIONS differs from 3072 — the exact class of
+// cross-environment drift bug documented for brain-runner.test.ts.
+const ENV_KEYS = ["EMBEDDING_PROVIDER", "LLM_PROVIDER", "EMBEDDING_DIMENSIONS"] as const;
 const savedEnv: Record<string, string | undefined> = {};
 for (const key of ENV_KEYS) savedEnv[key] = process.env[key];
 
