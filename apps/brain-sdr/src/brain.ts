@@ -26,6 +26,14 @@ const logger = createLogger();
 // resolve o provider real (memoizado no processo) na primeira chamada de embed()/embedQuery() —
 // providerName/dimensions refletem a instância real assim que a Promise resolve, o que satisfaz
 // search-knowledge.ts (só lê providerName após o await de embedQuery()).
+/**
+ * D-05/D-10 (Phase 32, IN-02 29-REVIEW): Process-lifetime singleton, no invalidation
+ * mechanism by design. EMBEDDING_PROVIDER/EMBEDDING_MODEL/EMBEDDING_DIMENSIONS are set
+ * via ENV at container start and never change at runtime — matches the project's
+ * per-client Docker image deployment model (CLAUDE.md). No config-reload use case exists
+ * today; building invalidation infrastructure for a scenario that cannot occur in this
+ * deployment model would be unused code.
+ */
 let embeddingProviderPromise: Promise<IEmbeddingProvider> | null = null;
 function getEmbeddingProvider(): Promise<IEmbeddingProvider> {
   if (!embeddingProviderPromise) {
@@ -34,6 +42,17 @@ function getEmbeddingProvider(): Promise<IEmbeddingProvider> {
   return embeddingProviderPromise;
 }
 
+/**
+ * D-02 (Phase 28)/D-04 (Phase 32, IN-02 29-REVIEW): buildGraph() is synchronous by IBrain
+ * contract — the real provider can only be resolved lazily, inside the first embed()/
+ * embedQuery() call. Until that first call resolves, `dimensions` reads as 0 and
+ * `providerName` reads as "unresolved" — these are placeholder values, NOT the real
+ * provider's config. Callers must not read dimensions/providerName before the first
+ * embed()/embedQuery() call completes. search-knowledge.ts only reads providerName AFTER
+ * awaiting embedQuery(), which is why this has never surfaced as a bug — documented here
+ * so future callers know not to read these eagerly. Changing these to async getters would
+ * be a breaking change to IEmbeddingProvider (implemented by other Brains) — out of scope.
+ */
 class LazyEmbeddingProvider implements IEmbeddingProvider {
   private resolved: IEmbeddingProvider | null = null;
 
@@ -78,18 +97,6 @@ const searchKnowledgeToolSchema = tool(
     }),
   }
 );
-
-// WR-01 (31-REVIEW) / TECH-05 gap fix: MCP tools whose name collides with a reserved
-// native tool name must never reach bindTools()/ToolNode — an operator-configured MCP_URL
-// server exposing e.g. "respond" would otherwise create two same-named tool objects with
-// undefined precedence, silently defeating the "never disableable" guarantee.
-const RESERVED_TOOL_NAMES = new Set([
-  "respond",
-  "search_knowledge",
-  "pause_session",
-  "finish_conversation",
-  "qualify_lead",  // brain-sdr-specific
-]);
 
 export const sdrBrain: IBrain = {
   id: "brain-sdr",
@@ -145,6 +152,16 @@ export const sdrBrain: IBrain = {
 
     // D-09 (Fase 16): respond tool para responseMode dinâmico (schema-as-tool)
     const respondTool = createRespondTool();
+
+    // D-09/IN-01 (29-REVIEW): RESERVED_TOOL_NAMES derived from the actual native tool instances
+    // created above, not a hand-maintained literal — cannot go stale on a future refactor that
+    // adds/renames/removes a native tool. Derivation happens server-side at buildGraph() time,
+    // before any LLM/user input is processed — not attacker-influenced.
+    const RESERVED_TOOL_NAMES = new Set<string>(
+      [boundQualifyTool, boundPauseSessionTool, boundFinishConversationTool, boundSearchKnowledgeTool, respondTool].map(
+        (t) => t.name
+      )
+    );
 
     // CRITICAL: bindTools() com [boundQualifyTool] — não ctx.tools
     // ctx.tools vem do ToolsRegistry e contém qualifyLeadTool sem closure;
