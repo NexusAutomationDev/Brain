@@ -73,7 +73,7 @@
 - [x] **Phase 29: Brain Suporte Core** — LangGraph graph + MCP tools + RAG obrigatório + transport + BrainOutput + leads + ToolsRegistry (completed 2026-07-01)
 - [x] **Phase 30: Brain Suporte Docker** — Dockerfile multi-stage independente + validação end-to-end de deploy (completed 2026-07-01)
 - [x] **Phase 31: Pre-Client Onboarding Hardening** — CI shell hygiene + respond tool guard + .env.example docs + migration warning comment (gap closure, from v1.5 audit tech debt; docker-compose port fix dropped — already committed pre-audit) (completed 2026-07-01)
-- [x] **Phase 32: Code Quality Cleanup — Accumulated Warnings & Test/Doc Hygiene** — resolve WR/IN findings from phases 27-30 + backfill SUMMARY frontmatter + fix test ordering/isolation issues (gap closure, from v1.5 audit tech debt) (completed 2026-07-02)
+- [ ] **Phase 32: Code Quality Cleanup — Accumulated Warnings & Test/Doc Hygiene** — resolve WR/IN findings from phases 27-30 + backfill SUMMARY frontmatter + fix test ordering/isolation issues (gap closure, from v1.5 audit tech debt) — 5/5 plans complete, gaps_found at verification (see 32-VERIFICATION.md)
 
 ## Phase Details
 
