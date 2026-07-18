@@ -91,5 +91,6 @@ Run `/gsd-new-milestone` to start v1.6.
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 260630-ssd | Melhorar a seção Git Commit Guidelines do CLAUDE.md (scope, breaking changes, formatação, idioma) | 2026-06-30 | 3647768 | [260630-ssd-melhorar-a-secao-git-commit-guidelines-d](./quick/260630-ssd-melhorar-a-secao-git-commit-guidelines-d/) |
+| 260717-uz8 | docker-compose.yml para brain-sdr usando imagem local existente sem build | 2026-07-18 | d0f1791 | [260717-uz8-docker-compose-yml-para-brain-sdr-usando](./quick/260717-uz8-docker-compose-yml-para-brain-sdr-usando/) |
 
-Last activity: 2026-07-02
+Last activity: 2026-07-18 - Completed quick task 260717-uz8: docker-compose.yml para brain-sdr usando imagem local existente sem build
