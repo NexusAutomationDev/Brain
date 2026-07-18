@@ -99,14 +99,30 @@ export class RabbitMQTransport implements ITransport {
           return ConsumerStatus.ACK;
         }
 
+        // D-16: normalizar corpo antes de validar. rabbitmq-client só faz JSON.parse
+        // quando o publisher envia content-type:application/json; sem isso (ex: node
+        // RabbitMQ do n8n), o body chega como Buffer/string crua. Parsear aqui torna o
+        // consumer tolerante a publishers que não setam o header — se o JSON.parse
+        // falhar, segue com o valor original e o safeParse rejeita → DLQ (comportamento
+        // inalterado para payload de fato inválido).
+        let body: unknown = msg.body;
+        if (body instanceof Uint8Array) body = Buffer.from(body).toString("utf8");
+        if (typeof body === "string") {
+          try {
+            body = JSON.parse(body);
+          } catch {
+            // deixa como string — safeParse abaixo rejeita e manda pra DLQ
+          }
+        }
+
         // T-07-06 / ASVS V5: validar payload antes de qualquer processamento
-        const parsed = BrainEventSchema.safeParse(msg.body);
+        const parsed = BrainEventSchema.safeParse(body);
 
         if (!parsed.success) {
           // Payload inválido — sem retry (schema não vai melhorar com retry)
           // T-07-08 Segurança: não logar body completo (pode conter PII — número, nome, etc.)
           this.logger.error(
-            { bodyKeys: Object.keys(msg.body ?? {}) },
+            { bodyType: typeof body },
             "Invalid BrainEvent from RabbitMQ — sending to DLQ"
           );
           await this.pub.send(dlq, msg.body);

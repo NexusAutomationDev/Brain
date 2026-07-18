@@ -10,7 +10,7 @@ node_modules
 # Git metadata — never needed inside a build context
 .git
 .gitignore
-
+apps/brain-sdr/.env
 # Environment files — MUST NOT enter the build context (secrets)
 .env
 .env.*
