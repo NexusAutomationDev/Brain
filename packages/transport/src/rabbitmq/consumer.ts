@@ -81,10 +81,14 @@ export class RabbitMQTransport implements ITransport {
     this.pub = this.rabbit.createPublisher({ confirm: true });
 
     // D-15: prefetch=1 + requeue:false (sem requeue automático — controle manual via retryMap)
-    // D-14: sem queueOptions — NÃO declarar fila (filas pré-configuradas por ops)
+    // D-14: filas pré-configuradas por ops — passive:true apenas verifica que a fila existe,
+    // sem assertar durable/exclusive/autoDelete (a lib sempre manda QueueDeclare; sem passive,
+    // omitir queueOptions ainda declara com os defaults do AMQP (durable:false), que conflita
+    // com PRECONDITION_FAILED contra qualquer fila pré-criada como durable:true)
     this.sub = this.rabbit.createConsumer(
       {
         queue,
+        queueOptions: { passive: true },
         qos: { prefetchCount: 1 },
         requeue: false,
       },
