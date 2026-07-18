@@ -1,7 +1,7 @@
 # apps/brain-sdr/docker-compose.portainer.yml
 # Stack pronta para colar direto no Portainer (Web editor) de um servidor
 # DIFERENTE deste repo. Não depende de nenhum arquivo local (sem build,
-# sem env_file) — a imagem `brain-sdr:1.6.1` já deve existir no Docker desse
+# sem env_file) — a imagem `brain-sdr:1.6.2` já deve existir no Docker desse
 # servidor, e os valores reais das variáveis abaixo são preenchidos na seção
 # "Environment variables" do Portainer ao criar a stack (nunca ficam neste
 # arquivo).
@@ -11,7 +11,7 @@
 
 services:
   brain-sdr:
-    image: brain-sdr:1.6.1
+    image: brain-sdr:1.6.2
     ports:
       - "3002:${PORT:-3001}"
     environment:
