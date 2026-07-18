@@ -92,5 +92,6 @@ Run `/gsd-new-milestone` to start v1.6.
 |---|-------------|------|--------|-----------|
 | 260630-ssd | Melhorar a seção Git Commit Guidelines do CLAUDE.md (scope, breaking changes, formatação, idioma) | 2026-06-30 | 3647768 | [260630-ssd-melhorar-a-secao-git-commit-guidelines-d](./quick/260630-ssd-melhorar-a-secao-git-commit-guidelines-d/) |
 | 260717-uz8 | docker-compose.yml para brain-sdr usando imagem local existente sem build | 2026-07-18 | d0f1791 | [260717-uz8-docker-compose-yml-para-brain-sdr-usando](./quick/260717-uz8-docker-compose-yml-para-brain-sdr-usando/) |
+| 260717-wpk | Suporte halfvec para embeddings >2000 dims (Gemini/3072) — NÃO mergeado em master, ver branch `worktree-agent-a51d3dffce5d3b264` | 2026-07-18 | (branch, não mergeado) | [260717-wpk-corrigir-suporte-a-embeddings-de-alta-di](./quick/260717-wpk-corrigir-suporte-a-embeddings-de-alta-di/) |
 
-Last activity: 2026-07-18 - Completed quick task 260717-uz8: docker-compose.yml para brain-sdr usando imagem local existente sem build
+Last activity: 2026-07-18 - Completed quick task 260717-wpk: halfvec fix para embeddings de alta dimensão (mantido fora de master até existir gating de build por flavor de imagem)
