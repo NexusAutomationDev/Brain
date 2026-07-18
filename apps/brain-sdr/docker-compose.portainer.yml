@@ -1,0 +1,55 @@
+# apps/brain-sdr/docker-compose.portainer.yml
+# Stack pronta para colar direto no Portainer (Web editor) de um servidor
+# DIFERENTE deste repo. Não depende de nenhum arquivo local (sem build,
+# sem env_file) — a imagem `brain-sdr:1.5` já deve existir no Docker desse
+# servidor, e os valores reais das variáveis abaixo são preenchidos na seção
+# "Environment variables" do Portainer ao criar a stack (nunca ficam neste
+# arquivo).
+#
+# Uso: Portainer > Stacks > Add stack > Web editor > cole este arquivo >
+# preencha "Environment variables" com os mesmos nomes usados em ${...} abaixo.
+
+services:
+  brain-sdr:
+    image: brain-sdr:1.5
+    ports:
+      - "3002:${PORT:-3001}"
+    environment:
+      # LLM
+      LLM_PROVIDER: ${LLM_PROVIDER:-}
+      LLM_MODEL: ${LLM_MODEL:-}
+      API_KEY: ${API_KEY:-}
+      # Embeddings
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-}
+      EMBEDDING_DIMENSIONS: ${EMBEDDING_DIMENSIONS:-}
+      # Banco (1 banco por cliente)
+      DATABASE_URL: ${DATABASE_URL:-}
+      MIGRATIONS_FOLDER: /app/migrations
+      # Transporte (webhook ou rabbitmq)
+      TRANSPORT: ${TRANSPORT:-webhook}
+      RABBITMQ_URL: ${RABBITMQ_URL:-}
+      RABBITMQ_QUEUE: ${RABBITMQ_QUEUE:-}
+      RABBITMQ_DLQ: ${RABBITMQ_DLQ:-}
+      RABBITMQ_RETRY_DELAY_MS: ${RABBITMQ_RETRY_DELAY_MS:-}
+      # Tokens / auth
+      WEBHOOK_TOKEN: ${WEBHOOK_TOKEN:-}
+      ADMIN_TOKEN: ${ADMIN_TOKEN:-}
+      INGEST_TOKEN: ${INGEST_TOKEN:-}
+      # Tools / MCP (se aplicável)
+      MCP_URL: ${MCP_URL:-}
+      MCP_AUTH_TOKEN: ${MCP_AUTH_TOKEN:-}
+      BRAIN_TOOLS: ${BRAIN_TOOLS:-}
+      # Follow-up
+      FUP_WEBHOOK_URL: ${FUP_WEBHOOK_URL:-}
+      FUP_POLL_INTERVAL_MS: ${FUP_POLL_INTERVAL_MS:-}
+      CONTEXT_WINDOW_MESSAGES: ${CONTEXT_WINDOW_MESSAGES:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+    networks:
+      - traefikNet
+
+networks:
+  traefikNet:
+    external: true
