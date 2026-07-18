@@ -78,6 +78,13 @@
       "when": 1783000000000,
       "tag": "0010_brain_support_prompts",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1784343520506,
+      "tag": "0011_gemini_highdim_halfvec_3072",
+      "breakpoints": true
     }
   ]
 }

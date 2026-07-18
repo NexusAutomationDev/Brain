@@ -1,4 +1,4 @@
-import { pgTable, text, uuid, timestamp, jsonb, boolean, index, vector, uniqueIndex, integer } from 'drizzle-orm/pg-core';
+import { pgTable, text, uuid, timestamp, jsonb, boolean, index, vector, halfvec, uniqueIndex, integer } from 'drizzle-orm/pg-core';
 
 // DB-02: Read dimension from env — must be locked before first migration.
 // WARNING: Cannot be changed after first migration without re-embedding all data.
@@ -10,6 +10,9 @@ if (EMBEDDING_DIM < 128 || EMBEDDING_DIM > 4096) {
     `Invalid EMBEDDING_DIMENSIONS: ${EMBEDDING_DIM}. Must be between 128 and 4096.`
   );
 }
+
+const EMBEDDING_NEEDS_HALFVEC = EMBEDDING_DIM > 2000;
+const EMBEDDING_OP_CLASS = EMBEDDING_NEEDS_HALFVEC ? 'halfvec_cosine_ops' : 'vector_cosine_ops';
 
 // DB-01: Memories table — key/value store for long-term agent memory
 export const memories = pgTable('memories', {
@@ -40,13 +43,16 @@ export const embeddings = pgTable('embeddings', {
   sessionId: text('session_id').notNull(),
   content: text('content').notNull(),
   // DB-02: Dimension from EMBEDDING_DIMENSIONS env (default 1536 for OpenAI text-embedding-3-small)
-  embedding: vector('embedding', { dimensions: EMBEDDING_DIM }).notNull(),
+  embedding: (EMBEDDING_NEEDS_HALFVEC
+    ? halfvec('embedding', { dimensions: EMBEDDING_DIM })
+    : vector('embedding', { dimensions: EMBEDDING_DIM })
+  ).notNull(),
   metadata: jsonb('metadata').default({}),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 }, (table) => ({
   // HNSW index for fast cosine similarity search (m=16, ef_construction=64 are production defaults)
   embeddingIdx: index('embeddings_embedding_idx')
-    .using('hnsw', table.embedding.op('vector_cosine_ops'))
+    .using('hnsw', table.embedding.op(EMBEDDING_OP_CLASS))
     .with({ m: 16, ef_construction: 64 }),
   sessionIdx: index('embeddings_session_idx').on(table.sessionId),
 }));
@@ -111,7 +117,10 @@ export const knowledgeChunks = pgTable('knowledge_chunks', {
   collection: text('collection').notNull(),
   content: text('content').notNull(),
   // D-08: Mesma dimensão que embeddings — EMBEDDING_DIM do ENV
-  embedding: vector('embedding', { dimensions: EMBEDDING_DIM }).notNull(),
+  embedding: (EMBEDDING_NEEDS_HALFVEC
+    ? halfvec('embedding', { dimensions: EMBEDDING_DIM })
+    : vector('embedding', { dimensions: EMBEDDING_DIM })
+  ).notNull(),
   embeddingModel: text('embedding_model').notNull(),
   chunkIndex: integer('chunk_index').notNull(),
   totalChunks: integer('total_chunks').notNull(),
