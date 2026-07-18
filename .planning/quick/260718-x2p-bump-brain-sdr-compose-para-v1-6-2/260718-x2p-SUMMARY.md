@@ -3,7 +3,7 @@ task: 260718-x2p
 type: quick
 title: Bump brain-sdr compose para v1.6.2 (força redeploy do fix passive-declare)
 status: complete
-commit: b105f9f
+commit: f77802d
 completed: 2026-07-18
 files_changed:
   - apps/brain-sdr/docker-compose.yml
