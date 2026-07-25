@@ -231,3 +231,116 @@ describe("LeadService.upsertLead() — fupNextAt no INSERT", () => {
     expect(valuesArg.fupNextAt).toBeNull();
   });
 });
+
+// ---- FUP-06 / D-19: Testes de resetFup() — re-arme de fup_next_at a partir de fup_config ----
+
+/**
+ * Cria mock combinado { select, update } para resetFup() com brainType:
+ * - select().from().where().limit() → consulta fup_config (retorna config ou vazio)
+ * - update().set().where() → UPDATE final; captura os argumentos de set()
+ */
+function makeResetFupDbMock(opts: { fupConfigRow: FupConfigRow | null }) {
+  // Chain de update: db.update().set().where()
+  const whereUpdateMock = mock(() => Promise.resolve([]));
+  const setMock = mock(() => ({ where: whereUpdateMock }));
+  const updateMock = mock(() => ({ set: setMock }));
+
+  // Chain de select: db.select().from().where().limit() — consulta fup_config
+  const limitMock = mock(() =>
+    Promise.resolve(opts.fupConfigRow ? [opts.fupConfigRow] : []),
+  );
+  const whereSelectMock = mock(() => ({ limit: limitMock }));
+  const fromMock = mock(() => ({ where: whereSelectMock }));
+  const selectMock = mock(() => ({ from: fromMock }));
+
+  const getSetArgs = () =>
+    (setMock.mock.calls[0]?.[0] as Record<string, unknown>) ?? null;
+
+  return { selectMock, updateMock, setMock, whereUpdateMock, getSetArgs };
+}
+
+function makeLeadServiceForReset(opts: { fupConfigRow: FupConfigRow | null }) {
+  const fakeSql = {} as import("postgres").Sql;
+  const service = new LeadService(fakeSql);
+
+  const mocks = makeResetFupDbMock(opts);
+
+  (service as unknown as { db: unknown }).db = {
+    select: mocks.selectMock,
+    update: mocks.updateMock,
+  };
+
+  return { service, ...mocks };
+}
+
+describe("LeadService.resetFup() — re-arme", () => {
+  test("(a) re-arme: brainType + fup_config ativo → fupNextAt Date não-nulo, fupStep 0, sem fupEnabled", async () => {
+    const { service, selectMock, getSetArgs } = makeLeadServiceForReset({
+      fupConfigRow: baseFupConfig,
+    });
+
+    await service.resetFup("lead-rearm-01", "sdr");
+
+    // fup_config foi consultado
+    expect(selectMock).toHaveBeenCalledTimes(1);
+
+    const setPayload = getSetArgs();
+    expect(setPayload).not.toBeNull();
+    expect(setPayload!.fupNextAt).toBeInstanceOf(Date);
+    expect(setPayload!.fupNextAt).not.toBeNull();
+    expect(setPayload!.fupStep).toBe(0);
+    // D-19: fup_enabled nunca alterado
+    expect("fupEnabled" in setPayload!).toBe(false);
+    // WR-02: updatedAt presente e Date
+    expect(setPayload!.updatedAt).toBeInstanceOf(Date);
+  });
+
+  test("(b) fallback disabled/missing: fup_config enabled=false → fupNextAt null, fupStep 0", async () => {
+    const { service, getSetArgs } = makeLeadServiceForReset({
+      fupConfigRow: { ...baseFupConfig, enabled: false },
+    });
+
+    await service.resetFup("lead-rearm-02", "sdr");
+
+    const setPayload = getSetArgs();
+    expect(setPayload!.fupNextAt).toBeNull();
+    expect(setPayload!.fupStep).toBe(0);
+    expect("fupEnabled" in setPayload!).toBe(false);
+  });
+
+  test("(b2) fallback missing: select vazio (sem config) → fupNextAt null", async () => {
+    const { service, getSetArgs } = makeLeadServiceForReset({
+      fupConfigRow: null,
+    });
+
+    await service.resetFup("lead-rearm-03", "sdr");
+
+    const setPayload = getSetArgs();
+    expect(setPayload!.fupNextAt).toBeNull();
+    expect(setPayload!.fupStep).toBe(0);
+  });
+
+  test("(c) fallback intervals vazio: intervalsSeconds=[] → fupNextAt null", async () => {
+    const { service, getSetArgs } = makeLeadServiceForReset({
+      fupConfigRow: { ...baseFupConfig, intervalsSeconds: [] },
+    });
+
+    await service.resetFup("lead-rearm-04", "sdr");
+
+    const setPayload = getSetArgs();
+    expect(setPayload!.fupNextAt).toBeNull();
+    expect(setPayload!.fupStep).toBe(0);
+  });
+
+  test("(d) D-19: em qualquer caminho com brainType, fupEnabled ausente do set{}", async () => {
+    // caminho re-arme
+    const rearm = makeLeadServiceForReset({ fupConfigRow: baseFupConfig });
+    await rearm.service.resetFup("lead-rearm-05", "sdr");
+    expect("fupEnabled" in rearm.getSetArgs()!).toBe(false);
+
+    // caminho fallback
+    const fallback = makeLeadServiceForReset({ fupConfigRow: null });
+    await fallback.service.resetFup("lead-rearm-06", "sdr");
+    expect("fupEnabled" in fallback.getSetArgs()!).toBe(false);
+  });
+});
