@@ -175,20 +175,63 @@ export class LeadService {
   }
 
   /**
-   * FUP-06 / D-19: Reseta o estado de FUP quando o lead responde.
-   * Seta fup_next_at = NULL e fup_step = 0.
-   * fup_enabled permanece true — lead continua elegível para novo ciclo se silenciar novamente.
+   * FUP-06 / D-19: Reseta o estado de FUP quando o lead responde e RE-ARMA o ciclo.
+   *
+   * Sempre zera fup_step = 0. Quando `brainType` é fornecido e existe fup_config
+   * ativo (enabled=true E intervals_seconds não-vazio), fup_next_at é RECALCULADO
+   * para o próximo slot válido (NOW() + intervals_seconds[0], ajustado para business
+   * hours via getNextValidSlot) — reiniciando o ciclo do step 0. Assim, se o lead
+   * voltar a silenciar, o FupScheduler volta a selecioná-lo (elegibilidade exige
+   * fup_next_at <= NOW()).
+   *
+   * Sem `brainType`, ou com fup_config ausente/disabled/intervals vazio, cai no
+   * fallback fup_next_at = NULL (comportamento anterior, backward compatible).
+   *
+   * D-19: fup_enabled NUNCA é alterado por resetFup — permanece intocado, preservando
+   * a elegibilidade do lead para novo ciclo.
    *
    * Chamado por BrainRunner.run() após touchLastMessage(), antes do gate ia_ativada.
    *
    * @param uniqueId - lead.uniqueId (IDLead canonical)
+   * @param brainType - Brain type para consultar fup_config e re-armar fup_next_at (opcional)
    */
-  async resetFup(uniqueId: string): Promise<void> {
+  async resetFup(uniqueId: string, brainType?: string): Promise<void> {
+    // Re-arme: quando brainType fornecido, consulta fup_config espelhando upsertLead.
+    let fupNextAt: Date | null = null;
+
+    if (brainType) {
+      const configRows = await this.db
+        .select({
+          enabled: fupConfig.enabled,
+          intervalsSeconds: fupConfig.intervalsSeconds,
+          minHour: fupConfig.minHour,
+          maxHour: fupConfig.maxHour,
+          allowedDays: fupConfig.allowedDays,
+          timezone: fupConfig.timezone,
+        })
+        .from(fupConfig)
+        .where(eq(fupConfig.brainType, brainType))
+        .limit(1);
+
+      const config = configRows[0];
+      // Mesmo guard de upsertLead: re-armar só com config ativa e intervals não-vazio (Pitfall 2).
+      if (config?.enabled === true && config.intervalsSeconds.length > 0) {
+        const rawNextAt = new Date(Date.now() + config.intervalsSeconds[0]! * 1000);
+        fupNextAt = getNextValidSlot(
+          rawNextAt,
+          config.minHour,
+          config.maxHour,
+          config.allowedDays,
+          config.timezone,
+        );
+      }
+    }
+
     await this.db
       .update(leads)
       // WR-02: updatedAt incluído para consistência com setFullpp() e setIaAtivada().
       // fupEnabled intencionalmente ausente — D-19: lead permanece elegível para novo ciclo.
-      .set({ fupNextAt: null, fupStep: 0, updatedAt: new Date() })
+      .set({ fupNextAt, fupStep: 0, updatedAt: new Date() })
       .where(eq(leads.uniqueId, uniqueId));
   }
 }

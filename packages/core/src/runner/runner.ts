@@ -314,9 +314,10 @@ export class BrainRunner {
     // inclusive quando ia_ativada=false (scheduler de FUP precisa saber o último contato).
     await this.leadService.touchLastMessage(lead.uniqueId);
 
-    // FUP-06 / D-19: Cancelar FUPs pendentes quando lead responde.
-    // Seta fup_next_at=NULL e fup_step=0. fup_enabled permanece true.
-    await this.leadService.resetFup(lead.uniqueId);
+    // FUP-06 / D-19: Re-armar o ciclo de FUP quando o lead responde.
+    // Zera fup_step=0 e recalcula fup_next_at a partir de fup_config (step 0), de modo
+    // que o lead volte a ser elegível caso silencie de novo. fup_enabled permanece intocado.
+    await this.leadService.resetFup(lead.uniqueId, this.brain.brainType);
 
     // D-04/D-05: Gate ia_ativada — retorna null silenciosamente (LEAD-03)
     // Segurança: iaAtivada vem do banco (upsert), nunca do payload externo
