@@ -28,7 +28,7 @@ import { LeadService } from "../leads/lead-service.js";
 import type { Lead } from "../leads/lead-service.js";
 import { BrainOutputSchema } from "../output/schema.js";
 import type { IEventPublisher, ToolEvent } from "../events/event-publisher.js";
-import { EventPublisher } from "../events/event-publisher.js";
+import { EventPublisher, isErrorToolResult } from "../events/event-publisher.js";
 import type { IFupScheduler } from "../fup/fup-scheduler.js";
 import { FupScheduler } from "../fup/fup-scheduler.js";
 
@@ -393,6 +393,22 @@ export class BrainRunner {
           typeof msg.name === "string" &&
           TOOL_EVENTS_WHITELIST.has(msg.name)
         ) {
+          const resultContent =
+            typeof msg.content === "string"
+              ? msg.content
+              : JSON.stringify(msg.content);
+
+          // EVT-06: resultado marcado como falha não vira evento — publicá-lo faria o
+          // consumidor externo tratar um erro técnico como decisão de negócio
+          // T-20-02: logar apenas toolName/threadId — nunca a payload (PII do lead)
+          if (isErrorToolResult(resultContent)) {
+            this.logger.warn(
+              { toolName: msg.name, threadId },
+              "Tool result marcado como erro — evento não publicado (EVT-06)"
+            );
+            continue;
+          }
+
           toolEvents.push({
             event_id: `${threadId}:${msg.tool_call_id}`,
             action: msg.name,
@@ -401,10 +417,7 @@ export class BrainRunner {
               nome: lead.nome ?? null,
               numero: lead.numero,
             },
-            result:
-              typeof msg.content === "string"
-                ? msg.content
-                : JSON.stringify(msg.content),
+            result: resultContent,
             timestamp: new Date().toISOString(),
           });
         }

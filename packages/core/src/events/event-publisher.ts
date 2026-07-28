@@ -27,6 +27,32 @@ export interface IEventPublisher {
 }
 
 /**
+ * EVT-06: contrato genérico do SDK — resultado de tool marcado como falha não vira evento.
+ *
+ * Uma tool cujo resultado é um objeto JSON com `status: "error"` está sinalizando que a
+ * operação NÃO foi executada. Esse resultado não representa um desfecho de negócio e não
+ * deve chegar ao consumidor externo, que o interpretaria como decisão real — ex: uma
+ * qualificação que falhou por erro de LLM seria lida como lead desqualificado.
+ *
+ * Regra vale para qualquer tool de qualquer Brain; não há special-case por nome de tool.
+ * A ausência do campo `status` significa sucesso, então nenhuma payload já existente muda
+ * de comportamento. Conteúdo não-JSON (texto puro) também segue sendo publicado.
+ */
+export function isErrorToolResult(content: string): boolean {
+  try {
+    const parsed: unknown = JSON.parse(content);
+    return (
+      typeof parsed === "object" &&
+      parsed !== null &&
+      !Array.isArray(parsed) &&
+      (parsed as { status?: unknown }).status === "error"
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
  * NoopEventPublisher: usado quando TOOL_EVENTS_URL e TOOL_EVENTS_QUEUE estão ausentes.
  * BrainRunner usa NoopEventPublisher — EventPublisher nunca é instanciado sem ENVs.
  */
