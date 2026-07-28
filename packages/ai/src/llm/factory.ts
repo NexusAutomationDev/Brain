@@ -90,6 +90,35 @@ interface ModelSpec {
 }
 
 /**
+ * Remove o prefixo `models/` dos nomes de modelo do Google.
+ *
+ * O console do Google exibe o modelo como `models/gemini-3.1-flash-lite`, e é essa a
+ * grafia que normalmente se cola na ENV. Probe com as classes reais mostrou que as duas
+ * grafias produzem a MESMA request — não existe risco de `models/models/...`:
+ *   - `@langchain/google-genai@2.1.31` (chat_models.js:428) remove o prefixo:
+ *     `this.model = fields.model.replace(/^models\//, "")`;
+ *   - `@google/generative-ai@0.24.1` (index.mjs:1348-1355) o recoloca ao montar a URL,
+ *     mantendo o nome como está quando ele já contém "/".
+ *
+ * Normalizar aqui, então, NÃO é cosmético — é a dedup da cadeia que depende disso.
+ * `parseFallbackSpecs` deduplica por `provider:model` comparando strings; sem normalizar,
+ * `LLM_MODEL=gemini-3.1-flash-lite` + `LLM_FALLBACK_MODELS=models/gemini-3.1-flash-lite`
+ * montaria uma cadeia com o MESMO modelo saturado duas vezes — um "fallback" que só
+ * dobra a latência do lead durante o 503, exatamente a falha que a cadeia existe para
+ * evitar. Também mantém os labels de log em uma grafia só (a observabilidade ruim foi o
+ * que levou o time a diagnosticar "não há retry" quando havia).
+ *
+ * Escopado ao gemini de propósito: `models/` é convenção de nome do Google. Em outros
+ * providers o "/" faz parte do nome (OpenRouter usa `vendor/model`) e remover trocaria o
+ * modelo pedido. O regex é o mesmo do langchain — ancorado em `^models/` e aplicado uma
+ * única vez —, então `tunedModels/...` (caminho válido do SDK) sobrevive intacto.
+ */
+function normalizeModelName(provider: string, model: string): string {
+  if (provider !== "gemini" || typeof model !== "string") return model;
+  return model.replace(/^models\//, "");
+}
+
+/**
  * Faz o parse de LLM_FALLBACK_MODELS (CSV).
  *
  * Cada entrada é `model` (mesmo provider do primário) ou `provider:model` (cross-provider).
@@ -105,15 +134,23 @@ function parseFallbackSpecs(raw: string | undefined, primary: ModelSpec): ModelS
 
   for (const entry of raw.split(",").map((e) => e.trim()).filter(Boolean)) {
     const separator = entry.indexOf(":");
-    let spec: ModelSpec = { provider: primary.provider, model: entry };
+    let provider = primary.provider;
+    let model = entry;
 
     if (separator > 0) {
       const maybeProvider = entry.slice(0, separator).trim().toLowerCase();
       const maybeModel = entry.slice(separator + 1).trim();
       if (SUPPORTED_PROVIDERS.has(maybeProvider) && maybeModel) {
-        spec = { provider: maybeProvider, model: maybeModel };
+        provider = maybeProvider;
+        model = maybeModel;
       }
     }
+
+    // Normaliza ANTES de deduplicar — é o que faz `models/x` e `x` contarem como um só elo.
+    const spec: ModelSpec = { provider, model: normalizeModelName(provider, model) };
+    // Entrada degenerada (`models/` sozinho) vira nome vazio: descarta em vez de
+    // instanciar um modelo sem nome e só descobrir isso na hora do 503.
+    if (!spec.model) continue;
 
     const key = `${spec.provider}:${spec.model}`;
     if (seen.has(key)) continue;
@@ -135,7 +172,12 @@ function parseFallbackSpecs(raw: string | undefined, primary: ModelSpec): ModelS
  * Optional env vars (resiliência a erro transitório de provider):
  *   LLM_MAX_RETRIES     — retries por modelo antes do fallback (default: 2)
  *   LLM_FALLBACK_MODELS — CSV de modelos de fallback: `model` ou `provider:model`
+ *                         ex.: LLM_FALLBACK_MODELS=gemini-3.1-flash-lite
  *   API_KEY_<PROVIDER>  — key por provider, para fallback cross-provider
+ *
+ * Nomes de modelo do gemini aceitam as duas grafias — `gemini-3.1-flash-lite` e
+ * `models/gemini-3.1-flash-lite` (a do console do Google). São normalizadas para a forma
+ * sem prefixo, que é a que o `@langchain/google-genai` usa internamente.
  *
  * D-07: Throws ConfigurationError if LLM_PROVIDER is not set.
  * D-08: Supports openai, anthropic, gemini, openrouter.
@@ -159,8 +201,9 @@ export async function createLLM(options: LLMOptions = {}): Promise<BaseChatModel
     throw new ConfigurationError(`Unknown LLM_PROVIDER: ${provider}`, { provider });
   }
 
-  // model may be undefined — the provider SDK surfaces its own validation error
-  const modelStr = model as string;
+  // model may be undefined — the provider SDK surfaces its own validation error.
+  // normalizeModelName preserva `undefined` (guard de typeof), então esse contrato não muda.
+  const modelStr = normalizeModelName(provider, model as string);
   const maxRetries = resolveMaxRetries();
   const primarySpec: ModelSpec = { provider, model: modelStr };
 

@@ -272,3 +272,128 @@ describe("createLLM — configuração de retry e compatibilidade", () => {
     expect(result.content).toBe("resposta de gemini-2.5-flash");
   });
 });
+
+// O console do Google mostra o modelo como `models/<nome>`, e foi essa a grafia que o
+// usuário validou empiricamente contra a API real (`models/gemini-3.1-flash-lite`).
+// Probe com as classes REAIS provou que as duas grafias são a MESMA request:
+//   @langchain/google-genai@2.1.31 chat_models.js:428 remove o prefixo;
+//   @google/generative-ai@0.24.1  index.mjs:1348-1355 o recoloca ao montar a URL.
+// Ou seja: `models/models/...` é impossível — a biblioteca está segura.
+// O risco real é NOSSO: a dedup da cadeia compara strings, então sem normalizar
+// `models/x` e `x` contariam como modelos distintos.
+describe("createLLM — normalização do prefixo `models/` do Google", () => {
+  beforeEach(() => {
+    for (const key of Object.keys(BEHAVIOR)) delete BEHAVIOR[key];
+    INVOCATIONS = [];
+    delete process.env.LLM_PROVIDER;
+    delete process.env.LLM_MODEL;
+    delete process.env.API_KEY;
+    delete process.env.LLM_FALLBACK_MODELS;
+    delete process.env.LLM_MAX_RETRIES;
+    delete process.env.API_KEY_OPENAI;
+  });
+
+  it("REGRESSÃO: `models/x` como fallback de `x` é deduplicado — a cadeia não repete o modelo saturado", async () => {
+    // Sem normalizar, a cadeia viraria [gemini-3.1-flash-lite, gemini-3.1-flash-lite]:
+    // um "fallback" que tenta de novo o MESMO modelo saturado, só dobrando a latência do
+    // lead no 503. É exatamente a falha que esta sessão de debug existe para impedir.
+    process.env.LLM_PROVIDER = "gemini";
+    process.env.LLM_MODEL = "gemini-3.1-flash-lite";
+    process.env.API_KEY = "test-key";
+    process.env.LLM_FALLBACK_MODELS = "models/gemini-3.1-flash-lite";
+    BEHAVIOR["gemini-3.1-flash-lite"] = 503;
+
+    const llm = await createLLM();
+    await expect(llm.invoke("olá")).rejects.toThrow(/503/);
+    expect(INVOCATIONS).toEqual(["gemini-3.1-flash-lite"]);
+  });
+
+  it("prefixo no LLM_MODEL primário funciona e é normalizado na cadeia", async () => {
+    process.env.LLM_PROVIDER = "gemini";
+    process.env.LLM_MODEL = "models/gemini-3.5-flash";
+    process.env.API_KEY = "test-key";
+    process.env.LLM_FALLBACK_MODELS = "gemini-3.1-flash-lite";
+    BEHAVIOR["gemini-3.5-flash"] = 503;
+
+    const llm = await createLLM();
+    const result = (await llm.invoke("olá")) as unknown as { content: string };
+
+    expect(result.content).toBe("resposta de gemini-3.1-flash-lite");
+    expect(INVOCATIONS).toEqual(["gemini-3.5-flash", "gemini-3.1-flash-lite"]);
+  });
+
+  it("prefixo no LLM_FALLBACK_MODELS funciona (grafia validada pelo usuário)", async () => {
+    setupProduction("models/gemini-3.1-flash-lite");
+    BEHAVIOR["gemini-3.5-flash"] = 503;
+
+    const llm = await createLLM();
+    const result = (await llm.invoke("olá")) as unknown as { content: string };
+
+    expect(result.content).toBe("resposta de gemini-3.1-flash-lite");
+    expect(INVOCATIONS).toEqual(["gemini-3.5-flash", "gemini-3.1-flash-lite"]);
+  });
+
+  it("as duas grafias no mesmo CSV colapsam em um único elo", async () => {
+    setupProduction("models/gemini-3.1-flash-lite,gemini-3.1-flash-lite");
+    BEHAVIOR["gemini-3.5-flash"] = 503;
+
+    const llm = await createLLM();
+    const result = (await llm.invoke("olá")) as unknown as { content: string };
+
+    expect(result.content).toBe("resposta de gemini-3.1-flash-lite");
+    expect(INVOCATIONS).toEqual(["gemini-3.5-flash", "gemini-3.1-flash-lite"]);
+  });
+
+  it("combina com a sintaxe provider:model — `gemini:models/x`", async () => {
+    setupProduction("gemini:models/gemini-3.1-flash-lite");
+    BEHAVIOR["gemini-3.5-flash"] = 503;
+
+    const llm = await createLLM();
+    const result = (await llm.invoke("olá")) as unknown as { content: string };
+
+    expect(result.content).toBe("resposta de gemini-3.1-flash-lite");
+    expect(INVOCATIONS).toEqual(["gemini-3.5-flash", "gemini-3.1-flash-lite"]);
+  });
+
+  it("entrada degenerada `models/` (nome vazio após normalizar) é descartada", async () => {
+    setupProduction("models/,gemini-3.1-flash-lite");
+    BEHAVIOR["gemini-3.5-flash"] = 503;
+
+    const llm = await createLLM();
+    const result = (await llm.invoke("olá")) as unknown as { content: string };
+
+    expect(result.content).toBe("resposta de gemini-3.1-flash-lite");
+    expect(INVOCATIONS).toEqual(["gemini-3.5-flash", "gemini-3.1-flash-lite"]);
+  });
+
+  // Fronteiras da classe de equivalência: o que NÃO pode ser removido.
+  it("NÃO normaliza em outro provider — `models/` só é convenção do Google", async () => {
+    // Em OpenRouter/OpenAI o "/" faz parte do nome (`vendor/model`); remover trocaria o
+    // modelo pedido por outro. O strip precisa ser escopado ao provider gemini.
+    setupProduction("openai:models/gpt-4.1-mini");
+    process.env.API_KEY_OPENAI = "openai-key";
+    BEHAVIOR["gemini-3.5-flash"] = 503;
+
+    const llm = await createLLM();
+    const result = (await llm.invoke("olá")) as unknown as { content: string };
+
+    expect(result.content).toBe("resposta de models/gpt-4.1-mini");
+    expect(INVOCATIONS).toEqual(["gemini-3.5-flash", "models/gpt-4.1-mini"]);
+  });
+
+  it.each([
+    ["tunedModels/meu-modelo", "tunedModels/meu-modelo"],
+    ["models/models/gemini-x", "models/gemini-x"],
+  ])("paridade com o regex do langchain: %s -> %s", async (input, expected) => {
+    // `^models/` ancorado e removido UMA vez só — exatamente
+    // `fields.model.replace(/^models\//, "")` do chat_models.js:428. `tunedModels/` é um
+    // caminho válido do SDK e precisa sobreviver intacto.
+    setupProduction(input);
+    BEHAVIOR["gemini-3.5-flash"] = 503;
+
+    const llm = await createLLM();
+    const result = (await llm.invoke("olá")) as unknown as { content: string };
+
+    expect(result.content).toBe(`resposta de ${expected}`);
+  });
+});
