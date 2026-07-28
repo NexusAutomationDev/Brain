@@ -16,7 +16,7 @@ import type { IBrain, BrainBuildContext } from "@brain-pkg/core";
 import { createPauseSessionTool, createFinishConversationTool, createRespondTool, createSearchKnowledgeTool, hasToolCall, getFirstToolCallName } from "@brain-pkg/core";
 import { createEmbeddingProvider } from "@brain-pkg/embeddings";
 import type { IEmbeddingProvider } from "@brain-pkg/embeddings";
-import { qualifyLeadTool, runQualificationAgent } from "./qualifier.js";
+import { qualifyLeadTool, runQualificationAgent, serializeQualificationResult } from "./qualifier.js";
 import { createLogger } from "@brain-pkg/observability";
 
 const logger = createLogger();
@@ -123,7 +123,9 @@ export const sdrBrain: IBrain = {
           sessionId,
           ctx.prompts["qualification"] // D-04: prompt do banco — zero hardcode
         );
-        return JSON.stringify(result);
+        // Serialização centralizada — marca falha com status:"error" para o BrainRunner
+        // não publicar o evento como se fosse desqualificação
+        return serializeQualificationResult(result);
       },
       {
         name: qualifyLeadTool.name,

@@ -16,6 +16,30 @@ import postgres from "postgres";
 
 const logger = createLogger();
 
+// ─── Contrato de resultado ───────────────────────────────────────────────────
+
+/**
+ * Resultado da qualificação.
+ *
+ * `qualificado: null` significa **não foi possível analisar** — falha técnica
+ * (LLM indisponível, resposta não-parseável, banco inacessível). NÃO é uma
+ * desqualificação: o lead não foi avaliado. Consumidores devem tratar `null`
+ * como "sem informação", nunca como "lead rejeitado".
+ */
+export interface QualificationResult {
+  qualificado: boolean | null;
+  motivo: string;
+  proximo_passo: string;
+}
+
+/** Falha dentro do nó `analyze` — LLM não respondeu ou respondeu algo inutilizável. */
+const ANALYSIS_FAILED: QualificationResult = {
+  qualificado: null,
+  motivo: "Falha técnica ao analisar o histórico — a qualificação não foi realizada",
+  proximo_passo:
+    "Continue a conversa normalmente; não trate o lead como desqualificado",
+};
+
 // ─── Helpers de persistência ─────────────────────────────────────────────────
 
 async function saveQualificationToMemories(
@@ -115,10 +139,6 @@ const qualificationGraph = new StateGraph(QualificationAnnotation)
     const llm = await createLLM();
     const historyText = buildHistoryText(state.aiMessages, state.humanMessages);
 
-    let qualificado = false;
-    let motivo = "Não foi possível analisar o histórico";
-    let proximo_passo = "Continue a conversa normalmente para coletar mais informações";
-
     try {
       const response = await llm.invoke([
         { role: "system", content: state.qualificationPrompt },
@@ -133,18 +153,35 @@ const qualificationGraph = new StateGraph(QualificationAnnotation)
       const jsonStr = extractJSON(content);
       const parsed = JSON.parse(jsonStr);
 
-      // Validar campos obrigatórios
-      if (typeof parsed.qualificado === "boolean") qualificado = parsed.qualificado;
-      if (typeof parsed.motivo === "string" && parsed.motivo) motivo = parsed.motivo;
-      if (typeof parsed.proximo_passo === "string" && parsed.proximo_passo)
-        proximo_passo = parsed.proximo_passo;
+      // Sem o booleano não há veredito — resposta inutilizável é falha, não um `false`.
+      // Cair no catch abaixo devolve `null`; devolver `false` aqui inventaria uma
+      // desqualificação que o modelo nunca emitiu.
+      if (typeof parsed.qualificado !== "boolean") {
+        throw new Error(
+          "campo 'qualificado' ausente ou não-booleano na resposta do LLM"
+        );
+      }
+
+      return {
+        qualificado: parsed.qualificado,
+        motivo:
+          typeof parsed.motivo === "string" && parsed.motivo
+            ? parsed.motivo
+            : "Sem motivo informado pelo modelo",
+        proximo_passo:
+          typeof parsed.proximo_passo === "string" && parsed.proximo_passo
+            ? parsed.proximo_passo
+            : "Continue a conversa normalmente para coletar mais informações",
+      };
     } catch (err) {
       // Pitfall 5: Fallback gracioso — não derruba a conversa principal
       // RESOLVED: Retornar fallback em vez de throw (Open Question Q2 — RESEARCH.md)
-      logger.warn({ err }, "Qualification sub-agent: JSON parse failed — using fallback");
+      logger.warn(
+        { err },
+        "Qualification sub-agent: analysis failed — returning null (não é desqualificação)"
+      );
+      return { ...ANALYSIS_FAILED };
     }
-
-    return { qualificado, motivo, proximo_passo };
   })
   .addEdge("__start__", "analyze")
   .addEdge("analyze", "__end__");
@@ -165,17 +202,18 @@ const compiledQualificationGraph = qualificationGraph.compile();
  * @param qualificationPrompt - Prompt do banco para o sub-agente (ctx.prompts["qualification"]).
  *   Em produção, SEMPRE fornecido pelo boundQualifyTool em brain.ts (SDR-04).
  *   Fallback mínimo usado apenas em chamadas diretas sem contexto de BrainRunner.
- * @returns {qualificado, motivo, proximo_passo}
+ * @returns {qualificado, motivo, proximo_passo} — `qualificado: null` quando a análise falhou
  */
 export async function runQualificationAgent(
   description: string,
   sessionId: string,
   qualificationPrompt?: string
-): Promise<{ qualificado: boolean; motivo: string; proximo_passo: string }> {
-  const fallback = {
-    qualificado: false,
-    motivo: "Não foi possível analisar no momento",
-    proximo_passo: "Continue a conversa normalmente para coletar mais informações",
+): Promise<QualificationResult> {
+  const fallback: QualificationResult = {
+    qualificado: null,
+    motivo: "Falha técnica ao acessar o histórico — a qualificação não foi realizada",
+    proximo_passo:
+      "Continue a conversa normalmente; não trate o lead como desqualificado",
   };
 
   const dbUrl = process.env.DATABASE_URL;
@@ -228,26 +266,56 @@ export async function runQualificationAgent(
       qualificationPrompt: resolvedPrompt,
     });
 
-    const finalResult = {
-      qualificado: result.qualificado ?? false,
+    const finalResult: QualificationResult = {
+      qualificado: result.qualificado ?? null,
       motivo: result.motivo || fallback.motivo,
       proximo_passo: result.proximo_passo || fallback.proximo_passo,
     };
 
-    // Persiste resultado na tabela memories (key: "qualification") — fire-and-forget com log
-    saveQualificationToMemories(
-      dbUrl,
-      sessionId,
-      finalResult.qualificado,
-      finalResult.motivo,
-      finalResult.proximo_passo
-    ).catch((err) => logger.warn({ err, sessionId }, "Qualification: falha ao salvar em memories"));
+    // Persiste resultado na tabela memories (key: "qualification") — fire-and-forget com log.
+    // O UPSERT usa ON CONFLICT DO UPDATE: gravar uma falha aqui sobrescreveria uma
+    // qualificação genuína anterior. Resultado indeterminado não toca no banco.
+    if (finalResult.qualificado !== null) {
+      saveQualificationToMemories(
+        dbUrl,
+        sessionId,
+        finalResult.qualificado,
+        finalResult.motivo,
+        finalResult.proximo_passo
+      ).catch((err) => logger.warn({ err, sessionId }, "Qualification: falha ao salvar em memories"));
+    } else {
+      logger.warn(
+        { sessionId },
+        "Qualification: resultado indeterminado — memories preservado, evento não publicado"
+      );
+    }
 
     return finalResult;
   } catch (err) {
     logger.error({ err, sessionId }, "Qualification agent error — returning fallback");
     return fallback;
   }
+}
+
+// ─── serializeQualificationResult ────────────────────────────────────────────
+
+/**
+ * Converte o resultado na string de conteúdo da ToolMessage — único ponto de
+ * serialização (usado por qualifyLeadTool aqui e por boundQualifyTool em brain.ts).
+ *
+ * Quando `qualificado` é `null`, a payload ganha `status: "error"`. Esse marcador é
+ * lido por `isErrorToolResult` (packages/core/src/events/event-publisher.ts) e faz o
+ * BrainRunner NÃO publicar o evento no canal de saída — sem ele, o consumidor externo
+ * leria uma falha técnica como lead desqualificado.
+ *
+ * No caminho de sucesso a payload permanece byte-idêntica à anterior (sem `status`),
+ * para não quebrar consumidores já integrados ao webhook.
+ */
+export function serializeQualificationResult(result: QualificationResult): string {
+  if (result.qualificado === null) {
+    return JSON.stringify({ status: "error", ...result });
+  }
+  return JSON.stringify(result);
 }
 
 // ─── qualifyLeadTool ─────────────────────────────────────────────────────────
@@ -270,7 +338,7 @@ export const qualifyLeadTool = tool(
     // (ex: testes unitários de schema). Em produção, boundQualifyTool é usado.
     logger.info({ session_id }, "qualify_lead tool called (without qualification prompt)");
     const result = await runQualificationAgent(description, session_id);
-    return JSON.stringify(result);
+    return serializeQualificationResult(result);
   },
   {
     name: "qualify_lead",
