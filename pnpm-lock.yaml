@@ -167,6 +167,9 @@ importers:
 
   packages/ai:
     dependencies:
+      '@brain-pkg/observability':
+        specifier: workspace:*
+        version: link:../observability
       '@brain-pkg/shared':
         specifier: workspace:*
         version: link:../shared
