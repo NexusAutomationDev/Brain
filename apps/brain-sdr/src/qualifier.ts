@@ -98,18 +98,36 @@ const QualificationAnnotation = Annotation.Root({
   }),
 });
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// ─── Schema de saída ─────────────────────────────────────────────────────────
 
-/** Extrai primeiro bloco JSON válido do conteúdo do LLM (Pitfall 5 do RESEARCH.md) */
-function extractJSON(text: string): string {
-  // Remove code fences se presentes: ```json...```
-  const codeFenceMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-  if (codeFenceMatch) return codeFenceMatch[1];
-  // Extrai primeiro objeto JSON encontrado
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
-  if (jsonMatch) return jsonMatch[0];
-  return text;
-}
+/**
+ * Contrato de saída imposto ao provider via withStructuredOutput().
+ *
+ * Substitui a extração e o parse manual: antes o shape era pedido apenas em texto no
+ * prompt, e nenhum modelo era obrigado a cumpri-lo. Um modelo fraco devolvendo JSON válido
+ * com chaves diferentes passava pelo parse e virava `qualificado: false` silenciosamente
+ * (debug qualify-lead-falso-negativo-json-shape).
+ *
+ * As descrições viajam para o provider como parte do schema — são elas que instruem o
+ * modelo, no lugar da instrução textual removida da mensagem human.
+ */
+const QualificationOutputSchema = z.object({
+  qualificado: z
+    .boolean()
+    .describe(
+      "true se o lead demonstrou necessidade clara, autoridade de decisão, urgência e budget compatível; false caso contrário"
+    ),
+  motivo: z
+    .string()
+    .describe("Explicação objetiva em 1-2 frases de por que qualificou ou não"),
+  proximo_passo: z
+    .string()
+    .describe(
+      "Ação específica que o Brain principal deve tomar — ex: agendar demo, solicitar informações sobre budget, transferir para humano"
+    ),
+});
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 /** Formata histórico de mensagens como texto para o sub-agente analisar */
 function buildHistoryText(
@@ -140,38 +158,39 @@ const qualificationGraph = new StateGraph(QualificationAnnotation)
     const historyText = buildHistoryText(state.aiMessages, state.humanMessages);
 
     try {
-      const response = await llm.invoke([
-        { role: "system", content: state.qualificationPrompt },
-        {
-          role: "human",
-          content: `Descrição do momento da conversa: ${state.description}\n\nHistórico completo:\n${historyText}\n\nResponda EXCLUSIVAMENTE em JSON: {"qualificado": true/false, "motivo": "...", "proximo_passo": "..."}`,
-        },
-      ]);
-
-      const content =
-        typeof response.content === "string" ? response.content : "";
-      const jsonStr = extractJSON(content);
-      const parsed = JSON.parse(jsonStr);
-
-      // Sem o booleano não há veredito — resposta inutilizável é falha, não um `false`.
-      // Cair no catch abaixo devolve `null`; devolver `false` aqui inventaria uma
-      // desqualificação que o modelo nunca emitiu.
-      if (typeof parsed.qualificado !== "boolean") {
+      // Guard defensivo: provider sem structured output cai no catch e devolve `null` —
+      // comportamento seguro em vez de silenciosamente voltar a confiar no prompt.
+      if (typeof llm.withStructuredOutput !== "function") {
         throw new Error(
-          "campo 'qualificado' ausente ou não-booleano na resposta do LLM"
+          "provider LLM não suporta withStructuredOutput — qualificação exige schema imposto"
         );
       }
 
+      // A cadeia de fallback vale nesta rota: withModelFallback intercepta
+      // withStructuredOutput (packages/ai/src/llm/fallback.ts). Sem esse trap o runnable
+      // ficaria preso ao modelo primário.
+      const structuredLlm = llm.withStructuredOutput(QualificationOutputSchema, {
+        name: "qualificacao_lead",
+      });
+
+      // A instrução "Responda EXCLUSIVAMENTE em JSON: {...}" foi removida daqui de
+      // propósito: com structured output o provider já impõe o shape, e mandar o modelo
+      // responder em JSON o induz a emitir texto em vez de preencher o schema — que é
+      // justamente o caminho que falhou em produção.
+      const parsed = await structuredLlm.invoke([
+        { role: "system", content: state.qualificationPrompt },
+        {
+          role: "human",
+          content: `Descrição do momento da conversa: ${state.description}\n\nHistórico completo:\n${historyText}`,
+        },
+      ]);
+
       return {
         qualificado: parsed.qualificado,
-        motivo:
-          typeof parsed.motivo === "string" && parsed.motivo
-            ? parsed.motivo
-            : "Sem motivo informado pelo modelo",
+        motivo: parsed.motivo || "Sem motivo informado pelo modelo",
         proximo_passo:
-          typeof parsed.proximo_passo === "string" && parsed.proximo_passo
-            ? parsed.proximo_passo
-            : "Continue a conversa normalmente para coletar mais informações",
+          parsed.proximo_passo ||
+          "Continue a conversa normalmente para coletar mais informações",
       };
     } catch (err) {
       // Pitfall 5: Fallback gracioso — não derruba a conversa principal
@@ -254,7 +273,11 @@ export async function runQualificationAgent(
     const aiMessages = allMessages.filter((m) => m._getType() === "ai");
     const humanMessages = allMessages.filter((m) => m._getType() === "human");
 
-    logger.debug(
+    // Nível info de propósito: produção roda com LOG_LEVEL=info (.env.example:68), então a
+    // versão debug desta linha nunca era impressa — e sem ela não havia como provar se o
+    // sub-agente recebeu histórico ou analisou o vazio (debug qualify-lead-falso-negativo-
+    // json-shape). Loga apenas contadores; nunca conteúdo de mensagem.
+    logger.info(
       { sessionId, aiCount: aiMessages.length, humanCount: humanMessages.length },
       "Qualification agent: history fetched"
     );
