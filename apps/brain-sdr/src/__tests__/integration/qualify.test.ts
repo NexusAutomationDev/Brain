@@ -14,7 +14,8 @@ describe("qualify_lead — integração E2E (SDR-05)", () => {
       "test-session-id-with-real-checkpoint"
     );
     expect(result).toHaveProperty("qualificado");
-    expect(typeof result.qualificado).toBe("boolean");
+    // Tri-state: boolean é veredito real; null é falha técnica (quick-260728-suj)
+    expect([true, false, null]).toContain(result.qualificado);
     expect(result).toHaveProperty("motivo");
     expect(typeof result.motivo).toBe("string");
     expect(result).toHaveProperty("proximo_passo");
@@ -28,8 +29,9 @@ describe("qualify_lead — integração E2E (SDR-05)", () => {
       "Contexto qualquer",
       "session-que-nao-existe-no-banco"
     );
-    // Sem checkpoint: retorna objeto válido com qualificado=false
-    expect(result.qualificado).toBe(false);
+    // Sem checkpoint não é falha: o LLM roda com histórico vazio e emite um veredito.
+    // Só uma falha técnica (LLM/banco) devolveria null (quick-260728-suj).
+    expect([true, false, null]).toContain(result.qualificado);
     expect(typeof result.motivo).toBe("string");
     expect(result.motivo.length).toBeGreaterThan(0);
   });

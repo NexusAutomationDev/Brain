@@ -4,14 +4,16 @@ import { resolve } from "path";
 
 // Gap 9-02-02: PostgresSaver.getTuple() sem setup(); fallback em erro (SDR-05)
 
-describe("runQualificationAgent — fallback quando DATABASE_URL ausente (SDR-05)", () => {
-  test("retorna objeto fallback válido quando DATABASE_URL não está definida", async () => {
+describe("runQualificationAgent — falha técnica devolve null, não false (quick-260728-suj)", () => {
+  test("qualificado é null (não false) quando DATABASE_URL não está definida", async () => {
     const saved = process.env.DATABASE_URL;
     delete process.env.DATABASE_URL;
     try {
       const { runQualificationAgent } = await import("../../qualifier.js");
       const result = await runQualificationAgent("Lead interessado no produto", "session-unit-001");
-      expect(result.qualificado).toBe(false);
+      // null = não foi possível analisar. `false` significaria lead desqualificado,
+      // um veredito que ninguém emitiu.
+      expect(result.qualificado).toBeNull();
       expect(typeof result.motivo).toBe("string");
       expect(result.motivo.length).toBeGreaterThan(0);
       expect(typeof result.proximo_passo).toBe("string");
@@ -19,6 +21,48 @@ describe("runQualificationAgent — fallback quando DATABASE_URL ausente (SDR-05
     } finally {
       if (saved !== undefined) process.env.DATABASE_URL = saved;
     }
+  });
+});
+
+describe("serializeQualificationResult — marcador de erro na ToolMessage", () => {
+  test("qualificado null produz payload com status 'error'", async () => {
+    const { serializeQualificationResult } = await import("../../qualifier.js");
+    const payload = JSON.parse(
+      serializeQualificationResult({
+        qualificado: null,
+        motivo: "Falha técnica",
+        proximo_passo: "Continue a conversa",
+      })
+    );
+    expect(payload.status).toBe("error");
+    expect(payload.qualificado).toBeNull();
+  });
+
+  test("qualificado false NÃO carrega status — payload de sucesso inalterada", async () => {
+    const { serializeQualificationResult } = await import("../../qualifier.js");
+    const payload = JSON.parse(
+      serializeQualificationResult({
+        qualificado: false,
+        motivo: "Lead sem orçamento",
+        proximo_passo: "Encerrar cordialmente",
+      })
+    );
+    // Compatibilidade: consumidores já integrados ao webhook não veem campo novo
+    expect(payload).not.toHaveProperty("status");
+    expect(payload.qualificado).toBe(false);
+  });
+
+  test("qualificado true NÃO carrega status", async () => {
+    const { serializeQualificationResult } = await import("../../qualifier.js");
+    const payload = JSON.parse(
+      serializeQualificationResult({
+        qualificado: true,
+        motivo: "Lead com fit e orçamento",
+        proximo_passo: "Agendar reunião",
+      })
+    );
+    expect(payload).not.toHaveProperty("status");
+    expect(payload.qualificado).toBe(true);
   });
 });
 
@@ -91,5 +135,17 @@ describe("PGB-TD01: prepare: false em saveQualificationToMemories", () => {
     // Mesmo padrao de PGB-05 em migrate.test.ts (linhas 126-132)
     const hasPrepare = /postgres\(dbUrl,\s*\{[^}]*prepare:\s*false/.test(codeLines);
     expect(hasPrepare).toBe(true);
+  });
+});
+
+describe("quick-260728-suj: memories não é sobrescrito por falha de qualificação", () => {
+  const src = readFileSync(resolve(import.meta.dir, "../../qualifier.ts"), "utf-8");
+  const codeLines = src.split("\n").filter(l => !l.trim().startsWith("//")).join("\n");
+
+  test("saveQualificationToMemories está sob guard de qualificado !== null", () => {
+    // O UPSERT usa ON CONFLICT DO UPDATE — gravar uma falha apagaria a qualificação anterior
+    expect(codeLines).toMatch(
+      /if\s*\(\s*finalResult\.qualificado\s*!==\s*null\s*\)\s*\{[\s\S]*?saveQualificationToMemories\(/
+    );
   });
 });

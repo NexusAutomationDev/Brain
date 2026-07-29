@@ -49,7 +49,7 @@ mock.module("@brain-pkg/shared", () => ({
 }));
 
 // Import APÓS os mocks
-const { EventPublisher, NoopEventPublisher } = await import("../../event-publisher.js");
+const { EventPublisher, NoopEventPublisher, isErrorToolResult } = await import("../../event-publisher.js");
 
 // --- Helper: evento de teste ---
 function makeEvent(overrides: Partial<{
@@ -308,5 +308,32 @@ describe("NoopEventPublisher", () => {
   test("close() resolve sem lançar", async () => {
     const noop = new NoopEventPublisher();
     await expect(noop.close()).resolves.toBeUndefined();
+  });
+});
+
+// EVT-06 (quick-260728-suj): resultado de tool marcado como erro não vira evento
+describe("isErrorToolResult", () => {
+  test("objeto com status 'error' → true", () => {
+    expect(isErrorToolResult('{"status":"error","qualificado":null}')).toBe(true);
+  });
+
+  test("payload sem campo status → false (comportamento atual preservado)", () => {
+    expect(isErrorToolResult(makeEvent().result)).toBe(false);
+  });
+
+  test("objeto com status 'ok' → false", () => {
+    expect(isErrorToolResult('{"status":"ok","qualificado":true}')).toBe(false);
+  });
+
+  test("string não-JSON → false (tools que devolvem texto puro seguem publicando)", () => {
+    expect(isErrorToolResult("ok")).toBe(false);
+  });
+
+  test("array JSON → false", () => {
+    expect(isErrorToolResult("[]")).toBe(false);
+  });
+
+  test("literal null → false", () => {
+    expect(isErrorToolResult("null")).toBe(false);
   });
 });
