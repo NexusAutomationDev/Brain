@@ -164,11 +164,17 @@ function proxyWithInvoke<T extends object>(
  * `BaseChatModel` — inclusive `bindTools()`, que é o caminho usado pelos Brains
  * (`ctx.llm.bindTools(tools)` em `buildGraph()`).
  *
- * O fallback é aplicado nos DOIS caminhos:
- *   - `llm.invoke(...)`            — qualifier, FupScheduler
- *   - `llm.bindTools(t).invoke()`  — nó `llm` do grafo (brain-sdr, brain-support)
+ * O fallback é aplicado nos TRÊS caminhos:
+ *   - `llm.invoke(...)`                        — FupScheduler
+ *   - `llm.bindTools(t).invoke()`              — nó `llm` do grafo (brain-sdr, brain-support)
+ *   - `llm.withStructuredOutput(s).invoke()`   — sub-agente de qualificação (brain-sdr)
  *
  * Cobrir só o primeiro deixaria justamente o Brain que quebrou em produção sem proteção.
+ *
+ * Por que cada rota precisa de trap explícito: `proxyWithInvoke` só substitui `invoke` e o
+ * que estiver em `extraTraps`. Qualquer outro método cai em `value.bind(obj)` e fica ligado
+ * ao modelo PRIMÁRIO — então um `withStructuredOutput` sem trap devolveria um runnable preso
+ * ao modelo saturado, que é exatamente o cenário que a cadeia existe para evitar.
  *
  * @returns o próprio modelo primário quando não há fallbacks (zero overhead / zero mudança
  *   de comportamento), ou um proxy com a cadeia ativa.
@@ -183,6 +189,7 @@ export function withModelFallback(
   const chain: FallbackCandidate[] = [{ label: primaryLabel, model: primary }, ...fallbacks];
 
   const supportsTools = typeof primary.bindTools === "function";
+  const supportsStructuredOutput = typeof primary.withStructuredOutput === "function";
 
   const boundToolsTrap = supportsTools
     ? {
@@ -208,6 +215,32 @@ export function withModelFallback(
       }
     : {};
 
+  // Mesma construção do boundToolsTrap, sobre o MESMO array `chain` — é isso que garante
+  // que as duas rotas degradam pela mesma sequência de modelos.
+  const structuredOutputTrap = supportsStructuredOutput
+    ? {
+        withStructuredOutput: (
+          outputSchema: Parameters<NonNullable<BaseChatModel["withStructuredOutput"]>>[0],
+          config?: unknown,
+        ) => {
+          const bound = chain.map((c) => ({
+            label: c.label,
+            runnable: c.model.withStructuredOutput!(outputSchema, config as never),
+          }));
+
+          const candidates: Invocable[] = bound.map((b) => ({
+            label: b.label,
+            invoke: (input: unknown, options?: unknown) =>
+              b.runnable.invoke(input as never, options as never) as Promise<unknown>,
+          }));
+
+          return proxyWithInvoke(bound[0]!.runnable as object, () => (input, options) =>
+            invokeChain(candidates, input, options),
+          );
+        },
+      }
+    : {};
+
   return proxyWithInvoke(
     primary,
     () => (input, options) =>
@@ -219,6 +252,6 @@ export function withModelFallback(
         input,
         options,
       ),
-    boundToolsTrap,
+    { ...boundToolsTrap, ...structuredOutputTrap },
   ) as BaseChatModel;
 }

@@ -54,6 +54,15 @@ class FakeChatModel {
       invoke: (i: unknown, o?: unknown) => this.invoke(i, o),
     };
   }
+
+  withStructuredOutput(
+    schema: unknown
+  ): { schema: unknown; invoke: (i: unknown, o?: unknown) => Promise<{ content: string }> } {
+    return {
+      schema,
+      invoke: (i: unknown, o?: unknown) => this.invoke(i, o),
+    };
+  }
 }
 
 mock.module("@langchain/openai", () => ({
@@ -120,6 +129,22 @@ describe("createLLM — fallback de modelo em erro transitório do provider", ()
     expect(llm.bindTools).toBeDefined();
     const bound = llm.bindTools!([{ name: "HTTP_Request" }]);
     const result = (await bound.invoke("olá")) as unknown as { content: string };
+
+    expect(result.content).toBe("resposta de gemini-2.5-flash");
+    expect(INVOCATIONS).toEqual(["gemini-3.5-flash", "gemini-2.5-flash"]);
+  });
+
+  it("REGRESSÃO: fallback também vale em withStructuredOutput() — sub-agente de qualificação", async () => {
+    // qualifier.ts usa llm.withStructuredOutput(schema).invoke(). Sem trap no proxy,
+    // o runnable ficaria preso ao modelo primário via value.bind(obj) — e o sub-agente
+    // falharia por completo quando o primário está saturado, em vez de degradar.
+    setupProduction("gemini-2.5-flash");
+    BEHAVIOR["gemini-3.5-flash"] = 503;
+
+    const llm = await createLLM();
+    expect(llm.withStructuredOutput).toBeDefined();
+    const structured = llm.withStructuredOutput!({ type: "object" });
+    const result = (await structured.invoke("olá")) as unknown as { content: string };
 
     expect(result.content).toBe("resposta de gemini-2.5-flash");
     expect(INVOCATIONS).toEqual(["gemini-3.5-flash", "gemini-2.5-flash"]);
