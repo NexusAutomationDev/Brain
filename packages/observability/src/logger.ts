@@ -27,9 +27,46 @@ export interface LogContext {
  * Security note (T-03-01): Never pass DATABASE_URL or secrets in LogContext.
  * Context is intentionally limited to identifiers (tenantId, brainId, sessionId, userId).
  */
+/** Níveis aceitos pelo pino. Qualquer outro valor faz o construtor lançar. */
+const VALID_LOG_LEVELS = new Set([
+  'trace',
+  'debug',
+  'info',
+  'warn',
+  'error',
+  'fatal',
+  'silent',
+]);
+
+/**
+ * Resolve LOG_LEVEL tolerando lixo na ENV.
+ *
+ * `pino()` LANÇA quando o nível é desconhecido, e `createLogger()` é chamado em import time
+ * em vários módulos (ex.: packages/ai/src/llm/fallback.ts:4). Um typo de uma tecla —
+ * `LOG_LEVEL==info` no compose vira o valor `"=info"` — derrubava o container inteiro antes
+ * de qualquer log útil sair, com um stack trace do pino que não aponta para a causa.
+ *
+ * Aqui um valor inválido vira aviso e cai para `info`: o operador vê o problema no stdout,
+ * com o valor recebido, e o Brain continua de pé.
+ */
+function resolveLogLevel(): string {
+  const raw = process.env.LOG_LEVEL;
+  if (raw === undefined || raw.trim() === '') return 'info';
+
+  const normalized = raw.trim().toLowerCase();
+  if (VALID_LOG_LEVELS.has(normalized)) return normalized;
+
+  // console.warn e não logger.warn: o logger ainda não existe neste ponto.
+  console.warn(
+    `[observability] LOG_LEVEL inválido: ${JSON.stringify(raw)} — usando "info". ` +
+      `Valores aceitos: ${[...VALID_LOG_LEVELS].join(', ')}`
+  );
+  return 'info';
+}
+
 export function createLogger(context: LogContext = {}) {
   return pino({
-    level: process.env.LOG_LEVEL || 'info',
+    level: resolveLogLevel(),
     formatters: {
       level: (label) => ({ level: label }),
     },

@@ -149,3 +149,33 @@ describe("quick-260728-suj: memories não é sobrescrito por falha de qualifica�
     );
   });
 });
+
+// quick-260728-tjb: o shape da saída passa a ser imposto pelo provider, não pedido por prompt
+describe("quick-260728-tjb: structured output e observabilidade do histórico", () => {
+  const src = readFileSync(resolve(import.meta.dir, "../../qualifier.ts"), "utf-8");
+  const codeLines = src.split("\n").filter(l => !l.trim().startsWith("//") && !l.trim().startsWith("*")).join("\n");
+
+  test("usa withStructuredOutput para impor o schema ao provider", () => {
+    expect(codeLines).toMatch(/withStructuredOutput\(QualificationOutputSchema/);
+  });
+
+  test("não faz parse manual de JSON — foi o caminho do falso negativo em produção", () => {
+    expect(codeLines).not.toMatch(/JSON\.parse/);
+    expect(codeLines).not.toMatch(/extractJSON/);
+  });
+
+  test("não instrui o modelo a responder em JSON — induziria texto no lugar do schema", () => {
+    expect(codeLines).not.toMatch(/Responda EXCLUSIVAMENTE em JSON/);
+  });
+
+  test("schema declara os três campos do contrato", () => {
+    expect(codeLines).toMatch(/qualificado:\s*z\s*\n?\s*\.boolean\(\)/);
+    expect(codeLines).toMatch(/motivo:\s*z\s*\n?\s*\.string\(\)/);
+    expect(codeLines).toMatch(/proximo_passo:\s*z\s*\n?\s*\.string\(\)/);
+  });
+
+  test("history fetched loga em info, não debug — produção roda com LOG_LEVEL=info", () => {
+    expect(codeLines).toMatch(/logger\.info\(\s*\{\s*sessionId,\s*aiCount/);
+    expect(codeLines).not.toMatch(/logger\.debug/);
+  });
+});
