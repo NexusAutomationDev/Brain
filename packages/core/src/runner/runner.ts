@@ -17,7 +17,7 @@ import { createTracingCallbacks } from "@brain-pkg/observability";
 import { createLogger } from "@brain-pkg/observability";
 import { ConfigurationError, BrainOutputValidationError } from "@brain-pkg/shared";
 import type { BrainOutput, TokenUsage } from "@brain-pkg/shared";
-import { ToolMessage } from "@langchain/core/messages";
+import { ToolMessage, AIMessage } from "@langchain/core/messages";
 import type { BaseMessage } from "@langchain/core/messages";
 import type { BrainEvent } from "@brain-pkg/transport";
 import type { Sql } from "postgres";
@@ -273,6 +273,35 @@ export class BrainRunner {
     this.prompts = await loadPrompts(this.sql, this.brain.brainType, this.brain.promptKeys);
     await this._compileGraph();
     this.logger.info({ brainId: this.brain.id }, "Prompts refreshed and graph recompiled");
+  }
+
+  /**
+   * D-1: Inject a synthetic AIMessage directly into a thread's LangGraph checkpoint,
+   * without invoking the graph or generating a real LLM response.
+   *
+   * Works even for a thread_id without a prior checkpoint — updateState() falls back to
+   * the `messages` channel default `[]` defined in BrainStateAnnotation.
+   *
+   * Called by POST /debug/inject-message handler.
+   */
+  async injectMessage(threadId: string, content: string): Promise<void> {
+    if (!this.compiledGraph) {
+      throw new ConfigurationError(
+        "BrainRunner.init() must be called before injectMessage()",
+        { brainId: this.brain.id }
+      );
+    }
+
+    await this.compiledGraph.updateState(
+      { configurable: { thread_id: threadId } },
+      { messages: [new AIMessage(content)] }
+    );
+
+    // SECURITY: never log `content` — may hold arbitrary admin-supplied text
+    this.logger.info(
+      { brainId: this.brain.id, threadId },
+      "Debug message injected into thread checkpoint"
+    );
   }
 
   /**
