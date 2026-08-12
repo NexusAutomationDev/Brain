@@ -10,9 +10,15 @@ O primeiro Brain real (SDR) foi entregue no v1.1 — atende leads no WhatsApp co
 
 Uma infraestrutura de agentes modular onde novos Brains são criados definindo apenas prompts, tools, embeddings e fluxos — sem reescrever a base.
 
-## Current Milestone
+## Current Milestone: v1.6 Transferência de Lead entre Agentes + Seed por Brain
 
-Nenhum milestone ativo — v1.5 foi entregue em 2026-07-02. Rode `/gsd-new-milestone` para iniciar o próximo ciclo (v1.6).
+**Goal:** Corrigir o seeding de cada Brain para ser específico do seu próprio tipo (prompts + fup_config + prompt padrão de FUP) e construir a capacidade de um agente transferir um lead ativo (dados + contexto de conversa) para outro agente, possivelmente em outro banco de dados.
+
+**Target features:**
+- Seed de prompts escopado por `brain_type` — cada imagem só roda o seed do seu próprio tipo, sem prompt de outro Brain vazando pro banco
+- Seed padrão de `fup_config` + prompt `key='fup'` para cada Brain existente (sdr, support, echo) — FUP passa a funcionar out-of-the-box em banco novo
+- Mecanismo (tool) para a IA decidir transferir o lead para outro agente, com nomes de agente configuráveis (não fixos em 2-3 tipos)
+- Transferência do lead completo (dados + contexto de conversa) para o banco do agente destino, que assume o atendimento
 
 ## Last Milestone: v1.5 Embedding SDK + Brain Suporte + Tech Debt — SHIPPED 2026-07-02
 

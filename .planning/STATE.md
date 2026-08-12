@@ -1,10 +1,10 @@
 ---
 gsd_state_version: 1.0
-milestone: none
-milestone_name: null
-status: Milestone shipped — awaiting next milestone
-last_updated: "2026-07-02T15:20:00.000Z"
-last_activity: 2026-07-02
+milestone: v1.6
+milestone_name: Transferência de Lead entre Agentes + Seed por Brain
+status: planning
+last_updated: "2026-08-12T22:46:56.464Z"
+last_activity: 2026-08-12
 progress:
   total_phases: 0
   completed_phases: 0
@@ -25,7 +25,10 @@ See: .planning/PROJECT.md (updated 2026-07-02 after v1.5 milestone shipped)
 
 ## Current Position
 
-No active phase. v1.5 milestone complete and archived.
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-08-12 — Milestone v1.6 started
 
 ## Milestone v1.5 Summary — SHIPPED 2026-07-02
 
