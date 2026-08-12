@@ -2,11 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Transferência de Lead entre Agentes + Seed por Brain
+current_phase: 33
+current_phase_name: Seed por Tipo de Brain
 status: planning
-last_updated: "2026-08-12T22:46:56.464Z"
+stopped_at: Phase 33 context gathered
+last_updated: "2026-08-12T23:23:26.662Z"
 last_activity: 2026-08-12
+last_activity_desc: ROADMAP.md created for v1.6 (Phases 33-35), REQUIREMENTS.md traceability filled (15/15 mapped)
 progress:
-  total_phases: 3
+  total_phases: 4
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -122,3 +126,9 @@ Run `/gsd-plan-phase 33` to plan Phase 33 (Seed por Tipo de Brain).
 | 260803-g4j | Endpoint de debug POST /debug/inject-message (X-Admin-Token, mesmo padrão de segurança do /reload-prompts) que chama BrainRunner.injectMessage() → compiledGraph.updateState() pra injetar uma AIMessage no thread do LangGraph sem rodar o LLM; funciona mesmo sem checkpoint prévio; +16 testes | 2026-08-03 | 8423284, beedaca, 79e80f0 | [260803-g4j-adicionar-endpoint-de-debug-para-injetar](./quick/260803-g4j-adicionar-endpoint-de-debug-para-injetar/) |
 
 Last activity: 2026-08-12 - ROADMAP.md criado para v1.6 (Phases 33-35): Seed por Tipo de Brain → Fundação de Handoff (Agents + DBLink) → Execução de Handoff (Transfer Lead). 15/15 requirements mapeados, zero orphans.
+
+## Session
+
+**Last session:** 2026-08-12T23:23:26.610Z
+**Stopped at:** Phase 33 context gathered
+**Resume file:** .planning/phases/33-seed-por-tipo-de-brain/33-CONTEXT.md
