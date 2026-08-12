@@ -1,712 +1,225 @@
-# Architecture Patterns: v1.4 RAG + Tool Events + FUP Automático
+# Architecture Research
 
-**Milestone:** v1.4 RAG + Tool Events + FUP Automático
-**Researched:** 2026-06-23
-**Confidence:** HIGH (entire existing codebase read directly; no external assumptions)
+**Domain:** Multi-agent lead handoff + per-brain-type seed scoping — Brain Core v1.6
+**Researched:** 2026-08-12
+**Confidence:** HIGH (grounded directly in current repo source — `packages/core`, `packages/database`, `packages/transport`, `packages/ai`, `apps/brain-{sdr,support,echo}`)
 
----
+This is integration-point research against the ACTUAL existing codebase, not a generic ecosystem survey. Every claim below is traced to a real file/line read during research.
 
-## Existing Architecture Snapshot
+## Part A — Per-brain-type scoped seeding
 
-Before prescribing changes, here is what exists and is load-bearing:
+### The bug, precisely
 
-```
-packages/
-  shared/      — BrainOutput, TokenUsage, ConfigurationError types (no Zod, no circular deps)
-  database/    — TenantPoolManager, runMigrations(), Drizzle schema (tables.ts)
-  ai/          — BrainStateAnnotation, createLLM(), createEmbeddings(), createCheckpointer()
-  memory/      — MemoryManager, upsertEmbedding(), searchSimilar()
-  observability/ — createLogger(), createHealthApp(), createTracingCallbacks()
-  transport/   — ITransport, BrainEvent, WebhookTransport, RabbitMQTransport, createTransport()
-  core/        — IBrain, BrainBuildContext, BrainRunner, LeadService, ToolsRegistry,
-                 createPauseSessionTool(), createFinishConversationTool(), createRespondTool()
+`packages/database/src/migrate.ts::runMigrations(sql, migrationsFolder)` wraps drizzle-kit's `migrate(db, { migrationsFolder })` in a `_schema_lock` row-lock transaction. Drizzle's migrator reads **the entire folder + its own `meta/_journal.json`** and applies every migration file not yet recorded — it has no concept of "brain type," only of DDL files in sequence.
 
-apps/
-  brain-sdr/   — sdrBrain: IBrain, createServer() mounts 3 sub-apps
-  brain-echo/  — echoBrain: IBrain, createServer()
-```
+Confirmed contamination: `packages/database/src/migrations/` contains, alongside pure schema DDL (0000, 0001, 0003, 0004, 0006-0009, 0011), three **seed-only** files that are 100% `INSERT INTO prompts ... ON CONFLICT DO NOTHING` with no DDL:
+- `0002_echo_brain_seed.sql` → `brain_type='echo'`
+- `0005_brain_sdr_prompts.sql` → `brain_type='sdr'`
+- `0010_brain_support_prompts.sql` → `brain_type='support'`
 
-Key data flows already in place:
-- BrainRunner.init() → runMigrations() → loadPrompts() → _compileGraph()
-- BrainRunner.run(event) → LeadService.upsertLead() → graph.invoke() → BrainOutput
-- _compileGraph() builds BrainBuildContext { llm, prompts, tools, sql, mcpTools } → brain.buildGraph(ctx)
-- Server per Brain: createServer(sql, runner) → Hono with /health, /api/v1/webhook, /reload-prompts
-- Transport: TRANSPORT=webhook (WebhookTransport) or TRANSPORT=rabbitmq (RabbitMQTransport)
+Every Brain's `Dockerfile` (`apps/brain-sdr/Dockerfile:95`, `apps/brain-support/Dockerfile:97` — comment literally says *"D-04: packages/database/src/migrations é compartilhado entre todos os Brains"*) copies this **entire** folder to `/app/migrations`, and every `.env.example` sets `MIGRATIONS_FOLDER=../../packages/database/src/migrations` pointing at the same shared tree. Result: brain-sdr's database ends up with `echo` and `support` prompt rows too (harmless-but-wasteful today because `loadPrompts()` double-filters on `(brain_type, key)` — see `packages/core/src/prompts/loader.ts:36-39` — but it is exactly the "leaking" the milestone wants closed).
 
-Existing `embeddings` table: userId, sessionId, content, embedding vector, metadata, createdAt.
-Scoped to conversation memory (semantic.ts: upsertEmbedding / searchSimilar). This is the write-path
-dead code (MEM-03) — createEmbeddings() called in factory but upsertEmbedding() has no caller.
+Separately confirmed: **no migration anywhere inserts a `fup_config` row or a `prompts(key='fup')` row** for any brain type. `packages/core/src/fup/fup-scheduler.ts:148-160` queries `SELECT content FROM prompts WHERE brain_type = $1 AND key = 'fup'` directly and **logs a skip + does nothing** when it's missing ("prompt key='fup' não encontrado — pulando lead"). This is why FUP is silently dead on every fresh database today — not a scheduler bug, a missing-seed bug.
 
----
+### Constraint: you cannot make drizzle-kit brainType-aware
 
-## Feature 1: RAG (Retrieval-Augmented Generation)
+Drizzle's migrator has no filtering hook. The only two ways to stop cross-seeding are (1) fork/patch the migrator, or (2) remove the brain-type-specific seed content from the drizzle-tracked folder entirely and apply it through a separate, non-drizzle idempotent mechanism. Given the codebase's own conventions (idempotent `ON CONFLICT DO NOTHING` INSERTs, already used for exactly this purpose), option 2 is the only one consistent with "don't break the shared-migrations convention more than necessary" — it changes *what* runs where, not *how* schema migrations run.
 
-### Package Placement Decision
+### Recommended design
 
-**Location: packages/rag (new package)**
+**Split "schema" from "seed" as two mechanisms, not two migration folders:**
 
-Rationale:
-- RAG crosses package boundaries: it needs packages/ai (createEmbeddings), packages/database (Drizzle
-  schema + sql), and packages/transport (Hono sub-app). A new package is cleaner than fattening any
-  existing one.
-- packages/ai already owns LLM/embedding factories — pulling ingest + search logic there creates an
-  HTTP concern (Hono route) inside an AI primitives package. Wrong responsibility.
-- packages/database already owns schema/migrations only — adding chunking + HTTP there is wrong.
-- packages/memory already owns conversation-scoped semantic memory (embeddings table scoped to userId).
-  Knowledge chunks are domain-scoped (collection-based), not user-scoped. Different access pattern.
-- A new packages/rag keeps the concern isolated and usable by any Brain via BrainBuildContext.
+1. **Schema migrations — untouched.** `packages/database/src/migrations/` + `runMigrations()` + `_schema_lock` row-lock + `MIGRATIONS_FOLDER` ENV + Dockerfile `COPY .../migrations` stay **exactly as they are**. This is pure DDL, genuinely shared across every Brain type, and the row-lock/PgBouncer-compat work already done for it (D-06, PGB-02/03) must not be touched.
+2. **New seed mechanism — per brain type, NOT drizzle-tracked.** Add `packages/database/src/seeds/<brainType>/` (e.g. `seeds/sdr/`, `seeds/support/`, `seeds/echo/`), each containing that brain's own idempotent SQL (or a small `.ts` seed descriptor — SQL is simpler and matches existing style). Add a new exported function `runBrainSeed(sql: Sql, brainType: string, seedsFolder: string): Promise<void>` in `packages/database` that reads and executes the SQL file(s) in that folder with the same `ON CONFLICT DO NOTHING` idempotency already used — **no drizzle, no journal, no migrator involved**, so there's nothing to reconcile against `__drizzle_migrations`/journal bookkeeping.
+3. **Each Brain's Dockerfile copies only its own seed subfolder**, e.g. `COPY --from=builder /app/packages/database/src/seeds/sdr ./seeds` for brain-sdr, mirroring the existing `COPY .../migrations` line. New ENV `SEEDS_FOLDER` (parallel naming to `MIGRATIONS_FOLDER`) points at `/app/seeds` inside the image.
+4. **`BrainRunner.init()` calls `runBrainSeed(this.sql, this.brain.brainType, seedsFolder)` immediately after `runMigrations()` and before `loadPrompts()`** (`packages/core/src/runner/runner.ts:141-189`) — ordering matters because the very next block validates `promptKeys` are all present and calls `process.exit(1)` otherwise (D-06 fail-fast); seeding must land before that check.
+5. **Every brain type's seed folder gets two new rows added to what it already seeds**: a default `fup_config` row (`enabled=true`, sane `intervals_seconds`/`min_hour`/`max_hour`/`allowed_days`/`timezone`) and a `prompts(brain_type, key='fup', content=...)` row. This directly fixes the "no Brain has FUP out of the box" gap — `LeadService.upsertLead()` (`packages/core/src/leads/lead-service.ts:55-84`) already auto-activates `fup_enabled` the moment a `fup_config` row exists for that `brainType`, so this seed alone turns FUP on with zero other code changes.
 
-**Do NOT reuse the existing `embeddings` table for RAG knowledge chunks.**
-The `embeddings` table is scoped by `(userId, sessionId)` — it is conversation memory.
-RAG knowledge is scoped by `(collection)` — it is shared reference data for all leads.
-Mixing these into one table creates query confusion and index inefficiency.
+**Why `ON CONFLICT DO NOTHING` scoped seeds are safe even if two brain types share one database** (an edge case the codebase does not fully prevent, even though `apps/brain-support/.env.example` explicitly documents the convention that co-located Brains for the same client should use *different* `DATABASE_NAME`s): every seed row is keyed by `(brain_type, key)` for prompts and `brain_type` (PK) for `fup_config`. Running brain-sdr's seed and then brain-support's seed against the same DB just adds two disjoint sets of rows — never overwrites, never cross-contaminates a query (loader.ts's `and(eq(brainType), inArray(key,...))` double-filter already guarantees this). No new risk is introduced by this design for the shared-DB edge case.
 
-### New DB Table: knowledge_chunks
+### Migration-risk rollout note (flag for phase-level validation)
 
-```typescript
-// packages/database/src/schema/tables.ts (add)
-export const knowledgeChunks = pgTable('knowledge_chunks', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  collection: text('collection').notNull(),          // logical namespace, e.g. "sdr-faq"
-  content: text('content').notNull(),                // chunk text
-  embedding: vector('embedding', { dimensions: EMBEDDING_DIM }).notNull(),
-  metadata: jsonb('metadata').default({}),           // source, page, etc.
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-}, (table) => ({
-  embeddingIdx: index('kc_embedding_idx')
-    .using('hnsw', table.embedding.op('vector_cosine_ops'))
-    .with({ m: 16, ef_construction: 64 }),
-  collectionIdx: index('kc_collection_idx').on(table.collection),
-}));
-```
+Two rollout strategies exist for what to do with the *existing* 0002/0005/0010 seed migrations already recorded as applied in every deployed customer database:
 
-This requires a new migration file in `packages/database/src/migrations/`.
+- **Strategy A (bigger diff):** retroactively strip those three files + their `_journal.json` entries out of the shared schema folder now that their content lives in the new per-type seed mechanism. Requires verifying drizzle-kit's migrator doesn't choke when a target DB's `__drizzle_migrations` bookkeeping references a journal tag no longer present locally (my read of the migrator's reconciliation logic says this is safe — it only checks local-journal-entries against remote state, never the reverse — but this has **not been empirically verified against drizzle-kit source in this session** and should be tested against a DB carrying the full 0000-0011 history before relying on it).
+- **Strategy B (recommended, lower risk):** leave 0000-0011 exactly as committed (accept the historical cross-seeding as inert legacy debt — it's dead rows, not a correctness bug, per the double-filter above). Ship the new per-type seed mechanism purely additively for what the milestone actually requires (fup_config + fup prompt for every brain type), and simply stop adding brain-type-specific seed content to the shared numbered-migrations folder from this point forward. This satisfies "without breaking the existing shared-migrations convention more than necessary" literally, and ships faster with zero regression risk to already-deployed databases.
 
-### Ingest Endpoint: How It Attaches to Hono
+Recommend **Strategy B** for v1.6; defer Strategy A to a future cleanup milestone if the dead rows ever become an actual operational problem.
 
-The ingest route lives in packages/rag as `createRagApp(sql: Sql): Hono`. It is mounted in each Brain's
-`createServer()` as a fourth sub-app, alongside the existing three:
+## Part B — Multi-agent lead handoff
 
-```typescript
-// apps/brain-sdr/src/server.ts (modified)
-import { createRagApp } from "@brain-pkg/rag";
+### What already exists that this reuses directly
 
-export function createServer(sql: Sql, runner: BrainRunner): Hono {
-  const app = new Hono();
-  app.route("/", createHealthApp(sql));
-  app.route("/", createWebhookApp(runner));
-  app.route("/", createCoreApp(runner));
-  app.route("/", createRagApp(sql));   // NEW — POST /api/v1/ingest
-  return app;
-}
-```
+| Existing primitive | File | Reused for handoff as |
+|---|---|---|
+| Tool factory closure-over-`sql` pattern | `packages/core/src/tools/pause-session.ts`, `finish-conversation.ts` | `createTransferLeadTool(sql, ...)` follows the identical shape: `thread_id` read from `config.configurable.thread_id`, never from the LLM (D-04) |
+| `LeadService.setIaAtivada(uniqueId, value)` | `packages/core/src/leads/lead-service.ts:152-157` | **Already exists, currently dead code** (tech debt TD-04: "sem callers de produção"). Transfer-lead is the first real production caller — deactivates the source lead after a *confirmed successful* handoff. Ships as a byproduct: TD-04 gets resolved for free. |
+| `BrainRunner.injectMessage(threadId, content)` + `compiledGraph.updateState()` | `packages/core/src/runner/runner.ts:287-305`, exposed via `packages/core/src/server.ts` `/debug/inject-message` | This is the exact primitive needed to seed the **destination** thread's checkpoint with handoff context, without invoking the destination's LLM. Built last milestone, designed for debug use — now gets its first real production caller. |
+| One-shot stateless sub-agent reading checkpointer history | `apps/brain-sdr/src/qualifier.ts` (`runQualificationAgent`, reads via checkpointer, no own persisted state) + `FupScheduler`'s one-shot LLM generation via `PostgresSaver.getTuple()` (FUP-03) | Precedent/template for a new stateless "summarize this thread for handoff" sub-agent — same computational shape, different prompt |
+| `IEventPublisher` + `TOOL_EVENTS_WHITELIST` | `packages/core/src/events/event-publisher.ts`, `packages/core/src/runner/runner.ts:36-40` | Adding `"transfer_lead"` to the whitelist gets the existing external-notification event `{action:"transfer_lead", lead, result}` **for free** — zero new plumbing for the "tell my CRM a handoff happened" concern |
+| Admin-token auth pattern (`X-Admin-Token` vs `ADMIN_TOKEN`, fail-closed 503 if unset) | `packages/core/src/server.ts` (`/reload-prompts`, `/debug/inject-message`) | Exact auth model for the new Brain-to-Brain receiving endpoint — this is server-to-server traffic, not lead-facing traffic |
+| FUP eligibility gate `WHERE fup_enabled = true AND ia_ativada = true` | `packages/core/src/fup/fup-scheduler.ts:113-114` | Confirms that deactivating `ia_ativada` on the source lead after transfer **automatically and correctly** removes it from future FUP scheduling — no separate "cancel pending FUP" call is needed |
 
-Why sub-app pattern (not middleware, not separate server):
-- Consistent with how createWebhookApp, createHealthApp, createCoreApp are composed.
-- No new port — same Hono instance, same process.
-- sql is already available in createServer() (it is passed by index.ts).
-- Ingest is admin/write — must have its own auth (same ADMIN_TOKEN pattern as /reload-prompts or a
-  dedicated INGEST_TOKEN env). Not the same as WEBHOOK_TOKEN.
+### Answering the integration questions directly
 
-Endpoint signature:
-```
-POST /api/v1/ingest
-Authorization: Bearer <INGEST_TOKEN>
-Content-Type: application/json
+**Does the source Brain need an HTTP client to call the destination's webhook, reusing the existing webhook shape? — No. New dedicated client + new dedicated endpoint.**
 
-{ "text": "...", "collection": "sdr-faq", "metadata": {} }
+`POST /api/v1/webhook` (`packages/transport/src/webhook/handler.ts`) is shaped for **lead-facing traffic**: it validates `BrainEventSchema {Name, Message, Numero, IDLead}`, immediately calls `runner.run(event)`, which upserts the lead, checks `ia_ativada`, and **invokes the LLM**. None of that is correct for a handoff: a handoff must NOT trigger an LLM turn (the whole point is to seed context silently before the lead's next real message arrives), and its payload shape is different (needs a summary/history field, a `sourceBrainType`, no `Message` to reply to). Reusing it would require overloading its contract in a way that breaks its existing lead-facing semantics.
 
-Response 200: { "status": "ok", "chunks": 3 }
-```
+`IEventPublisher` is also the wrong fit, for a different reason: it is explicitly designed as **fire-and-forget, one-directional, single-destination-per-Brain** notification (one `TOOL_EVENTS_URL`/`TOOL_EVENTS_QUEUE` per Brain instance, not one-per-named-agent), with no response/ack path. The transfer_lead tool's own success/failure **must** be awaited synchronously — the decision to deactivate the source lead's `ia_ativada` depends on the destination confirming receipt — which is structurally incompatible with EventPublisher's D-08 "never await, absorb failures silently" contract. Keep `IEventPublisher` doing exactly what it does today (notify externally that a transfer happened, via the whitelist addition); it is not the transfer mechanism itself.
 
-### Ingest Data Flow
+**Recommended: a new synchronous Brain-to-Brain HTTP call, admin-authenticated, hitting a NEW endpoint:**
+- New client: `packages/core/src/handoff/handoff-client.ts` — small `fetch()`-based client (same shape as `EventPublisher._publishWebhook`'s pattern, but **awaited**, not fire-and-forget, with a longer timeout than EVT's 5s since a summary + DB write on the destination happens synchronously inside the request — recommend `AbortSignal.timeout(10000)`).
+- New endpoint: `POST /api/v1/handoff` in `packages/core/src/server.ts`, alongside `/reload-prompts` and `/debug/inject-message`, same `X-Admin-Token`/`ADMIN_TOKEN` fail-closed auth model. (Promote this out of the `/debug/*` namespace — unlike `injectMessage`, this is a first-class production feature, not a debugging aid, even though it reuses the debugging primitive internally.)
+- New `BrainRunner.receiveHandoff(payload)` method — thin orchestration only, no new LangGraph mechanics:
+  1. `await this.leadService.upsertLead(payload.numero, payload.uniqueId, payload.nome, this.brain.brainType)` — reuses the existing method verbatim, which means the incoming lead **automatically becomes FUP-eligible** on the destination if that brain type's `fup_config` is seeded (Part A dependency — see Build Order below).
+  2. `await this.injectMessage(payload.uniqueId, payload.summary)` — reuses the existing primitive verbatim to seed the destination's checkpoint with an AIMessage carrying the handoff context, without invoking the destination LLM.
+  3. Return 200 only after both steps succeed.
+
+**How does conversation-context continuity work?**
+
+At transfer time, the **source** Brain's `transfer_lead` tool handler (not the destination) is responsible for producing the context to hand over, since it has ready access to the live thread's checkpoint state (`this.compiledGraph.getState({configurable:{thread_id}})`, the same primitive `BrainRunner.run()` already uses at `runner.ts:366-369` to read `historicalMessages`). Recommended v1 approach, mirroring the FUP-03 precedent (one-shot LLM condensation of checkpointer history, no persisted sub-agent state): a new stateless module `packages/core/src/handoff/summarize.ts` that takes the raw message history and produces a short handoff summary string via one `createLLM()` call — same shape as `qualifier.ts`'s `runQualificationAgent`. That summary string is what travels over the wire to `/api/v1/handoff` and becomes the single `injectMessage()` payload on the destination. (A raw-history / multi-message injection variant is possible as a v2 enhancement — see Open Questions — but a single AIMessage summary is the smallest correct increment and matches the shape `injectMessage()` already supports without any LangGraph-side changes.)
+
+**Does the destination need a registry of "known agents"? Where does it live?**
+
+Yes — the milestone explicitly requires agent names to be **configurable, not fixed to 2-3 hardcoded types** ("nomes de agente configuráveis"). None of the three existing config idioms in the codebase fit a growable N-entry registry cleanly:
+- ENV vars (`TOOL_EVENTS_URL`, `FUP_WEBHOOK_URL`, `MCP_URL`) are single-value-per-concern — fine for "this Brain's one event sink" but wrong shape for "this Brain's N possible handoff destinations, each with its own base URL + its own admin token."
+- A `config.json`-style file requires a redeploy to add/rotate an agent — inconsistent with how `fup_config` and `prompts` (the two closest analogues, both per-deployment tunables) are already modeled as **database tables**, changeable per-client without a rebuild.
+
+**Recommended: a new `agents` table**, added to the shared schema migrations folder (real DDL, applies uniformly to every Brain type — unlike Part A's seeds, this is genuinely shared schema since any Brain could be a source or a destination):
 
 ```
-POST /api/v1/ingest
-  → auth check (INGEST_TOKEN)
-  → validate body (Zod: text, collection, metadata?)
-  → chunk text (simple: split by paragraph or fixed-size with overlap)
-  → createEmbeddings() → embedMany(chunks)
-  → INSERT INTO knowledge_chunks (collection, content, embedding, metadata) — batch
-  → return { status: "ok", chunks: N }
+agents (
+  name          text PRIMARY KEY,   -- what the LLM's tool-call argument references
+  brain_type    text NOT NULL,      -- destination's own brainType, for observability/logging only
+  base_url      text NOT NULL,      -- destination Brain's reachable HTTP base (own host/DB, possibly different)
+  admin_token   text NOT NULL,      -- matches destination's ADMIN_TOKEN — used as X-Admin-Token
+  enabled       boolean NOT NULL DEFAULT true,
+  created_at, updated_at
+)
 ```
 
-Chunking strategy for v1: fixed-size chunks (512 chars) with 64-char overlap. No external chunking
-library needed — a simple string-split function inside packages/rag is sufficient. Do NOT bring in
-LangChain text splitters for this; a 20-line local function is cleaner given Bun constraints.
+Lives in each Brain's **own** database (source-side lookup only — the destination never needs to know its own registry entry). No CRUD UI is needed for v1 (matches the existing "UI de gerenciamento de Brains — futuro" out-of-scope decision in PROJECT.md) — populated via direct SQL insert by ops, same operational tier as `fup_config` today.
 
-### search_knowledge Tool: Where It Lives and How It's Instantiated
+Read timing: unlike `prompts` (snapshotted into the closure at `_compileGraph()` time and refreshed only via `/reload-prompts`), recommend the `transfer_lead` tool's handler **queries `agents` live on every invocation** rather than snapshotting at compile time — the same per-invocation DB read cost that `pause_session`/`finish_conversation` already pay, and it avoids a staleness class of bug entirely (adding a new agent shouldn't require a `/reload-prompts` call to become usable).
 
-**Location: packages/rag — exported as `createSearchKnowledgeTool(sql: Sql, collection?: string)`**
+**Should the source Brain deactivate `ia_ativada` after a successful handoff, mirroring `pause_session`?**
 
-Pattern matches the existing tool factories (createPauseSessionTool, createFinishConversationTool):
-factory function with closure over sql, returns a StructuredTool.
+Yes, but with a stricter ordering than `finish_conversation`'s single atomic UPDATE: the destination call must be confirmed successful **first**, and `setIaAtivada(threadId, false)` only happens after a 2xx from `/api/v1/handoff`. If the HandoffClient call fails (unreachable destination, timeout, unknown `agents.name`), the tool must return an error-shaped JSON result (same `{status:"error", ...}` convention `qualifier.ts`'s `serializeQualificationResult()` already uses, which `isErrorToolResult()` in `event-publisher.ts:41-53` already knows to suppress from the external ToolEvent feed) and **leave the source lead's `ia_ativada` untouched** — the conversation must keep flowing on the source side if the transfer didn't actually land. This is a meaningful divergence from `pause_session`'s "always succeeds, pure local DB write" shape, because `transfer_lead` has a genuine network failure mode `pause_session` never had.
 
-```typescript
-// packages/rag/src/tools/search-knowledge.ts
-export function createSearchKnowledgeTool(sql: Sql, defaultCollection?: string): StructuredTool
-```
+Because the `FupScheduler` eligibility query already filters `WHERE fup_enabled = true AND ia_ativada = true` (`fup-scheduler.ts:113-114`), setting `ia_ativada=false` on a successful transfer automatically and correctly removes the source lead from any further FUP scheduling — no separate cancellation call is required.
 
-**How it gets into BrainBuildContext:**
-BrainBuildContext already has `mcpTools: StructuredTool[]` — a parallel field `ragTools: StructuredTool[]`
-is added to carry RAG tools injected by BrainRunner:
+### New vs. modified components
 
-```typescript
-// packages/core/src/brain/interface.ts (modified)
-export interface BrainBuildContext {
-  llm: BaseChatModel;
-  prompts: Record<string, string>;
-  tools: StructuredTool[];
-  sql?: Sql;
-  mcpTools: StructuredTool[];
-  ragTools: StructuredTool[];   // NEW — [] when RAG not configured (no KNOWLEDGE_COLLECTIONS env)
-}
-```
+**NEW:**
+- `packages/database/src/seeds/<brainType>/*.sql` — per-type seed content (existing prompt seeds relocated/duplicated here going forward + new `fup_config`/`key='fup'` rows for sdr, support, echo)
+- `packages/database` — `runBrainSeed(sql, brainType, seedsFolder)` function
+- `packages/database/src/schema/tables.ts` — new `agents` table (real schema migration, shared folder)
+- `packages/core/src/tools/transfer-lead.ts` — `createTransferLeadTool(sql, ...)` factory, same shape as `pause-session.ts`
+- `packages/core/src/handoff/handoff-client.ts` — synchronous, awaited, admin-token-authenticated HTTP client
+- `packages/core/src/handoff/summarize.ts` — stateless one-shot LLM handoff-summary generator (mirrors `qualifier.ts`)
+- `POST /api/v1/handoff` route in `packages/core/src/server.ts`
+- `BrainRunner.receiveHandoff(payload)` method in `packages/core/src/runner/runner.ts`
+- `SEEDS_FOLDER` ENV (parallel to `MIGRATIONS_FOLDER`)
 
-BrainRunner._compileGraph() creates ragTools based on ENV:
-```
-KNOWLEDGE_COLLECTIONS=sdr-faq,sdr-products   → one createSearchKnowledgeTool per collection
-                                                or one tool that accepts collection as param
-```
+**MODIFIED:**
+- `packages/core/src/runner/runner.ts` — call `runBrainSeed()` after `runMigrations()`/before `loadPrompts()` in `init()`; add `"transfer_lead"` to `TOOL_EVENTS_WHITELIST`; add `receiveHandoff()` method
+- `packages/core/src/server.ts` — new `/api/v1/handoff` route alongside existing two
+- Each `apps/brain-{sdr,support,echo}/src/index.ts` — `toolsRegistry.enableTool("<type>", "transfer_lead")`
+- Each `apps/brain-{sdr,support,echo}/src/brain.ts` — add bound `transfer_lead` tool to `nativeTools`/`buildGraph()`, same pattern as `boundPauseSessionTool`/`boundFinishConversationTool` in `apps/brain-sdr/src/brain.ts:145-146`
+- Each `apps/brain-{sdr,support,echo}/Dockerfile` — `COPY` only that Brain's own `packages/database/src/seeds/<type>` subfolder; `MIGRATIONS_FOLDER` COPY/ENV unchanged
+- `packages/core/src/leads/lead-service.ts` — **no code change**; `setIaAtivada()` already exists and gains its first production caller (resolves TD-04)
 
-Simpler approach: single tool that accepts `collection` as a parameter in its Zod schema. The LLM
-provides the collection name based on context. This avoids N tools for N collections.
+**LEFT UNTOUCHED (deliberately):**
+- `packages/database/src/migrate.ts` / `runMigrations()` / `_schema_lock` row-lock — the entire schema-migration mechanism
+- `packages/transport` webhook/RabbitMQ handlers and `BrainEventSchema` — lead-facing contract stays exactly as-is
+- `IEventPublisher`/`EventPublisher` internals — only its whitelist constant in `runner.ts` gains one entry
+- `TenantPoolManager` — no cross-container DB pooling is introduced; the destination Brain talks to its own database through its own already-running process, reached purely over HTTP
 
-Brain's buildGraph() spreads ragTools into bindTools() exactly as mcpTools:
-```typescript
-const llmWithTools = ctx.llm.bindTools([
-  ...nativeTools,
-  ...ctx.mcpTools,
-  ...ctx.ragTools,   // NEW
-]);
-```
-
-The ToolNode in each Brain receives ragTools alongside the other tools.
-
-**This means Brains do NOT need to know about RAG explicitly** — they receive pre-built tools
-in BrainBuildContext and spread them. RAG is infrastructure, not Brain-specific.
-
-### search_knowledge Tool Data Flow
+### Data flow
 
 ```
-LLM calls search_knowledge({ query: "...", collection: "sdr-faq" })
-  → createEmbeddings().embedQuery(query)
-  → SELECT FROM knowledge_chunks WHERE collection = ?
-      ORDER BY embedding <=> queryVector
-      LIMIT 5
-  → return joined chunk content as string (LLM consumes as tool result)
+SOURCE Brain container                              DESTINATION Brain container
+┌─────────────────────────────┐                      ┌─────────────────────────────┐
+│ LLM emits transfer_lead(    │                      │                             │
+│   destination: "support")   │                      │                             │
+│         │                    │                      │                             │
+│         ▼                    │                      │                             │
+│ createTransferLeadTool       │                      │                             │
+│   1. thread_id from config    │                      │                             │
+│      (never from LLM)         │                      │                             │
+│   2. SELECT * FROM agents      │                      │                             │
+│      WHERE name=destination   │                      │                             │
+│      AND enabled=true         │                      │                             │
+│   3. read checkpoint history  │                      │                             │
+│      (compiledGraph.getState) │                      │                             │
+│   4. summarize.ts: one-shot    │                      │                             │
+│      LLM condenses history    │                      │                             │
+│         │                     │                      │                             │
+│         ▼                     │   POST /api/v1/handoff│                             │
+│ handoff-client.ts  ───────────┼──────────────────────►│  X-Admin-Token auth          │
+│   (awaited, 10s timeout)      │  {uniqueId, numero,   │         │                    │
+│                                │   nome, sourceType,   │         ▼                    │
+│                                │   summary}            │  BrainRunner.receiveHandoff  │
+│                                │                        │   1. leadService.upsertLead │
+│                                │                        │      (fup_config auto-      │
+│                                │                        │       activates if seeded)  │
+│                                │                        │   2. injectMessage(summary) │
+│                                │                        │      → compiledGraph        │
+│                                │                        │        .updateState()       │
+│                                │  ◄─────────────────────┼─── 200 OK                    │
+│         │                      │                        └─────────────────────────────┘
+│         ▼ (only on 2xx)         │
+│ leadService.setIaAtivada(false) │  ← source stops answering; FupScheduler eligibility
+│         │                       │    query (fup_enabled AND ia_ativada) auto-excludes it
+│         ▼                       │
+│ TOOL_EVENTS_WHITELIST includes   │
+│ "transfer_lead" → existing       │
+│ IEventPublisher fires             │
+│ {action:"transfer_lead",...}      │  ← separate, pre-existing, fire-and-forget channel
+│ to source's own CRM/webhook/queue │    (unchanged — just gains this action name)
+└───────────────────────────────────┘
 ```
 
-The tool uses cosine distance on the HNSW index — same pattern as searchSimilar() in packages/memory/
-semantic.ts. packages/rag can import packages/database for the schema and Drizzle, and packages/ai
-for createEmbeddings().
+### Suggested build order across phases
 
----
+**Phase 1 — Seed-scoping fix (Part A), ships alone first.**
+Per-brain-type `seeds/` folders, `runBrainSeed()`, `fup_config` + `key='fup'` prompt defaults for sdr/support/echo, Dockerfile updates. No new tools, no new endpoints — low risk, independently verifiable (spin up a fresh DB per brain type, assert exactly that type's prompts + one `fup_config` row exist, assert FUP actually fires against a silent test lead).
 
-## Feature 2: Tool Events (Outbound Event Channel)
+*Why this must land first:* `LeadService.upsertLead(numero, uniqueId, nome, brainType)` — the exact method `BrainRunner.receiveHandoff()` will call in Phase 2/3 — already auto-activates `fup_enabled` by looking up `fup_config` for that `brainType` (Phase 25/26 logic, confirmed in `lead-service.ts:55-84`). If Part A hasn't shipped, every lead newly created via a handoff lands on a destination with no FUP safety net, silently, for exactly the same root-cause reason FUP is broken today. Handoff correctness is therefore causally downstream of seed-scoping correctness, not just sequenced by convention.
 
-### Package Placement Decision
+**Phase 2 — Destination-receiving side.**
+`agents` table (schema migration), `POST /api/v1/handoff` endpoint, `BrainRunner.receiveHandoff()`. Testable standalone via a raw HTTP client (curl/integration test) without touching the LLM/tool side at all — deliberately built and verified before the source-initiating side exists, so failures are isolated to one direction at a time.
 
-**Location: packages/core — alongside the tool factories**
+**Phase 3 — Source-initiating side.**
+`transfer-lead.ts` tool, `handoff-client.ts`, `summarize.ts`, `TOOL_EVENTS_WHITELIST` addition, per-Brain `buildGraph()`/`ToolsRegistry` registration. Wires the LLM-facing decision + the strict "confirm destination success before deactivating source" ordering.
 
-Rationale:
-- Tool events are about what happens when a tool runs. The tool factories (createPauseSessionTool,
-  createFinishConversationTool, createRespondTool) already live in packages/core. The event publisher
-  is most naturally co-located with the tools it wraps.
-- packages/transport already handles inbound events (BrainEvent in, BrainOutput out). Adding an
-  outbound publisher there would conflate two distinct responsibilities.
-- The publisher itself is simple: send HTTP POST or publish to RabbitMQ queue. No new deps needed
-  — packages/core already depends on packages/transport for BrainEvent, and the rabbitmq-client
-  library is already in the dependency tree.
+**Phase 4 (stretch, defer if time-constrained) — richer context handoff.**
+Multi-message raw history injection instead of a single summarized AIMessage (would need to extend `injectMessage()`/`updateState()` to accept an array of typed messages rather than one AIMessage); bidirectional handoff-back; agent registry admin UI. None of these block the v1.6 milestone's stated scope.
 
-**New file: packages/core/src/events/publisher.ts**
+## Open Questions
 
-```typescript
-export interface ToolEventPayload {
-  action: string;                 // tool name: "pause_session", "qualify_lead", etc.
-  lead: {
-    id: string;                   // lead.uniqueId (IDLead)
-    nome: string | null;
-    numero: string;
-  };
-  result: string;                 // tool return value (stringified)
-  timestamp: string;              // ISO 8601
-}
-
-export interface IToolEventPublisher {
-  publish(payload: ToolEventPayload): Promise<void>;
-}
-
-export function createToolEventPublisher(): IToolEventPublisher | null
-```
-
-Returns null when neither TOOL_EVENTS_WEBHOOK_URL nor TOOL_EVENTS_RABBITMQ_QUEUE is configured.
-This allows BrainRunner to skip event publishing without error when the feature is not configured.
-
-ENV-based selection (same pattern as TRANSPORT env):
-- `TOOL_EVENTS_WEBHOOK_URL` → HTTP POST (fire-and-forget, no retry needed for events)
-- `TOOL_EVENTS_RABBITMQ_QUEUE` → publish to named queue (reuses existing RABBITMQ_URL)
-
-### How BrainRunner Triggers Event Publishing
-
-**Mechanism: tool wrapper in _compileGraph(), not LangGraph callbacks**
-
-LangGraph callbacks (via `createTracingCallbacks`) are for observability tracing only and not
-appropriate for side-effect publishing. Tool wrapping is cleaner and already done in brain.ts:
-the `boundQualifyTool` pattern shows how to wrap a tool's invoke function with additional logic.
-
-BrainRunner cannot directly wrap individual Brain tools (Brain is a black box from the runner's
-perspective). The integration point is:
-
-**Option A (recommended): Pass publisher into BrainBuildContext, let each tool factory handle it**
-
-```typescript
-// packages/core/src/brain/interface.ts (modified)
-export interface BrainBuildContext {
-  llm: BaseChatModel;
-  prompts: Record<string, string>;
-  tools: StructuredTool[];
-  sql?: Sql;
-  mcpTools: StructuredTool[];
-  ragTools: StructuredTool[];
-  toolEventPublisher?: IToolEventPublisher;  // NEW — null when not configured
-}
-```
-
-Tool factories accept publisher optionally and fire events after their DB update:
-
-```typescript
-export function createPauseSessionTool(sql: Sql, publisher?: IToolEventPublisher): StructuredTool
-```
-
-The tool's implementation becomes:
-```
-await db.update(leads)...
-await publisher?.publish({ action: "pause_session", lead: {...}, result: "Sessão pausada" })
-return "Sessão pausada com sucesso"
-```
-
-BrainRunner._compileGraph() creates the publisher from ENV and injects it:
-```typescript
-const toolEventPublisher = createToolEventPublisher(); // null if not configured
-const ctx: BrainBuildContext = { ..., toolEventPublisher };
-```
-
-**Why not Option B (LangGraph DispatchCustomEvent / callbacks):**
-LangGraph's event dispatch system would work but adds ceremony (async generators, streaming callbacks).
-The tool wrapper approach is already established in this codebase (boundQualifyTool) and simpler.
-
-**For mcpTools:** MCP tools cannot be wrapped with a publisher in advance since they come from the
-external MCP server. After the graph runs, the tool results are in the messages array in state.
-For v1.4, limit event publishing to native tools only. MCP tool event publishing deferred.
-
-### Tool Events Data Flow
-
-```
-LLM calls pause_session (tool_call in AIMessage)
-  → ToolNode executes createPauseSessionTool()
-  → DB: UPDATE leads SET fullpp=false WHERE unique_id=?
-  → publisher.publish({ action: "pause_session", lead: {...}, result: "..." })
-      └── TOOL_EVENTS_WEBHOOK_URL set → fetch(url, { method: "POST", body: JSON })
-      └── TOOL_EVENTS_RABBITMQ_QUEUE set → rabbit.publish(queue, payload)
-      └── fire-and-forget: errors logged, NOT propagated to tool return
-  → return "Sessão pausada com sucesso"
-  → ToolMessage injected into state.messages (existing flow unchanged)
-```
-
-The publisher is fire-and-forget. Tool return value is unchanged — no impact on existing LangGraph
-message flow or BrainOutput contract.
-
-**Lead context for the publisher:** The tool factories currently only receive `sql`. To publish lead
-info, they need access to lead data (nome, numero). Two approaches:
-
-- Read lead from DB inside the tool using threadId from RunnableConfig (same pattern as the UPDATE —
-  the threadId is the uniqueId, so `SELECT * FROM leads WHERE unique_id = ?`).
-- Or: add lead data as a parameter to the tool factory (requires callers to pass it in buildGraph).
-
-The DB read approach is cleaner — one extra SELECT per tool invocation, negligible cost, and avoids
-coupling buildGraph() to lead data at construction time.
-
----
-
-## Feature 3: FUP Automático (Follow-Up Scheduler)
-
-### Package Placement Decision
-
-**Location: packages/fup (new package)**
-
-Rationale:
-- FUP is a significant new subsystem: scheduler loop, DB reads for candidate leads, LLM invocation,
-  config storage, transport send. This is not a minor extension to any existing package.
-- packages/core is already the Brain orchestration SDK; a background scheduler is a separate concern.
-- A dedicated package keeps BrainRunner clean and makes FUP testable in isolation.
-- Other future Brains will want FUP too — it must be in packages/, not apps/.
-
-### New DB Columns on `leads` Table
-
-The scheduler needs per-lead FUP state. Add to `leads` table:
-
-```typescript
-// packages/database/src/schema/tables.ts (add to leads table)
-fupEnabled: boolean('fup_enabled').notNull().default(false),
-fupStep: integer('fup_step').notNull().default(0),
-fupNextAt: timestamp('fup_next_at'),          // null = not scheduled
-lastMessageAt: timestamp('last_message_at'),  // null = no message yet (updated on every BrainRunner.run())
-```
-
-**`lastMessageAt`** must be updated by BrainRunner.run() on every successful turn (ia_ativada=true,
-not null result). This is one line in LeadService.upsertLead() or a dedicated
-`LeadService.touchLastMessage(uniqueId)` call at the end of BrainRunner.run().
-
-**`fupEnabled`** is set to true by external integrations (CRM, manual admin call). It is NOT
-automatically true for all leads — FUP is opt-in per lead.
-
-**`fupStep`** tracks which follow-up message was last sent (0=none sent, 1=first sent, etc.).
-Incremented after each FUP send. When step reaches the last configured interval, set
-`fupEnabled=false` (automatic deactivation per spec).
-
-**`fupNextAt`** set to `NOW() + interval[step]` after each FUP send (or on lead creation if
-fupEnabled=true). Scheduler queries `WHERE fup_enabled=true AND fup_next_at <= NOW()`.
-
-### New DB Table: fup_config
-
-FUP intervals and rules stored in DB (per brainType, configurable without redeploy):
-
-```typescript
-export const fupConfig = pgTable('fup_config', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  brainType: text('brain_type').notNull().unique(),
-  // intervals in seconds — e.g. [300, 900, 3600] means FUP at 5min, 15min, 1h
-  intervals: jsonb('intervals').notNull().$type<number[]>(),
-  // allowed hours window: { start: 8, end: 20 } (inclusive, in timezone)
-  allowedHours: jsonb('allowed_hours').notNull().$type<{ start: number; end: number }>(),
-  // allowed days: [1,2,3,4,5] = Mon-Fri (0=Sun, 6=Sat)
-  allowedDays: jsonb('allowed_days').notNull().$type<number[]>(),
-  // IANA timezone string: "America/Sao_Paulo"
-  timezone: text('timezone').notNull().default('America/Sao_Paulo'),
-  // FUP prompt key — loaded from prompts table by BrainType
-  promptKey: text('prompt_key').notNull().default('fup'),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
-});
-```
-
-This table is seeded via a migration SQL file (same as brain SDR prompts in 0005_brain_sdr_prompts.sql).
-
-### FUP Scheduler: Where It Lives and Starts
-
-**Class: packages/fup/src/FupScheduler.ts**
-
-```typescript
-export interface FupSchedulerOptions {
-  sql: Sql;
-  brainType: string;
-  transport: ITransport;           // reuse existing transport to send messages
-  llm: BaseChatModel;             // reuse BrainRunner's LLM for generation
-  checkpointer: BaseCheckpointSaver; // for reading conversation history
-}
-
-export class FupScheduler {
-  async start(): Promise<void>     // begins setInterval loop
-  async stop(): Promise<void>      // clears interval
-}
-```
-
-**Started by BrainRunner.init()**, after graph compilation:
-
-```typescript
-// packages/core/src/runner/runner.ts (modified init())
-if (process.env.FUP_ENABLED === "true") {
-  this.fupScheduler = new FupScheduler({
-    sql: this.sql,
-    brainType: this.brain.brainType,
-    transport: this.transport,     // PROBLEM: BrainRunner doesn't currently hold transport
-    llm,
-    checkpointer,
-  });
-  await this.fupScheduler.start();
-}
-```
-
-**The transport injection problem:** BrainRunner currently does not hold a reference to the ITransport
-(transport is created in apps/brain-sdr/src/index.ts and not passed into the runner). For FUP,
-the scheduler needs to send messages via the same channel.
-
-Solution: BrainRunner does NOT need the transport directly. The FUP scheduler generates a message
-and needs to deliver it to the lead. The simplest approach for v1.4:
-
-**FUP sends messages by calling an outbound webhook or publishing to a dedicated RabbitMQ queue**
-(separate from the inbound queue), configured via:
-- `FUP_WEBHOOK_URL` — POST target for FUP messages (same format as inbound BrainEvent, reversed)
-- `FUP_RABBITMQ_QUEUE` — queue name for FUP outbound messages
-
-This decouples FUP from the existing transport instances. The FUP scheduler publishes a message
-to an external system that then routes it to the lead (WhatsApp, CRM, etc.). This is consistent
-with how events already work in this architecture.
-
-**Alternative (simpler for v1.4):** FUP re-invokes the compiled LangGraph directly with a synthetic
-"fup trigger" message (a HumanMessage with a special marker) using the lead's thread_id. The graph
-runs as normal, generates a response via the LLM + FUP prompt, and the result is sent via the
-event publisher. This avoids needing a separate outbound transport.
-
-**Recommended for v1.4: the LangGraph re-invocation approach**
-
-```
-FupScheduler.tick():
-  SELECT leads WHERE fup_enabled=true AND fup_next_at <= NOW() AND ia_ativada=true LIMIT 10
-  For each lead:
-    1. Check time window (allowedHours, allowedDays, timezone) → skip if outside window
-    2. Build synthetic event: { Name, Message: "[FUP_TRIGGER]", Numero, IDLead: lead.uniqueId }
-    3. compiledGraph.invoke({ messages: [HumanMessage("[FUP_TRIGGER:step=N]")], ... },
-                             { configurable: { thread_id: lead.uniqueId } })
-       → LLM receives conversation history + FUP system prompt → generates follow-up
-    4. Extract brainOutput from result
-    5. Publish via outbound webhook/queue (TOOL_EVENTS channel or FUP-specific channel)
-    6. UPDATE leads SET fup_step=N+1, fup_next_at=NOW()+interval[N+1] (or fup_enabled=false if last step)
-    7. UPDATE leads SET last_message_at=NOW()
-```
-
-**Scheduler interval:** configured via `FUP_CHECK_INTERVAL_MS` (default: 30 seconds). This is NOT
-the FUP message interval (that is in fup_config.intervals) — this is how often the scheduler polls.
-
-### FUP Scheduler Access to compiledGraph
-
-The scheduler needs to invoke the same compiledGraph owned by BrainRunner. The cleanest approach:
-
-**BrainRunner exposes a package-internal `runFup(lead)` method** that the FupScheduler calls.
-This keeps compiledGraph private to BrainRunner and avoids coupling FupScheduler to LangGraph directly.
-
-```typescript
-// BrainRunner — new internal method (not exported in public API)
-async runFup(lead: Lead, fupMessage: string): Promise<BrainOutput | null>
-```
-
-FupScheduler receives a reference to BrainRunner (passed in constructor). This is a minor coupling
-but safer than exposing compiledGraph publicly.
-
-### FUP Data Flow
-
-```
-setInterval(FupScheduler.tick, FUP_CHECK_INTERVAL_MS)
-  ↓
-SELECT leads WHERE fup_enabled=true AND fup_next_at <= NOW() LIMIT 10
-  ↓ for each lead:
-  Check time window (allowedHours, allowedDays, timezone via Intl.DateTimeFormat)
-    → skip + reschedule fup_next_at to next valid window start if outside
-  ↓
-  BrainRunner.runFup(lead, "[FUP_TRIGGER:step=N lead={nome}]")
-    → compiledGraph.invoke with FUP system prompt (loaded via FUP promptKey from fup_config)
-    → LLM generates follow-up using conversation history + FUP prompt
-    → brainOutput { fullResponse, responseMode }
-  ↓
-  toolEventPublisher.publish({ action: "fup_message", lead, result: brainOutput.fullResponse })
-    → fires to TOOL_EVENTS_WEBHOOK_URL or TOOL_EVENTS_RABBITMQ_QUEUE
-  ↓
-  UPDATE leads SET fup_step=N+1, fup_next_at=NOW()+intervals[N+1]
-  OR
-  UPDATE leads SET fup_step=N+1, fup_enabled=false (if N+1 >= intervals.length)
-  UPDATE leads SET last_message_at=NOW()
-```
-
-**Error handling:** FUP failures are non-fatal. Log error, DO NOT advance fup_step, let next tick retry.
-After 3 consecutive failures for a lead, set `fup_enabled=false` to prevent infinite retry spam.
-
----
-
-## Component Map: New vs. Modified
-
-### New Components
-
-| Component | Location | Description |
-|-----------|----------|-------------|
-| `knowledge_chunks` table | packages/database/src/schema/tables.ts | RAG knowledge storage |
-| `fup_config` table | packages/database/src/schema/tables.ts | FUP rules per brainType |
-| `leads.fupEnabled` col | packages/database/src/schema/tables.ts + migration | FUP opt-in |
-| `leads.fupStep` col | packages/database/src/schema/tables.ts + migration | FUP step counter |
-| `leads.fupNextAt` col | packages/database/src/schema/tables.ts + migration | Next FUP timestamp |
-| `leads.lastMessageAt` col | packages/database/src/schema/tables.ts + migration | Last message timestamp |
-| Migration `0007_*` | packages/database/src/migrations/ | knowledge_chunks + fup_config + leads cols |
-| `packages/rag` | packages/rag/ | New package: ingest endpoint + search tool |
-| `createRagApp(sql)` | packages/rag/src/server.ts | Hono sub-app: POST /api/v1/ingest |
-| `createSearchKnowledgeTool(sql)` | packages/rag/src/tools/search-knowledge.ts | LangGraph tool |
-| `packages/fup` | packages/fup/ | New package: FupScheduler class |
-| `FupScheduler` | packages/fup/src/scheduler.ts | Background interval loop |
-| `ToolEventPublisher` | packages/core/src/events/publisher.ts | Outbound event publisher |
-| `createToolEventPublisher()` | packages/core/src/events/publisher.ts | Factory returning null if not configured |
-
-### Modified Components
-
-| Component | Location | Change |
-|-----------|----------|--------|
-| `BrainBuildContext` | packages/core/src/brain/interface.ts | Add `ragTools`, `toolEventPublisher?` |
-| `BrainRunner._compileGraph()` | packages/core/src/runner/runner.ts | Create publisher + ragTools; inject into ctx |
-| `BrainRunner.init()` | packages/core/src/runner/runner.ts | Start FupScheduler if FUP_ENABLED=true |
-| `BrainRunner.run()` | packages/core/src/runner/runner.ts | Call `LeadService.touchLastMessage()` after turn |
-| `BrainRunner.close()` | packages/core/src/runner/runner.ts | Stop FupScheduler on SIGTERM |
-| `BrainRunner` (new method) | packages/core/src/runner/runner.ts | Add `runFup(lead, message): Promise<BrainOutput|null>` |
-| `createPauseSessionTool()` | packages/core/src/tools/pause-session.ts | Accept optional publisher; fire event after DB update |
-| `createFinishConversationTool()` | packages/core/src/tools/finish-conversation.ts | Accept optional publisher; fire event after DB update |
-| `LeadService` | packages/core/src/leads/lead-service.ts | Add `touchLastMessage(uniqueId)`, `getFupCandidates()` |
-| `createServer()` (both Brains) | apps/brain-sdr/src/server.ts, apps/brain-echo/src/server.ts | Mount `createRagApp(sql)` |
-| `brain.buildGraph()` (both Brains) | apps/brain-sdr/src/brain.ts, apps/brain-echo/src/brain.ts | Spread `ctx.ragTools` into `bindTools()` and `ToolNode` |
-| Migration journal | packages/database/src/migrations/meta/ | Add entry for 0007 migration |
-
----
-
-## Dependency Graph for the Three Features
-
-```
-Feature 1 (RAG):
-  packages/rag
-    depends on: packages/database (schema), packages/ai (createEmbeddings), packages/observability
-    consumes: existing sql (Sql) from BrainRunner context
-    touches: BrainBuildContext (add ragTools), createServer() in each Brain
-
-Feature 2 (Tool Events):
-  packages/core/src/events/publisher.ts
-    depends on: packages/shared (types), packages/observability (logger)
-    touches: BrainBuildContext (add toolEventPublisher), tool factories (pass publisher)
-
-Feature 3 (FUP):
-  packages/fup
-    depends on: packages/database (schema, LeadService), packages/core (BrainRunner.runFup),
-                packages/observability, packages/shared
-    touches: BrainRunner.init() (start scheduler), BrainRunner.run() (touchLastMessage),
-             leads table (new columns), fup_config table (new)
-  FUP also re-uses Feature 2 (tool events) to send the generated FUP message outbound
-```
-
----
-
-## Build Order (Phase Sequencing)
-
-**Rationale for order:**
-
-1. DB migrations are foundational — all features need their tables/columns before anything else can run.
-   Add all new columns and tables in one migration (0007) to minimize migration round-trips.
-
-2. Tool Events (Feature 2) is the simplest feature and has no deps on RAG or FUP.
-   Build it second — it pays off immediately (existing tools start publishing events) and
-   its IToolEventPublisher interface is reused by FUP.
-
-3. RAG (Feature 1) is independent of Tool Events and FUP. Build it third.
-   The ingest endpoint and search tool are self-contained within packages/rag.
-   Once built, it is injected into BrainBuildContext and available to all Brains.
-
-4. FUP (Feature 3) is the most complex. It depends on:
-   - The new DB columns (needs migration — done in phase 1)
-   - `lastMessageAt` being updated by BrainRunner.run() (minor run() change)
-   - IToolEventPublisher interface for outbound message delivery (done in feature 2 phase)
-   FUP is built last when all dependencies are in place.
-
-**Suggested Phase Structure:**
-
-```
-Phase A: Database foundation
-  - Add knowledge_chunks table, fup_config table, new leads columns to tables.ts
-  - Write migration 0007
-  - Export knowledgeChunks, fupConfig from packages/database
-  - Add LeadService.touchLastMessage() and LeadService.getFupCandidates()
-  - Add BrainRunner.run() → touchLastMessage() call
-
-Phase B: Tool Events
-  - packages/core/src/events/publisher.ts (createToolEventPublisher, IToolEventPublisher)
-  - Modify createPauseSessionTool() + createFinishConversationTool() to accept publisher
-  - Add toolEventPublisher to BrainBuildContext + BrainRunner._compileGraph()
-  - ENV: TOOL_EVENTS_WEBHOOK_URL, TOOL_EVENTS_RABBITMQ_QUEUE
-
-Phase C: RAG
-  - Create packages/rag with createRagApp() and createSearchKnowledgeTool()
-  - Add ragTools to BrainBuildContext
-  - BrainRunner._compileGraph() creates ragTools from KNOWLEDGE_COLLECTIONS env
-  - Mount createRagApp(sql) in apps/brain-sdr + apps/brain-echo createServer()
-  - Spread ragTools in both Brain buildGraph() (bindTools + ToolNode)
-  - ENV: KNOWLEDGE_COLLECTIONS, INGEST_TOKEN
-
-Phase D: FUP Automático
-  - Create packages/fup with FupScheduler
-  - Add BrainRunner.runFup() internal method
-  - BrainRunner.init() starts FupScheduler if FUP_ENABLED=true
-  - BrainRunner.close() stops scheduler on SIGTERM
-  - Seed fup_config via SQL migration or /reload-prompts extension
-  - ENV: FUP_ENABLED, FUP_CHECK_INTERVAL_MS
-```
-
----
-
-## Anti-Patterns to Avoid
-
-### Anti-Pattern 1: Reusing `embeddings` table for RAG knowledge chunks
-**Why bad:** The embeddings table is scoped by (userId, sessionId) — mixing domain knowledge into
-conversation memory pollutes the isolation boundary, breaks the HNSW index efficiency (cross-userId
-scans), and creates semantic confusion for future developers.
-**Instead:** New `knowledge_chunks` table with `collection` column as the namespace.
-
-### Anti-Pattern 2: LangGraph callbacks for event publishing
-**Why bad:** Callbacks (LCEL callbacks, dispatchCustomEvent) are for tracing/observability, not
-for side-effect triggering. They have async completion semantics that are less predictable.
-**Instead:** Tool factory accepts publisher as optional argument; publisher.publish() called inside
-the tool implementation after the side-effect (DB update).
-
-### Anti-Pattern 3: FUP scheduler as a separate process or container
-**Why bad:** Adds operational complexity (separate Docker service, separate DB connection pool,
-process coordination). The Brain already has the compiled LangGraph and SQL connection.
-**Instead:** FupScheduler runs inside the same BrainRunner process, started by init(), stopped
-by close(). No new infrastructure.
-
-### Anti-Pattern 4: FUP duplicating LangGraph graph construction
-**Why bad:** FUP would need its own LLM + tools + checkpointer — duplicating what BrainRunner
-already manages. This creates drift between FUP behavior and normal conversation behavior.
-**Instead:** BrainRunner.runFup() reuses the same compiledGraph. FUP is just a synthetic trigger
-message with a special FUP system prompt layered in.
-
-### Anti-Pattern 5: Spreading ragTools only in brain-sdr (not in core)
-**Why bad:** Every new Brain would need to remember to spread ragTools — violates the "add once,
-works everywhere" principle of the SDK.
-**Instead:** ragTools is part of BrainBuildContext. Both brain-sdr and brain-echo must spread it
-in their buildGraph(). Document this in IBrain contract. Alternatively, consider whether BrainRunner
-could inject ragTools into ToolNode automatically — but this conflicts with the current design where
-Brain owns its own graph wiring.
-
-### Anti-Pattern 6: FUP sending messages via BrainEvent → transport inbound queue
-**Why bad:** Sending to the Brain's own inbound queue creates a circular dependency (Brain sends
-to itself) and pollutes the inbound queue with synthetic events mixed with real user messages.
-**Instead:** FUP publishes to a dedicated outbound channel (TOOL_EVENTS publisher) that an external
-system (n8n, WhatsApp gateway) routes to the lead.
-
----
-
-## Scalability Considerations
-
-| Concern | v1.4 (single Brain instance) | Future |
-|---------|------------------------------|--------|
-| Ingest throughput | Synchronous chunking in request handler; acceptable for <1000 docs | Async ingest queue if needed |
-| knowledge_chunks scan | HNSW index covers cosine search; collection index covers filter | Partition by collection if >1M rows |
-| FUP scheduler multi-instance | Multiple Brain instances all poll the same leads — race condition risk | Add `fup_locked_until` column for optimistic lock, or leader election |
-| Tool events ordering | Fire-and-forget per tool; no ordering guarantee | Add sequence number if consumer needs ordering |
-
-**Critical for v1.4:** The FUP multi-instance race (multiple instances scheduling the same lead's
-FUP at the same time) should be mitigated with a simple `UPDATE leads SET fup_next_at = fup_next_at + interval '30 seconds' WHERE unique_id = ? AND fup_next_at <= NOW() RETURNING *` optimistic-lock pattern.
-Only the instance that successfully updates and gets a RETURNING row proceeds. All others skip.
-
----
+- Exact `injectMessage()` extension point if a future phase wants to hand over raw alternating Human/AI messages instead of one summarized AIMessage — current signature only accepts a single `content: string` → `AIMessage`.
+- Whether `agents.admin_token` should be stored in plaintext in the destination's own database (matches how `ADMIN_TOKEN` itself is a plaintext ENV var today — no existing precedent for secret-at-rest encryption in this codebase) or whether this needs a stronger secret-handling story before shipping to production customers.
+- Whether a transferred-and-then-returned lead (destination later hands back to original source) needs `ia_ativada` re-activation on the original source, or whether that's an out-of-scope v2 concern — not addressed by the milestone's stated scope ("Mecanismo para a IA decidir transferir" implies one-directional handoff, not round-trip).
 
 ## Sources
 
-- All findings based on direct codebase read (HIGH confidence):
-  - /root/Brain/packages/core/src/runner/runner.ts
-  - /root/Brain/packages/core/src/brain/interface.ts
-  - /root/Brain/packages/core/src/server.ts
-  - /root/Brain/packages/core/src/tools/pause-session.ts
-  - /root/Brain/packages/core/src/tools/finish-conversation.ts
-  - /root/Brain/packages/core/src/leads/lead-service.ts
-  - /root/Brain/packages/database/src/schema/tables.ts
-  - /root/Brain/packages/database/src/migrate.ts
-  - /root/Brain/packages/ai/src/graph/state.ts
-  - /root/Brain/packages/ai/src/embeddings/factory.ts
-  - /root/Brain/packages/memory/src/semantic.ts
-  - /root/Brain/packages/transport/src/factory.ts
-  - /root/Brain/packages/transport/src/webhook/handler.ts
-  - /root/Brain/packages/transport/src/rabbitmq/consumer.ts
-  - /root/Brain/apps/brain-sdr/src/brain.ts
-  - /root/Brain/apps/brain-sdr/src/server.ts
-  - /root/Brain/.planning/PROJECT.md
+- `/root/Brain/packages/core/src/runner/runner.ts` (BrainRunner lifecycle, TOOL_EVENTS_WHITELIST, injectMessage, _compileGraph)
+- `/root/Brain/packages/core/src/tools/pause-session.ts`, `finish-conversation.ts` (tool factory pattern)
+- `/root/Brain/packages/core/src/events/event-publisher.ts` (IEventPublisher contract, fire-and-forget design)
+- `/root/Brain/packages/core/src/leads/lead-service.ts` (upsertLead FUP auto-activation, setIaAtivada dead code)
+- `/root/Brain/packages/core/src/fup/fup-scheduler.ts` (eligibility query, prompt key='fup' lookup)
+- `/root/Brain/packages/core/src/prompts/loader.ts` (brand_type/key double-filter)
+- `/root/Brain/packages/core/src/server.ts` (admin-token auth pattern, /debug/inject-message)
+- `/root/Brain/packages/database/src/migrate.ts`, `src/schema/tables.ts`, `src/migrations/*.sql`, `src/migrations/meta/_journal.json`
+- `/root/Brain/packages/transport/src/webhook/handler.ts`, `src/webhook/events.ts`, `src/interface.ts`
+- `/root/Brain/packages/ai/src/graph/checkpointer.ts` (PostgresSaver setup)
+- `/root/Brain/apps/brain-sdr/src/brain.ts`, `src/qualifier.ts` (stateless sub-agent precedent, tool wiring)
+- `/root/Brain/apps/brain-sdr/src/index.ts`, `/root/Brain/apps/brain-support/src/index.ts` (ToolsRegistry.enableTool wiring)
+- `/root/Brain/apps/brain-sdr/Dockerfile`, `/root/Brain/apps/brain-support/Dockerfile` (shared migrations COPY, confirmed contamination)
+- `/root/Brain/.planning/PROJECT.md` (milestone goal, prior decisions, tech-debt ledger including TD-04)
+
+---
+*Architecture research for: multi-agent lead handoff + per-brain-type seed scoping*
+*Researched: 2026-08-12*
