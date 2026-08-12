@@ -47,8 +47,26 @@
 
 ## Traceability
 
-Preenchido durante a criação do roadmap.
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| SEED-01 | Phase 33 | Pending |
+| SEED-02 | Phase 33 | Pending |
+| SEED-03 | Phase 33 | Pending |
+| SEED-04 | Phase 33 | Pending |
+| SEED-05 | Phase 33 | Pending |
+| HANDOFF-01 | Phase 34 | Pending |
+| HANDOFF-02 | Phase 34 | Pending |
+| HANDOFF-04 | Phase 34 | Pending |
+| HANDOFF-10 | Phase 34 | Pending |
+| HANDOFF-03 | Phase 35 | Pending |
+| HANDOFF-05 | Phase 35 | Pending |
+| HANDOFF-06 | Phase 35 | Pending |
+| HANDOFF-07 | Phase 35 | Pending |
+| HANDOFF-08 | Phase 35 | Pending |
+| HANDOFF-09 | Phase 35 | Pending |
+
+Coverage: 15/15 v1 requirements mapped. No orphans.
 
 ---
 *Requirements defined: 2026-08-12*
-*Last updated: 2026-08-12 after initial definition (v1.6)*
+*Last updated: 2026-08-12 after ROADMAP.md creation (v1.6) — traceability filled, Phases 33-35*

@@ -8,6 +8,7 @@
 - ✅ **v1.3 MCP Integration + Dynamic responseMode** — Phases 14-17 (shipped 2026-06-16) — [archive](milestones/v1.3-ROADMAP.md)
 - ✅ **v1.4 RAG + Eventos de Tools + FUP Automático** — Phases 19-26 (shipped 2026-06-25) — [archive](milestones/v1.4-ROADMAP.md)
 - ✅ **v1.5 Embedding SDK + Brain Suporte + Tech Debt** — Phases 27-32 (shipped 2026-07-02) — [archive](milestones/v1.5-ROADMAP.md)
+- 🚧 **v1.6 Transferência de Lead entre Agentes + Seed por Brain** — Phases 33-35 (in progress)
 
 ## Phases
 
@@ -80,9 +81,55 @@ Full details: [archive](milestones/v1.5-ROADMAP.md)
 
 </details>
 
+### 🚧 v1.6 Transferência de Lead entre Agentes + Seed por Brain (In Progress)
+
+**Milestone Goal:** Corrigir o seeding de cada Brain para ser específico do seu próprio tipo (prompts + fup_config + prompt padrão de FUP) e construir a capacidade de um agente transferir um lead ativo (dados + contexto de conversa) para outro agente, possivelmente em outro banco de dados.
+
+- [ ] **Phase 33: Seed por Tipo de Brain** - Seed idempotente e escopado por brain_type para prompts + fup_config + prompt fup, sem tocar nas migrations 0002/0005/0010 existentes
+- [ ] **Phase 34: Fundação de Handoff (Agents + DBLink)** - Tabela `agents`, extensão `dblink` na migration compartilhada, coluna `leads.handoff_context`
+- [ ] **Phase 35: Execução de Handoff (Transfer Lead)** - Tool `transfer_lead` com resumo LLM one-shot, escrita via DBLINK no destino, leitura/limpeza do contexto no destino e desativação do lead de origem
+
 ## Phase Details
 
 (v1.5 phase details archived to [milestones/v1.5-ROADMAP.md](milestones/v1.5-ROADMAP.md))
+
+### Phase 33: Seed por Tipo de Brain
+
+**Goal**: Cada imagem de Brain semeia, na inicialização, apenas os prompts e a configuração de FUP do seu próprio `brain_type` — FUP funciona out-of-the-box em qualquer banco novo, sem seed manual e sem contaminação cruzada entre tipos (echo/sdr/support)
+**Depends on**: Nothing (novo milestone; independente das fases 1-32)
+**Requirements**: SEED-01, SEED-02, SEED-03, SEED-04, SEED-05
+**Success Criteria** (what must be TRUE):
+  1. Uma inicialização em banco novo de qualquer Brain (sdr, support, echo) resulta em `prompts` contendo somente linhas do seu próprio `brain_type` — nenhuma linha de outro tipo é inserida (SEED-01)
+  2. Um banco novo de qualquer Brain tem, automaticamente, uma linha de `fup_config` para aquele `brain_type`, sem insert manual (SEED-02)
+  3. Um banco novo de qualquer Brain tem, automaticamente, um prompt `key='fup'` para aquele `brain_type` — um lead silencioso recebe FUP real sem qualquer setup manual de banco (SEED-03)
+  4. Reiniciar o container do Brain múltiplas vezes contra o mesmo banco não duplica nem falha o seed (idempotente via `ON CONFLICT DO NOTHING`), independente do lock/fluxo de `runMigrations()`/`_schema_lock` (SEED-04)
+  5. Bancos de clientes já em produção que aplicaram as migrations 0002/0005/0010 continuam funcionando sem qualquer migration destrutiva ou retroativa (SEED-05)
+**Plans**: TBD
+
+### Phase 34: Fundação de Handoff (Agents + DBLink)
+
+**Goal**: A infraestrutura de dados para transferência de lead existe e é validável isoladamente — tabela `agents` como registro de destinos, extensão `dblink` disponível por padrão em todo banco, e a coluna `leads.handoff_context` já presente no schema (seu uso ponta-a-ponta é validado na Fase 35) — antes de qualquer tool ou fluxo de transferência ser construído
+**Depends on**: Phase 33 (o destino de um handoff precisa ter `fup_config`/prompt `fup` já seedado para o lead virar elegível a FUP imediatamente após a transferência via `upsertLead()`)
+**Requirements**: HANDOFF-01, HANDOFF-02, HANDOFF-04, HANDOFF-10
+**Success Criteria** (what must be TRUE):
+  1. O schema de qualquer Brain inclui uma tabela `agents` (nome, brain_type, connection string do destino utilizável por dblink, enabled, timestamps), populável via INSERT SQL direto sem redeploy (HANDOFF-01)
+  2. A migration compartilhada executa `CREATE EXTENSION IF NOT EXISTS dblink` automaticamente na inicialização — um banco novo de cliente já tem dblink disponível sem qualquer ativação manual (HANDOFF-02)
+  3. Consultar `agents` por um nome desconhecido, ou por um nome com `enabled=false`, retorna um resultado de rejeição claro; consultar um nome válido e habilitado retorna sua connection string de destino (HANDOFF-04)
+  4. Qualquer código relacionado a handoff resolve o `thread_id` exclusivamente a partir do contexto de execução/configurable (nunca de um argumento vindo do LLM/tool), seguindo o mesmo padrão D-04 já usado pelas outras tools (HANDOFF-10)
+**Plans**: TBD
+
+### Phase 35: Execução de Handoff (Transfer Lead)
+
+**Goal**: A IA pode decidir, via prompt de cada Brain, transferir um lead ativo para outro agente — resumo gerado por LLM one-shot a partir do histórico, escrita direta no banco de destino via DBLINK, leitura e limpeza do contexto no destino, desativação do lead de origem somente após confirmação de sucesso, e evento publicado no canal de eventos já existente
+**Depends on**: Phase 34 (tabela `agents` + extensão `dblink` + coluna `handoff_context` precisam existir antes da tool poder escrever)
+**Requirements**: HANDOFF-03, HANDOFF-05, HANDOFF-06, HANDOFF-07, HANDOFF-08, HANDOFF-09
+**Success Criteria** (what must be TRUE):
+  1. O LLM pode chamar a tool `transfer_lead` durante uma conversa — a decisão de quando transferir é definida inteiramente pelo prompt de cada Brain (sem regra hardcoded no código) — e a chamada gera um resumo one-shot da conversa a partir do histórico do checkpoint (HANDOFF-03, HANDOFF-05)
+  2. Chamar `transfer_lead` com um agente de destino válido e habilitado escreve diretamente via DBLINK no banco de destino: upsert do lead (numero, nome, unique_id) e gravação do resumo gerado em `leads.handoff_context` (HANDOFF-06)
+  3. Ao processar a próxima mensagem recebida desse lead, o Brain de destino lê `handoff_context`, usa como contexto inicial da conversa, e então limpa o campo — não é reaproveitado em mensagens futuras (HANDOFF-07)
+  4. Somente após a escrita no destino ser confirmada com sucesso o Brain de origem desativa o lead (`ia_ativada=false` via `LeadService.setIaAtivada()`) — uma transferência com falha ou destino desconhecido/desabilitado mantém o lead de origem ativo e conversando (HANDOFF-08)
+  5. Uma chamada de `transfer_lead` bem-sucedida publica um evento `{action:"transfer_lead", lead, result}` no canal de eventos já existente do Brain (webhook/RabbitMQ via `IEventPublisher`), sem nova infraestrutura de notificação (HANDOFF-09)
+**Plans**: TBD
 
 ## Progress
 
@@ -120,6 +167,9 @@ Full details: [archive](milestones/v1.5-ROADMAP.md)
 | 30. Brain Suporte Docker | v1.5 | 3/3 | Complete    | 2026-07-01 |
 | 31. Pre-Client Onboarding Hardening | v1.5 | 1/1 | Complete    | 2026-07-02 |
 | 32. Code Quality Cleanup — Accumulated Warnings & Test/Doc Hygiene | v1.5 | 6/6 | Complete    | 2026-07-02 |
+| 33. Seed por Tipo de Brain | v1.6 | 0/TBD | Not started | - |
+| 34. Fundação de Handoff (Agents + DBLink) | v1.6 | 0/TBD | Not started | - |
+| 35. Execução de Handoff (Transfer Lead) | v1.6 | 0/TBD | Not started | - |
 
 ## Backlog
 

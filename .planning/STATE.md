@@ -6,7 +6,7 @@ status: planning
 last_updated: "2026-08-12T22:46:56.464Z"
 last_activity: 2026-08-12
 progress:
-  total_phases: 0
+  total_phases: 3
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -21,14 +21,28 @@ See: .planning/PROJECT.md (updated 2026-07-02 after v1.5 milestone shipped)
 
 **Core value:** Infraestrutura de agentes modular onde novos Brains são criados definindo apenas prompts, tools, embeddings e fluxos — sem reescrever a base
 
-**Current focus:** Nenhum — v1.5 shipped 2026-07-02. Rode `/gsd-new-milestone` para iniciar v1.6.
+**Current focus:** v1.6 — Phase 33 (Seed por Tipo de Brain), ready to plan
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-08-12 — Milestone v1.6 started
+Phase: 33 of 35 (Seed por Tipo de Brain)
+Plan: — (not yet planned)
+Status: Roadmap created — ready to plan Phase 33
+Last activity: 2026-08-12 — ROADMAP.md created for v1.6 (Phases 33-35), REQUIREMENTS.md traceability filled (15/15 mapped)
+
+Progress: [░░░░░░░░░░] 0%
+
+## Milestone v1.6 — Phases (planning)
+
+| Phase | Requirements | Plans | Status |
+|-------|--------------|-------|--------|
+| 33 Seed por Tipo de Brain | SEED-01..05 | TBD | Not started |
+| 34 Fundação de Handoff (Agents + DBLink) | HANDOFF-01,02,04,10 | TBD | Not started |
+| 35 Execução de Handoff (Transfer Lead) | HANDOFF-03,05,06,07,08,09 | TBD | Not started |
+
+**Architecture note (confirmed by user, deviates from research/ARCHITECTURE.md):** handoff is DBLINK-based (source Brain writes directly into the destination's `leads` table via `dblink`, using a connection string stored in the new `agents` table), not the HTTP-endpoint-first design the research doc sketched. The destination reads `leads.handoff_context` on its own next inbound message and clears it — no wake-up call to the destination. The HTTP endpoint idea is deferred to v2 as HANDOFF-11.
+
+**Dependency chain:** Phase 34/35 depend on Phase 33 shipping first — `LeadService.upsertLead()` already auto-activates `fup_enabled` by looking up `fup_config` for the lead's `brainType`, so a lead landing on a destination via handoff needs that destination's `fup_config` seeded before Phase 34/35 land, or it's silently unprotected by FUP.
 
 ## Milestone v1.5 Summary — SHIPPED 2026-07-02
 
@@ -60,7 +74,7 @@ Last activity: 2026-08-12 — Milestone v1.6 started
 
 ## Tech Debt
 
-Ledger v1.5 zerado no ship (ver `milestones/v1.5-MILESTONE-AUDIT.md` e Phases 31-32). Nenhum item bloqueante em aberto.
+Ledger v1.5 zerado no ship (ver `milestones/v1.5-MILESTONE-AUDIT.md` e Phases 31-32). TD-04 (`LeadService.setIaAtivada()` sem callers de produção) segue em aberto e será resolvido "de graça" pela Phase 35 (HANDOFF-08 é o primeiro caller real).
 
 ## Accumulated Context
 
@@ -70,6 +84,7 @@ Ledger v1.5 zerado no ship (ver `milestones/v1.5-MILESTONE-AUDIT.md` e Phases 31
 - `prepare: false` required in all postgres.js connections (PgBouncer transaction mode)
 - `bun:sql` has stuck-connection bug after constraint errors — use `postgres.js` driver
 - `bun test`'s `mock.module()` is process-global — a mock registered in one test file can leak into unrelated test files when the whole package's suite runs together (fixed for `brain-runner.test.ts`/`factory.test.ts` in Phase 32; same class of bug remains open in `packages/observability` and other `packages/core` test files — see Pending Todos)
+- Drizzle's migrator has no brain-type filtering hook — cross-Brain prompt seeding contamination (0002/0005/0010 all apply to every Brain's DB) is why Phase 33 uses a separate, non-drizzle-tracked seed mechanism rather than patching the migrator
 
 ### Pending Todos
 
@@ -87,7 +102,7 @@ Ledger v1.5 zerado no ship (ver `milestones/v1.5-MILESTONE-AUDIT.md` e Phases 31
 
 ## Next Steps
 
-Run `/gsd-new-milestone` to start v1.6.
+Run `/gsd-plan-phase 33` to plan Phase 33 (Seed por Tipo de Brain).
 
 ### Quick Tasks Completed
 
@@ -106,4 +121,4 @@ Run `/gsd-new-milestone` to start v1.6.
 | 260728-suj | Separar falha técnica de desqualificação real no qualifier do brain-sdr: qualificado passa a ser boolean \| null; null não grava em memories (ON CONFLICT sobrescrevia qualificação genuína) e não vira evento no webhook/RabbitMQ via isErrorToolResult em packages/core; +10 testes | 2026-07-28 | c7ed49b, 35f5390, 6eabe7d | [260728-suj-distinguish-qualification-failure-from-g](./quick/260728-suj-distinguish-qualification-failure-from-g/) |
 | 260803-g4j | Endpoint de debug POST /debug/inject-message (X-Admin-Token, mesmo padrão de segurança do /reload-prompts) que chama BrainRunner.injectMessage() → compiledGraph.updateState() pra injetar uma AIMessage no thread do LangGraph sem rodar o LLM; funciona mesmo sem checkpoint prévio; +16 testes | 2026-08-03 | 8423284, beedaca, 79e80f0 | [260803-g4j-adicionar-endpoint-de-debug-para-injetar](./quick/260803-g4j-adicionar-endpoint-de-debug-para-injetar/) |
 
-Last activity: 2026-08-03 - Completed quick task 260803-g4j: endpoint de debug para injetar mensagem da IA no thread via updateState
+Last activity: 2026-08-12 - ROADMAP.md criado para v1.6 (Phases 33-35): Seed por Tipo de Brain → Fundação de Handoff (Agents + DBLink) → Execução de Handoff (Transfer Lead). 15/15 requirements mapeados, zero orphans.
