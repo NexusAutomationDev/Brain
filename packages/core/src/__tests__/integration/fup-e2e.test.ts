@@ -190,6 +190,9 @@ describe("FupScheduler E2E — banco PostgreSQL real (FUP-02, FUP-05)", () => {
       checkpointer: mockCheckpointer,
       eventPublisher: mockEventPublisher,
       fupWebhookUrl: FUP_WEBHOOK_URL,
+      // D-10: mock fire-and-forget — este teste E2E não exercita a persistência no
+      // checkpoint LangGraph, apenas o fluxo de envio/scheduling já cobertos aqui.
+      injectMessage: async (_threadId: string, _content: string) => {},
     });
 
     // 7. Monkey-patch _generateFupMessage para evitar chamada real ao LLM

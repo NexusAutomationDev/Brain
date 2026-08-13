@@ -301,6 +301,39 @@ describe("FupScheduler._processFupForLead()", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  test("D-10: após envio bem-sucedido, injectMessage é chamado com (lead.uniqueId, message)", async () => {
+    const lead = makeLead({ uniqueId: "lead-d10", fupStep: 0, intervalsSeconds: [3600, 86400] });
+    const fetchMock = mock(async () => new Response(null, { status: 200 }));
+    const { scheduler, injectMessageMock } = makeScheduler({ leads: [lead], fetchMock });
+
+    const generateSpy = mock(() => Promise.resolve("Mensagem de FUP D-10"));
+    (scheduler as unknown as { _generateFupMessage: typeof generateSpy })._generateFupMessage = generateSpy;
+
+    await scheduler._processFupForLead(lead);
+
+    expect(injectMessageMock).toHaveBeenCalledTimes(1);
+    expect(injectMessageMock).toHaveBeenCalledWith("lead-d10", "Mensagem de FUP D-10");
+  });
+
+  test("D-10: falha em injectMessage não impede o avanço de fup_step", async () => {
+    const lead = makeLead({ uniqueId: "lead-d10-fail", fupStep: 0, intervalsSeconds: [3600, 86400] });
+    const fetchMock = mock(async () => new Response(null, { status: 200 }));
+    const { scheduler, injectMessageMock, updateCallStrings } = makeScheduler({ leads: [lead], fetchMock });
+
+    injectMessageMock.mockRejectedValueOnce(new Error("checkpoint indisponível"));
+
+    const generateSpy = mock(() => Promise.resolve("Mensagem de FUP D-10 falha"));
+    (scheduler as unknown as { _generateFupMessage: typeof generateSpy })._generateFupMessage = generateSpy;
+
+    await expect(scheduler._processFupForLead(lead)).resolves.toBeUndefined();
+
+    // Dar tempo para o fire-and-forget rejeitar e ser tratado pelo .catch()
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    const allSql = updateCallStrings.join(" ");
+    expect(allSql).toContain("fup_step");
+  });
+
   test("WR-04: com 2 falhas seguidas de sucesso na 3ª tentativa, scheduler completa e chama fetch 3x", async () => {
     const lead = makeLead({ fupStep: 0, intervalsSeconds: [3600, 86400] });
     let callCount = 0;

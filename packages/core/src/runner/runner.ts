@@ -244,6 +244,9 @@ export class BrainRunner {
         checkpointer: this.checkpointer,
         eventPublisher: this.eventPublisher,
         fupWebhookUrl,
+        // D-10: reusa o mesmo compiledGraph.updateState() já exposto por injectMessage()
+        // para POST /debug/inject-message — sem nova mecânica de LangGraph.
+        injectMessage: this.injectMessage.bind(this),
       });
       await this.fupScheduler.start();
       // T-22-04: logar apenas presença (hasFupUrl: true), nunca a URL
