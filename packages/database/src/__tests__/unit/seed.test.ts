@@ -133,6 +133,15 @@ describe('runBrainSeed() — bootstrap + lock reuse (D-09: same _schema_lock as 
   });
 });
 
+describe("SEED-04: idempotência — chamar runBrainSeed() duas vezes seguidas não lança erro", () => {
+  it('duas chamadas consecutivas contra o mesmo mock resolvem sem lançar (ON CONFLICT DO NOTHING é responsável pela não-duplicação real em Postgres)', async () => {
+    await expect(runBrainSeed(mockSql, BRAIN_TYPE, fixtureDir)).resolves.toBeUndefined();
+    await expect(runBrainSeed(mockSql, BRAIN_TYPE, fixtureDir)).resolves.toBeUndefined();
+
+    expect(beginCallCount).toBe(2);
+  });
+});
+
 describe('runBrainSeed() — executa arquivos de seed em ordem, via tx.unsafe()', () => {
   it('executa cada arquivo .sql do seedsFolder, ordenado por nome, ignorando arquivos não-.sql', async () => {
     await runBrainSeed(mockSql, BRAIN_TYPE, fixtureDir);
