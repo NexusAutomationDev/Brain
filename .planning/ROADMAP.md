@@ -130,7 +130,16 @@ Plans:
   3. Consultar `agents` por um nome desconhecido, ou por um nome com `enabled=false`, retorna um resultado de rejeição claro; consultar um nome válido e habilitado retorna sua connection string de destino (HANDOFF-04)
   4. Qualquer código relacionado a handoff resolve o `thread_id` exclusivamente a partir do contexto de execução/configurable (nunca de um argumento vindo do LLM/tool), seguindo o mesmo padrão D-04 já usado pelas outras tools (HANDOFF-10)
 
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 34-01-PLAN.md — agents table + leads.handoff_context column + dblink extension migration 0012, generated + applied + psql-verified against a real Postgres (tracer)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 34-02-PLAN.md — getAgentConnection() lookup function + unit tests + real-Postgres integration tests (closes Phase 33's verification gap)
 
 ### Phase 35: Execução de Handoff (Transfer Lead)
 
@@ -184,7 +193,7 @@ Plans:
 | 31. Pre-Client Onboarding Hardening | v1.5 | 1/1 | Complete    | 2026-07-02 |
 | 32. Code Quality Cleanup — Accumulated Warnings & Test/Doc Hygiene | v1.5 | 6/6 | Complete    | 2026-07-02 |
 | 33. Seed por Tipo de Brain | v1.6 | 3/3 | Complete    | 2026-08-13 |
-| 34. Fundação de Handoff (Agents + DBLink) | v1.6 | 0/TBD | Not started | - |
+| 34. Fundação de Handoff (Agents + DBLink) | v1.6 | 0/2 | Planned | - |
 | 35. Execução de Handoff (Transfer Lead) | v1.6 | 0/TBD | Not started | - |
 
 ## Backlog
