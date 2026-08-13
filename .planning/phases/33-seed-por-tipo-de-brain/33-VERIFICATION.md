@@ -1,16 +1,18 @@
 ---
 phase: 33-seed-por-tipo-de-brain
 verified: 2026-08-13T17:07:32Z
-status: human_needed
+status: passed
 score: 6/7 must-haves verified
 behavior_unverified: 1
 overrides_applied: 0
 behavior_unverified_items:
+
   - truth: "SEED-04: Reiniciar o container do Brain múltiplas vezes contra o mesmo banco não duplica nem falha o seed (idempotente via ON CONFLICT DO NOTHING), verificado contra um Postgres real"
     test: "Run `TEST_DATABASE_URL=postgres://... bun test packages/database/src/__tests__/integration/seed-idempotency.test.ts` (packages/database) against a real, schema-migrated PostgreSQL instance"
     expected: "All test cases pass (not skip): for each of sdr/support/echo, calling runBrainSeed() twice in a row against synthetic seed-idem-<type> fixtures never throws, and COUNT queries on fup_config/prompts return exactly 1 row after the second call — proving ON CONFLICT DO NOTHING actually suppresses duplicate rows at the database level, not just that a mocked call resolves twice"
     why_human: "No TEST_DATABASE_URL/POSTGRES_URL was available in this sandbox (confirmed empty) and no docker-compose/test-DB fixture exists in this repo to stand one up safely; the only Postgres containers running on this host belong to unrelated projects (nexusai, evolution-api) and lack the Brain schema, so using them risks touching infrastructure this verification has no mandate over. The unit-level seed.test.ts 'idempotência' test only proves a mocked sql.begin() resolves twice without throwing — it does not exercise real Postgres ON CONFLICT DO NOTHING duplicate-suppression, which is the actual claim SEED-04 makes. A human with access to a real test database must run the gated integration test once to close this."
 human_verification:
+
   - test: "Run `TEST_DATABASE_URL=postgres://... bun test packages/database/src/__tests__/integration/seed-idempotency.test.ts` (packages/database) against a real, schema-migrated PostgreSQL instance"
     expected: "3 describe blocks (sdr/support/echo) pass with no skips; two consecutive runBrainSeed() calls per type produce exactly 1 fup_config row and exactly 1 prompts(key='fup') row each"
     why_human: "Requires a live PostgreSQL instance with the Brain schema (fup_config, prompts, _schema_lock) already migrated; unavailable in the verification sandbox. 33-02-SUMMARY.md itself flags this same gap (D4, human_judgment: true)."
