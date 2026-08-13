@@ -4,17 +4,17 @@ milestone: v1.6
 milestone_name: Transferência de Lead entre Agentes + Seed por Brain
 current_phase: 33
 current_phase_name: Seed por Tipo de Brain
-status: executing
-stopped_at: Completed 33-02-PLAN.md
-last_updated: "2026-08-13T16:35:58.268Z"
+status: verifying
+stopped_at: Completed 33-03-PLAN.md
+last_updated: "2026-08-13T16:42:44.401Z"
 last_activity: 2026-08-13
 last_activity_desc: Phase 33 execution started
 progress:
   total_phases: 4
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 3
-  completed_plans: 2
-  percent: 0
+  completed_plans: 3
+  percent: 25
 ---
 
 # Project State
@@ -31,10 +31,10 @@ See: .planning/PROJECT.md (updated 2026-07-02 after v1.5 milestone shipped)
 
 Phase: 33 (Seed por Tipo de Brain) — EXECUTING
 Plan: 3 of 3
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-08-13 — Phase 33 execution started
 
-Progress: [███████░░░] 67%
+Progress: [██████████] 100%
 
 ## Milestone v1.6 — Phases (planning)
 
@@ -129,8 +129,8 @@ Last activity: 2026-08-12 - ROADMAP.md criado para v1.6 (Phases 33-35): Seed por
 
 ## Session
 
-**Last session:** 2026-08-13T16:35:58.249Z
-**Stopped at:** Completed 33-02-PLAN.md
+**Last session:** 2026-08-13T16:42:44.381Z
+**Stopped at:** Completed 33-03-PLAN.md
 **Resume file:** None
 
 ## Performance Metrics
@@ -139,6 +139,7 @@ Last activity: 2026-08-12 - ROADMAP.md criado para v1.6 (Phases 33-35): Seed por
 |------|----------|-------|-------|
 | Phase 33 P01 | 25min | 2 tasks | 9 files |
 | Phase 33 P02 | 15min | 2 tasks | 6 files |
+| Phase 33 P03 | 15min | 2 tasks | 4 files |
 
 ## Decisions
 
@@ -146,3 +147,5 @@ Last activity: 2026-08-12 - ROADMAP.md criado para v1.6 (Phases 33-35): Seed por
 - [Phase ?]: apps/brain-sdr/.env.example SEEDS_FOLDER doc line skipped — sandbox denies file access, per plan's own fallback instruction
 - [Phase ?]: seed-idempotency.test.ts builds temp seed-idem-<type> fixtures (real content, brain_type literal swapped) instead of calling runBrainSeed() against the unmodified real seeds/<type> folder with a synthetic brainType — the plan's literal wording would always throw
 - [Phase ?]: apps/brain-support/.env.example and apps/brain-echo/.env.example SEEDS_FOLDER doc lines skipped — sandbox denies file access, same fallback as Plan 33-01
+- [Phase ?]: D-10: injectMessage is a REQUIRED field on FupSchedulerOptions, forcing every construction site to explicitly decide checkpoint-write behavior instead of silently no-op-ing
+- [Phase ?]: Fixed fup-e2e.test.ts's out-of-plan FupScheduler construction with a no-op injectMessage mock — required by the new non-optional field (Rule 3)
