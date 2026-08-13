@@ -99,15 +99,22 @@ Full details: [archive](milestones/v1.5-ROADMAP.md)
 **Depends on**: Nothing (novo milestone; independente das fases 1-32)
 **Requirements**: SEED-01, SEED-02, SEED-03, SEED-04, SEED-05
 **Success Criteria** (what must be TRUE):
+
   1. Uma inicialização em banco novo de qualquer Brain (sdr, support, echo) resulta em `prompts` contendo somente linhas do seu próprio `brain_type` — nenhuma linha de outro tipo é inserida (SEED-01)
   2. Um banco novo de qualquer Brain tem, automaticamente, uma linha de `fup_config` para aquele `brain_type`, sem insert manual (SEED-02)
   3. Um banco novo de qualquer Brain tem, automaticamente, um prompt `key='fup'` para aquele `brain_type` — um lead silencioso recebe FUP real sem qualquer setup manual de banco (SEED-03)
   4. Reiniciar o container do Brain múltiplas vezes contra o mesmo banco não duplica nem falha o seed (idempotente via `ON CONFLICT DO NOTHING`), independente do lock/fluxo de `runMigrations()`/`_schema_lock` (SEED-04)
   5. Bancos de clientes já em produção que aplicaram as migrations 0002/0005/0010 continuam funcionando sem qualquer migration destrutiva ou retroativa (SEED-05)
+
 **Plans**: 3 plans
 
 Plans:
+**Wave 1**
+
 - [ ] 33-01-PLAN.md — runBrainSeed() core mechanism + brain-sdr end-to-end wiring (tracer) + unit tests
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 33-02-PLAN.md — Support + Echo seed files/Dockerfile wiring + cross-brain isolation & idempotency tests
 - [ ] 33-03-PLAN.md — D-10: FupScheduler persists sent FUP message into the lead's LangGraph checkpoint
 
@@ -117,10 +124,12 @@ Plans:
 **Depends on**: Phase 33 (o destino de um handoff precisa ter `fup_config`/prompt `fup` já seedado para o lead virar elegível a FUP imediatamente após a transferência via `upsertLead()`)
 **Requirements**: HANDOFF-01, HANDOFF-02, HANDOFF-04, HANDOFF-10
 **Success Criteria** (what must be TRUE):
+
   1. O schema de qualquer Brain inclui uma tabela `agents` (nome, brain_type, connection string do destino utilizável por dblink, enabled, timestamps), populável via INSERT SQL direto sem redeploy (HANDOFF-01)
   2. A migration compartilhada executa `CREATE EXTENSION IF NOT EXISTS dblink` automaticamente na inicialização — um banco novo de cliente já tem dblink disponível sem qualquer ativação manual (HANDOFF-02)
   3. Consultar `agents` por um nome desconhecido, ou por um nome com `enabled=false`, retorna um resultado de rejeição claro; consultar um nome válido e habilitado retorna sua connection string de destino (HANDOFF-04)
   4. Qualquer código relacionado a handoff resolve o `thread_id` exclusivamente a partir do contexto de execução/configurable (nunca de um argumento vindo do LLM/tool), seguindo o mesmo padrão D-04 já usado pelas outras tools (HANDOFF-10)
+
 **Plans**: TBD
 
 ### Phase 35: Execução de Handoff (Transfer Lead)
@@ -129,11 +138,13 @@ Plans:
 **Depends on**: Phase 34 (tabela `agents` + extensão `dblink` + coluna `handoff_context` precisam existir antes da tool poder escrever)
 **Requirements**: HANDOFF-03, HANDOFF-05, HANDOFF-06, HANDOFF-07, HANDOFF-08, HANDOFF-09
 **Success Criteria** (what must be TRUE):
+
   1. O LLM pode chamar a tool `transfer_lead` durante uma conversa — a decisão de quando transferir é definida inteiramente pelo prompt de cada Brain (sem regra hardcoded no código) — e a chamada gera um resumo one-shot da conversa a partir do histórico do checkpoint (HANDOFF-03, HANDOFF-05)
   2. Chamar `transfer_lead` com um agente de destino válido e habilitado escreve diretamente via DBLINK no banco de destino: upsert do lead (numero, nome, unique_id) e gravação do resumo gerado em `leads.handoff_context` (HANDOFF-06)
   3. Ao processar a próxima mensagem recebida desse lead, o Brain de destino lê `handoff_context`, usa como contexto inicial da conversa, e então limpa o campo — não é reaproveitado em mensagens futuras (HANDOFF-07)
   4. Somente após a escrita no destino ser confirmada com sucesso o Brain de origem desativa o lead (`ia_ativada=false` via `LeadService.setIaAtivada()`) — uma transferência com falha ou destino desconhecido/desabilitado mantém o lead de origem ativo e conversando (HANDOFF-08)
   5. Uma chamada de `transfer_lead` bem-sucedida publica um evento `{action:"transfer_lead", lead, result}` no canal de eventos já existente do Brain (webhook/RabbitMQ via `IEventPublisher`), sem nova infraestrutura de notificação (HANDOFF-09)
+
 **Plans**: TBD
 
 ## Progress
@@ -188,6 +199,7 @@ Plans:
 **Plans:** 1/1 plans complete
 
 Plans:
+
 - [ ] TBD (promote with /gsd-review-backlog when ready)
 
 ### Phase 18: Build and Publish Docker Image via DockGate
@@ -198,4 +210,5 @@ Plans:
 **Plans:** 1 plan
 
 Plans:
+
 - [ ] 18-01-PLAN.md — Criar .github/workflows/publish-brain-sdr.yml com pipeline completo de build, export e publicação no DockGate
