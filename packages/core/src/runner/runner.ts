@@ -9,7 +9,7 @@
 import { createCheckpointer, createLLM } from "@brain-pkg/ai";
 import type { LLMOptions } from "@brain-pkg/ai";
 import { MultiServerMCPClient } from "@langchain/mcp-adapters";
-import { runMigrations } from "@brain-pkg/database";
+import { runMigrations, runBrainSeed } from "@brain-pkg/database";
 import { MemoryManager } from "@brain-pkg/memory";
 import type { IEmbeddingProvider } from "@brain-pkg/embeddings";
 import { createEmbeddingProvider } from "@brain-pkg/embeddings";
@@ -51,6 +51,8 @@ export interface BrainRunnerOptions {
   llmOptions?: LLMOptions;
   /** Pasta de migrations para auto-migrate no init(). Se omitido, usa MIGRATIONS_FOLDER ENV. */
   migrationsFolder?: string;
+  /** Pasta de seeds por brain_type para runBrainSeed() no init(). Se omitido, usa SEEDS_FOLDER ENV. */
+  seedsFolder?: string;
   /** EventPublisher injetável para testes (D-11). Ausente = criado em init() a partir de ENVs. */
   eventPublisher?: IEventPublisher;
   /** IEmbeddingProvider injetável para testes (EMBD-05). Ausente = criado em init() a partir de ENVs — mesmo padrão de eventPublisher. */
@@ -72,6 +74,7 @@ export class BrainRunner {
   private readonly toolsRegistry: ToolsRegistry;
   private readonly llmOptions?: LLMOptions;
   private readonly migrationsFolder: string | undefined;
+  private readonly seedsFolder: string | undefined;
   private readonly logger = createLogger();
 
   private prompts: Record<string, string> = {};
@@ -103,6 +106,7 @@ export class BrainRunner {
     this.toolsRegistry = options.toolsRegistry;
     this.llmOptions = options.llmOptions;
     this.migrationsFolder = options.migrationsFolder;
+    this.seedsFolder = options.seedsFolder;
     this.leadService = new LeadService(options.sql);
     // D-11: EventPublisher injetável para testes; null = criado em init() a partir de ENVs
     if (options.eventPublisher) {
@@ -143,6 +147,24 @@ export class BrainRunner {
       process.exit(1);
     });
     this.logger.info({ brainId: this.brain.id }, 'Migrations completed');
+
+    // SEED-02/SEED-03: runBrainSeed() roda entre runMigrations() e loadPrompts() — garante
+    // que fup_config e prompts(key='fup') existem para este brainType antes do fail-fast
+    // loop de promptKeys abaixo. D-08/D-09: falha de seed é fail-fast, mesmo padrão de
+    // MIGRATIONS_FOLDER acima.
+    const seedsFolder = this.seedsFolder ?? process.env.SEEDS_FOLDER;
+    if (!seedsFolder) {
+      this.logger.error(
+        { brainId: this.brain.id },
+        'SEEDS_FOLDER not set — cannot run brain seed'
+      );
+      process.exit(1);
+    }
+    await runBrainSeed(this.sql, this.brain.brainType, seedsFolder).catch((err: unknown) => {
+      this.logger.error({ brainId: this.brain.id, err }, 'Brain seed failed — aborting init');
+      process.exit(1);
+    });
+    this.logger.info({ brainId: this.brain.id }, 'Brain seed completed');
 
     // EMBD-05: resolver embeddingProvider — SEMPRE, não condicional a ENV presente
     // (D-09: embedding é bloqueante no fluxo principal, não opcional como eventPublisher)

@@ -94,12 +94,18 @@ COPY --from=builder /app/apps/brain-sdr/node_modules ./apps/brain-sdr/node_modul
 # Copiadas para /app/migrations/ — path configurado via ENV MIGRATIONS_FOLDER
 COPY --from=builder /app/packages/database/src/migrations ./migrations
 
+# Seed por brain_type (SEED-02/SEED-03) — SÓ o subfolder deste tipo (sdr), NUNCA a árvore
+# completa seeds/ (Pitfall 3 — separação física, não apenas filtro de query em runtime).
+COPY --from=builder /app/packages/database/src/seeds/sdr ./seeds
+
 # Variáveis de ambiente padrão
 ENV PORT=3000
 ENV NODE_ENV=production
 # MIGRATIONS_FOLDER: informa ao runner.ts onde encontrar os arquivos SQL em runtime
 # CRITICAL: nome correto é MIGRATIONS_FOLDER (não MIGRATIONS_DIR) — ver runner.ts L:process.env.MIGRATIONS_FOLDER
 ENV MIGRATIONS_FOLDER=/app/migrations
+# SEEDS_FOLDER: informa a runBrainSeed() onde encontrar os arquivos .sql do seed deste brain_type
+ENV SEEDS_FOLDER=/app/seeds
 
 # T-09-03-04: USER bun — executa como não-root (ASVS L1 V10.2.1)
 # oven/bun:1 já inclui o usuário 'bun'
