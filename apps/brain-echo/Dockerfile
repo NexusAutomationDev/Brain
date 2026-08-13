@@ -89,11 +89,20 @@ COPY --from=builder /app/apps/brain-echo/node_modules ./apps/brain-echo/node_mod
 # Copiadas para /app/migrations/ — path configurado via ENV MIGRATIONS_DIR
 COPY --from=builder /app/packages/database/src/migrations ./migrations
 
+# Seed por brain_type (SEED-02/SEED-03) — SÓ o subfolder deste tipo (echo), NUNCA a árvore
+# completa seeds/ (Pitfall 3 — separação física, não apenas filtro de query em runtime).
+COPY --from=builder /app/packages/database/src/seeds/echo ./seeds
+
 # Variáveis de ambiente padrão
 ENV PORT=3000
 ENV NODE_ENV=production
 # MIGRATIONS_DIR: informa ao entrypoint onde encontrar os arquivos SQL em runtime
 ENV MIGRATIONS_DIR=/app/migrations
+# SEEDS_FOLDER: informa a runBrainSeed() onde encontrar os arquivos .sql do seed deste brain_type
+# NOTA: nome correto é SEEDS_FOLDER (consistente com sdr/support), mesmo que este Dockerfile
+# use a variável legada MIGRATIONS_DIR para migrations — inconsistência pré-existente, fora
+# de escopo desta fase (ver read_first do plano).
+ENV SEEDS_FOLDER=/app/seeds
 
 # Usuário não-root para segurança (bun image já tem usuário 'bun')
 USER bun

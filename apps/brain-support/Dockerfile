@@ -96,12 +96,18 @@ COPY --from=builder /app/apps/brain-support/node_modules ./apps/brain-support/no
 # D-04: packages/database/src/migrations é compartilhado entre todos os Brains
 COPY --from=builder /app/packages/database/src/migrations ./migrations
 
+# Seed por brain_type (SEED-02/SEED-03) — SÓ o subfolder deste tipo (support), NUNCA a árvore
+# completa seeds/ (Pitfall 3 — separação física, não apenas filtro de query em runtime).
+COPY --from=builder /app/packages/database/src/seeds/support ./seeds
+
 # Variáveis de ambiente padrão
 ENV PORT=3002
 ENV NODE_ENV=production
 # MIGRATIONS_FOLDER: informa ao runner.ts onde encontrar os arquivos SQL em runtime
 # CRITICAL: nome correto é MIGRATIONS_FOLDER (não MIGRATIONS_DIR)
 ENV MIGRATIONS_FOLDER=/app/migrations
+# SEEDS_FOLDER: informa a runBrainSeed() onde encontrar os arquivos .sql do seed deste brain_type
+ENV SEEDS_FOLDER=/app/seeds
 
 # Executa como não-root (ASVS L1 V10.2.1) — oven/bun:1 já inclui o usuário 'bun'
 USER bun
