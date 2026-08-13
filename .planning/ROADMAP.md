@@ -85,7 +85,7 @@ Full details: [archive](milestones/v1.5-ROADMAP.md)
 
 **Milestone Goal:** Corrigir o seeding de cada Brain para ser específico do seu próprio tipo (prompts + fup_config + prompt padrão de FUP) e construir a capacidade de um agente transferir um lead ativo (dados + contexto de conversa) para outro agente, possivelmente em outro banco de dados.
 
-- [ ] **Phase 33: Seed por Tipo de Brain** - Seed idempotente e escopado por brain_type para prompts + fup_config + prompt fup, sem tocar nas migrations 0002/0005/0010 existentes
+- [x] **Phase 33: Seed por Tipo de Brain** - Seed idempotente e escopado por brain_type para prompts + fup_config + prompt fup, sem tocar nas migrations 0002/0005/0010 existentes (completed 2026-08-13)
 - [ ] **Phase 34: Fundação de Handoff (Agents + DBLink)** - Tabela `agents`, extensão `dblink` na migration compartilhada, coluna `leads.handoff_context`
 - [ ] **Phase 35: Execução de Handoff (Transfer Lead)** - Tool `transfer_lead` com resumo LLM one-shot, escrita via DBLINK no destino, leitura/limpeza do contexto no destino e desativação do lead de origem
 
@@ -183,7 +183,7 @@ Plans:
 | 30. Brain Suporte Docker | v1.5 | 3/3 | Complete    | 2026-07-01 |
 | 31. Pre-Client Onboarding Hardening | v1.5 | 1/1 | Complete    | 2026-07-02 |
 | 32. Code Quality Cleanup — Accumulated Warnings & Test/Doc Hygiene | v1.5 | 6/6 | Complete    | 2026-07-02 |
-| 33. Seed por Tipo de Brain | v1.6 | 3/3 | In Progress|  |
+| 33. Seed por Tipo de Brain | v1.6 | 3/3 | Complete    | 2026-08-13 |
 | 34. Fundação de Handoff (Agents + DBLink) | v1.6 | 0/TBD | Not started | - |
 | 35. Execução de Handoff (Transfer Lead) | v1.6 | 0/TBD | Not started | - |
 
