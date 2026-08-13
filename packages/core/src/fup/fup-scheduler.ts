@@ -46,6 +46,9 @@ export interface FupSchedulerOptions {
   checkpointer: ICheckpointerLike;
   eventPublisher: IEventPublisher | null;  // D-18: injetável; null = sem publicação
   fupWebhookUrl: string;  // D-01: obrigatório — caller verifica presença antes de construir
+  // D-10: persiste a mensagem de FUP enviada no checkpoint LangGraph do lead, reusando o
+  // mesmo primitivo já exposto por BrainRunner.injectMessage()/compiledGraph.updateState().
+  injectMessage: (threadId: string, content: string) => Promise<void>;
 }
 
 export class FupScheduler implements IFupScheduler {
@@ -171,6 +174,16 @@ export class FupScheduler implements IFupScheduler {
         const message = await this._generateFupMessage(lead, fupPrompt);
         // D-01: POST para FUP_WEBHOOK_URL com payload { Name, Numero, Message, IDLead }
         await this._sendFupWebhook(lead, message);
+
+        // D-10: persistir a mensagem de FUP já enviada no checkpoint LangGraph do lead, para
+        // que o próximo turno real do LLM tenha esse contexto. Fire-and-forget-with-warn —
+        // uma falha aqui não pode desfazer um envio já confirmado via webhook (T-33-06).
+        this.opts.injectMessage(lead.uniqueId, message).catch((err: unknown) => {
+          this.logger.warn(
+            { err, uniqueId: lead.uniqueId },
+            "FUP D-10: injectMessage falhou — checkpoint não atualizado, envio já confirmado via webhook"
+          );
+        });
 
         // Sucesso: calcular próximo slot e atualizar banco (Tx 2 — UPDATE definitivo)
         const nextFupStep = lead.fupStep + 1;

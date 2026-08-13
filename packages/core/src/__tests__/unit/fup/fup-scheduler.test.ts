@@ -89,12 +89,17 @@ function makeScheduler(options: {
     getTuple: mock(() => Promise.resolve(undefined)),
   } as unknown as import("@langchain/langgraph-checkpoint-postgres").PostgresSaver;
 
+  // D-10: mock de injectMessage — resolve por padrão; testes individuais (Task 2) podem
+  // sobrescrever com mockRejectedValueOnce() para exercitar o caminho de falha isolada.
+  const injectMessageMock = mock(async (_threadId: string, _content: string) => {});
+
   const scheduler = new FupScheduler({
     sql: sqlTemplate as unknown as import("postgres").Sql,
     brainType: "sdr",
     checkpointer,
     eventPublisher: options.eventPublisher !== undefined ? options.eventPublisher : null,
     fupWebhookUrl: "http://localhost:3001/fup-webhook",
+    injectMessage: injectMessageMock,
   });
 
   // Injetar fetchMock no escopo do scheduler via monkey-patch de _sendFupWebhook
@@ -113,7 +118,7 @@ function makeScheduler(options: {
     }
   };
 
-  return { scheduler, sqlBeginMock, updateCallStrings, fetchMockFn };
+  return { scheduler, sqlBeginMock, updateCallStrings, fetchMockFn, injectMessageMock };
 }
 
 // ---- Testes ----
