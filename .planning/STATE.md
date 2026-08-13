@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Transferência de Lead entre Agentes + Seed por Brain
-current_phase: 33
-current_phase_name: Seed por Tipo de Brain
-status: verifying
+current_phase: 34
+current_phase_name: Agents + DBLink
+status: planning
 stopped_at: Completed 33-03-PLAN.md
-last_updated: "2026-08-13T16:42:44.401Z"
+last_updated: "2026-08-13T17:51:02.161Z"
 last_activity: 2026-08-13
-last_activity_desc: Phase 33 execution started
+last_activity_desc: Phase 33 complete, transitioned to Phase 34
 progress:
   total_phases: 4
   completed_phases: 1
@@ -21,18 +21,18 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-07-02 after v1.5 milestone shipped)
+See: .planning/PROJECT.md (updated 2026-08-13 after Phase 33)
 
 **Core value:** Infraestrutura de agentes modular onde novos Brains são criados definindo apenas prompts, tools, embeddings e fluxos — sem reescrever a base
 
-**Current focus:** Phase 33 — Seed por Tipo de Brain
+**Current focus:** Phase 34 — Fundação de Handoff (Agents + DBLink)
 
 ## Current Position
 
-Phase: 33 (Seed por Tipo de Brain) — EXECUTING
-Plan: 3 of 3
-Status: Phase complete — ready for verification
-Last activity: 2026-08-13 — Phase 33 execution started
+Phase: 34 — Fundação de Handoff (Agents + DBLink)
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-08-13 — Phase 33 complete, transitioned to Phase 34
 
 Progress: [██████████] 100%
 
@@ -93,6 +93,7 @@ Ledger v1.5 zerado no ship (ver `milestones/v1.5-MILESTONE-AUDIT.md` e Phases 31
 ### Pending Todos
 
 - Fix cross-test mock.module pollution in `packages/observability` (`server.test.ts` → `health-transport.test.ts`) and `packages/core` (`event-publisher.test.ts`, `lead-service-fup.test.ts`) full-suite runs — `.planning/todos/pending/2026-07-02-fix-cross-test-mock-module-pollution-in-full-suite-runs.md`
+- Fix `fup-e2e.test.ts` — inserts a nonexistent `leads.brain_type` column and an invalid `ON CONFLICT (unique_id)` target (no unique constraint on that column); pre-existing since commit `fe678ba` (2026-07-01, D-12), unrelated to Phase 33; means FUP-02/FUP-05 have had zero real-database E2E coverage since then — `.planning/todos/pending/2026-08-13-fix-fup-e2e-test-brain-type-column-and-on-conflict-target.md`
 
 ## Archived
 

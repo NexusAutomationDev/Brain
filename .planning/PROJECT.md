@@ -122,6 +122,14 @@ Uma infraestrutura de agentes modular onde novos Brains são criados definindo a
 
 - ✓ TECH-06: Achados warning/info de code review das fases 27-30 resolvidos (SIGTERM idempotency, RabbitMQ retry-key collision, WebhookTransport stale status, reembed MAX_PAGES cap, search-knowledge truncation, Gemini dimension validation, RESERVED_TOOL_NAMES derivado, type-guards de mensagem AI unificados) + lacunas de documentação/teste preenchidas (frontmatter retroativo, fup-e2e.test.ts isolamento de teste, mock.module cross-pollution entre brain-runner.test.ts/factory.test.ts corrigido) — Phase 32
 
+**v1.6 — Seed por Tipo de Brain (Phase 33)**
+
+- ✓ SEED-01: `runBrainSeed()` semeia apenas o próprio `brain_type` do Brain que chama — `seed-cross-brain-isolation.test.ts` (16/16) prova ausência de leakage cruzado em seed SQL e Dockerfile COPY paths — Phase 33
+- ✓ SEED-02: linha de `fup_config` auto-seedada por brain_type via `ON CONFLICT (brain_type) DO NOTHING`, chamada em `BrainRunner.init()` antes de `loadPrompts()` — Phase 33
+- ✓ SEED-03: linha `prompts(key='fup')` auto-seedada por brain_type — FUP funciona out-of-the-box em banco novo; D-10 (escopo confirmado pelo usuário) adicionalmente persiste a mensagem de FUP enviada no checkpoint LangGraph do lead via `FupScheduler` → `BrainRunner.injectMessage()` — Phase 33
+- ✓ SEED-04: seed idempotente (`ON CONFLICT DO NOTHING`) — confirmado contra PostgreSQL real (não apenas mock) via `seed-idempotency.test.ts`, human-verified 2026-08-13 — Phase 33
+- ✓ SEED-05: migrations 0002/0005/0010 intocadas — confirmado via git history, sem migration destrutiva/retroativa — Phase 33
+
 ### Active
 
 **Backlog (pós v1.4)**
@@ -222,6 +230,8 @@ Brains planejados para o futuro: Suporte, Customer Success, Cobrança, RH, Jurí
 | getEmbeddingProvider() singleton de vida do processo, sem invalidação (v1.5, D-05/D-10) | ENVs de embedding são fixas por container neste modelo de deployment — sem caso de uso de reload em runtime | ✓ Good — decisão documentada inline; nenhum caller precisou de invalidação |
 | resetFup() preserva fupEnabled (v1.4) | Ao receber mensagem, apenas fupNextAt e fupStep são zerados — fup_enabled permanece true para futuros FUPs | ✓ Good — D-19 da Phase 22; lead que responde continua elegível para próximos FUPs |
 | brainType como 4° parâmetro opcional em upsertLead (v1.4) | Backward compatible com callers existentes — brainType só é necessário para ativar FUP automaticamente | ✓ Good — Phase 25 integrou sem quebrar callers anteriores |
+| Seed mechanism separado do migrator Drizzle (v1.6, Phase 33) | Drizzle's migrator não tem hook de filtro por brain_type — migrations 0002/0005/0010 aplicam-se a todo banco; um seed idempotente próprio (`runBrainSeed()`, `ON CONFLICT DO NOTHING`, mesmo padrão de row-lock do `migrate.ts`) evita contaminação cruzada sem tocar migrations em produção | ✓ Good — SEED-01..05 fechados sem alterar `migrate.ts` ou as 3 migrations protegidas |
+| `injectMessage` como campo obrigatório em `FupSchedulerOptions` (v1.6, D-10) | Forçar toda construção de `FupScheduler` a decidir explicitamente o comportamento de escrita em checkpoint, em vez de no-op silencioso | ✓ Good — pegou um call site fora do plano (`fup-e2e.test.ts`) que precisava do mock, evitando quebra silenciosa em runtime |
 
 ## Evolution
 
@@ -241,4 +251,4 @@ Este documento evolui nas transições de fase e marcos de milestone.
 4. Atualizar Context com estado atual
 
 ---
-*Last updated: 2026-07-02 após v1.5 milestone (shipped — Phases 27-32, tech debt ledger zerado)
+*Last updated: 2026-08-13 após Phase 33 (Seed por Tipo de Brain, v1.6) — SEED-01..05 validados, SEED-04 human-verified contra Postgres real
