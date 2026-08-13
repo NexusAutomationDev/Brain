@@ -91,6 +91,7 @@ const mockSqlWr = mock(async () => [{ dimensions: 1536 }]) as unknown as never;
 
 mock.module("@brain-pkg/database", () => ({
   runMigrations: mock(async () => {}),
+  runBrainSeed: mock(async () => {}),
   leads: {},
   prompts: {},
   users: {},
@@ -113,6 +114,7 @@ mock.module("../../events/event-publisher.js", () => ({
 
 // Set required ENV vars
 process.env.MIGRATIONS_FOLDER = "/tmp/test-migrations-wr";
+process.env.SEEDS_FOLDER = "/tmp/test-seeds-wr";
 process.env.DATABASE_URL = "postgresql://test:test@localhost:5432/testdb";
 
 // Import after mocks

@@ -74,6 +74,7 @@ mock.module("@brain-pkg/embeddings", () => ({
 
 mock.module("@brain-pkg/database", () => ({
   runMigrations: mock(async () => {}),
+  runBrainSeed: mock(async () => {}),
 }));
 
 mock.module("@brain-pkg/shared", () => ({
@@ -172,6 +173,7 @@ describe("BrainRunner.run() — FUP-06: touchLastMessage antes do gate ia_ativad
 
     process.env.DATABASE_URL = "postgres://test:test@localhost:5432/test";
     process.env.MIGRATIONS_FOLDER = "/tmp/fake-migrations";
+    process.env.SEEDS_FOLDER = "/tmp/fake-seeds";
 
     toolsRegistry = new ToolsRegistry();
     toolsRegistry.enableTool("fup-test", "dummy"); // register brainType to avoid ConfigurationError

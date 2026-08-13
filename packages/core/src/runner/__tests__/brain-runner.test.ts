@@ -138,6 +138,7 @@ const mockSql = makeMockSql();
 
 mock.module("@brain-pkg/database", () => ({
   runMigrations: mock(async () => {}),
+  runBrainSeed: mock(async () => {}),
   // Mock das tabelas do Drizzle — necessário porque lead-service.ts importa `leads` de @brain-pkg/database
   // O mock de lead-service.js intercepta o LeadService mas o bun analisa os named exports do módulo
   leads: {},
@@ -156,6 +157,8 @@ mock.module("@brain-pkg/database", () => ({
 
 // Satisfy MIGRATIONS_FOLDER check in runner.init() — prevents process.exit(1) before runMigrations
 process.env.MIGRATIONS_FOLDER = "/tmp/test-migrations";
+// Satisfy SEEDS_FOLDER check in runner.init() — prevents process.exit(1) before runBrainSeed
+process.env.SEEDS_FOLDER = "/tmp/test-seeds";
 // Satisfy DATABASE_URL check in _compileGraph() — prevents process.exit(1) when createCheckpointer is called
 // The value is fake but the mock of @brain-pkg/ai.createCheckpointer intercepts before any real connection.
 process.env.DATABASE_URL = "postgresql://test:test@localhost:5432/testdb";
@@ -325,6 +328,35 @@ describe("BrainRunner", () => {
       process.exit = originalExit;
       // Restore ENV so subsequent tests are not affected
       process.env.MIGRATIONS_FOLDER = savedFolder;
+    }
+  });
+
+  test("init() calls process.exit(1) when SEEDS_FOLDER ENV is not set and seedsFolder option is absent (SEED-02/03)", async () => {
+    const savedSeedsFolder = process.env.SEEDS_FOLDER;
+    delete process.env.SEEDS_FOLDER;
+
+    const originalExit = process.exit;
+    const mockExit = mock((_code: number) => { throw new Error("process.exit called"); });
+    process.exit = mockExit as never;
+
+    const brain = makeBrain(["system"]);
+    // No seedsFolder option passed — relies solely on ENV (which is now unset)
+    const runner = new BrainRunner({
+      brain,
+      sql: mockSql,
+      toolsRegistry: registry,
+    });
+
+    try {
+      await runner.init();
+      expect.unreachable("init() should have called process.exit(1)");
+    } catch (e) {
+      expect((e as Error).message).toBe("process.exit called");
+      expect(mockExit).toHaveBeenCalledWith(1);
+    } finally {
+      process.exit = originalExit;
+      // Restore ENV so subsequent tests are not affected
+      process.env.SEEDS_FOLDER = savedSeedsFolder;
     }
   });
 
