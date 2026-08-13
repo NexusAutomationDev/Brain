@@ -5,15 +5,15 @@ milestone_name: Transferência de Lead entre Agentes + Seed por Brain
 current_phase: 33
 current_phase_name: Seed por Tipo de Brain
 status: executing
-stopped_at: Completed 33-01-PLAN.md
-last_updated: "2026-08-13T16:20:50.797Z"
+stopped_at: Completed 33-02-PLAN.md
+last_updated: "2026-08-13T16:35:58.268Z"
 last_activity: 2026-08-13
 last_activity_desc: Phase 33 execution started
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 3
-  completed_plans: 1
+  completed_plans: 2
   percent: 0
 ---
 
@@ -30,11 +30,11 @@ See: .planning/PROJECT.md (updated 2026-07-02 after v1.5 milestone shipped)
 ## Current Position
 
 Phase: 33 (Seed por Tipo de Brain) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-08-13 — Phase 33 execution started
 
-Progress: [███░░░░░░░] 33%
+Progress: [███████░░░] 67%
 
 ## Milestone v1.6 — Phases (planning)
 
@@ -129,8 +129,8 @@ Last activity: 2026-08-12 - ROADMAP.md criado para v1.6 (Phases 33-35): Seed por
 
 ## Session
 
-**Last session:** 2026-08-13T16:20:50.775Z
-**Stopped at:** Completed 33-01-PLAN.md
+**Last session:** 2026-08-13T16:35:58.249Z
+**Stopped at:** Completed 33-02-PLAN.md
 **Resume file:** None
 
 ## Performance Metrics
@@ -138,8 +138,11 @@ Last activity: 2026-08-12 - ROADMAP.md criado para v1.6 (Phases 33-35): Seed por
 | Plan | Duration | Tasks | Files |
 |------|----------|-------|-------|
 | Phase 33 P01 | 25min | 2 tasks | 9 files |
+| Phase 33 P02 | 15min | 2 tasks | 6 files |
 
 ## Decisions
 
 - [Phase ?]: Postgres '{...}' curly-brace array literal used instead of ARRAY[...] in seed SQL to satisfy the plan's zero-bracket acceptance criterion without changing values
 - [Phase ?]: apps/brain-sdr/.env.example SEEDS_FOLDER doc line skipped — sandbox denies file access, per plan's own fallback instruction
+- [Phase ?]: seed-idempotency.test.ts builds temp seed-idem-<type> fixtures (real content, brain_type literal swapped) instead of calling runBrainSeed() against the unmodified real seeds/<type> folder with a synthetic brainType — the plan's literal wording would always throw
+- [Phase ?]: apps/brain-support/.env.example and apps/brain-echo/.env.example SEEDS_FOLDER doc lines skipped — sandbox denies file access, same fallback as Plan 33-01

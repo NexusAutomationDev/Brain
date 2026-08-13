@@ -106,7 +106,7 @@ Full details: [archive](milestones/v1.5-ROADMAP.md)
   4. Reiniciar o container do Brain múltiplas vezes contra o mesmo banco não duplica nem falha o seed (idempotente via `ON CONFLICT DO NOTHING`), independente do lock/fluxo de `runMigrations()`/`_schema_lock` (SEED-04)
   5. Bancos de clientes já em produção que aplicaram as migrations 0002/0005/0010 continuam funcionando sem qualquer migration destrutiva ou retroativa (SEED-05)
 
-**Plans**: 1/3 plans executed
+**Plans**: 2/3 plans executed
 
 Plans:
 **Wave 1**
@@ -115,7 +115,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 33-02-PLAN.md — Support + Echo seed files/Dockerfile wiring + cross-brain isolation & idempotency tests
+- [x] 33-02-PLAN.md — Support + Echo seed files/Dockerfile wiring + cross-brain isolation & idempotency tests
 - [ ] 33-03-PLAN.md — D-10: FupScheduler persists sent FUP message into the lead's LangGraph checkpoint
 
 ### Phase 34: Fundação de Handoff (Agents + DBLink)
@@ -183,7 +183,7 @@ Plans:
 | 30. Brain Suporte Docker | v1.5 | 3/3 | Complete    | 2026-07-01 |
 | 31. Pre-Client Onboarding Hardening | v1.5 | 1/1 | Complete    | 2026-07-02 |
 | 32. Code Quality Cleanup — Accumulated Warnings & Test/Doc Hygiene | v1.5 | 6/6 | Complete    | 2026-07-02 |
-| 33. Seed por Tipo de Brain | v1.6 | 1/3 | In Progress|  |
+| 33. Seed por Tipo de Brain | v1.6 | 2/3 | In Progress|  |
 | 34. Fundação de Handoff (Agents + DBLink) | v1.6 | 0/TBD | Not started | - |
 | 35. Execução de Handoff (Transfer Lead) | v1.6 | 0/TBD | Not started | - |
 

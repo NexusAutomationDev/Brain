@@ -7,7 +7,7 @@
 
 ### SEED — Seed por Tipo de Brain
 
-- [ ] **SEED-01**: Cada imagem de Brain semeia, na inicialização, apenas os prompts do seu próprio `brain_type` — sem inserir prompts de outros tipos (echo, sdr, support) no banco
+- [x] **SEED-01**: Cada imagem de Brain semeia, na inicialização, apenas os prompts do seu próprio `brain_type` — sem inserir prompts de outros tipos (echo, sdr, support) no banco
 - [x] **SEED-02**: Cada Brain tem uma linha padrão de `fup_config` semeada automaticamente na inicialização, se ainda não existir
 - [x] **SEED-03**: Cada Brain tem um prompt padrão `key='fup'` semeado automaticamente na inicialização, se ainda não existir — corrige o FUP estar silenciosamente inoperante em bancos novos
 - [x] **SEED-04**: O novo mecanismo de seed roda de forma idempotente (`ON CONFLICT DO NOTHING`), independente do fluxo de migrations do Drizzle (`runMigrations()`/`_schema_lock` continuam intocados)
@@ -49,7 +49,7 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SEED-01 | Phase 33 | Pending |
+| SEED-01 | Phase 33 | Complete |
 | SEED-02 | Phase 33 | Complete |
 | SEED-03 | Phase 33 | Complete |
 | SEED-04 | Phase 33 | Complete |
