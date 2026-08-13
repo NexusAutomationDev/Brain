@@ -4,16 +4,16 @@ milestone: v1.6
 milestone_name: Transferência de Lead entre Agentes + Seed por Brain
 current_phase: 33
 current_phase_name: Seed por Tipo de Brain
-status: planning
-stopped_at: Phase 33 planned — 3 plans (verification passed)
-last_updated: "2026-08-13T15:54:07.000Z"
+status: executing
+stopped_at: Completed 33-01-PLAN.md
+last_updated: "2026-08-13T16:20:50.797Z"
 last_activity: 2026-08-13
-last_activity_desc: Phase 33 planned (33-01 tracer+tests, 33-02 support/echo, 33-03 D-10 checkpoint wiring) — plan-checker verification passed, requirements 5/5 + CONTEXT.md decisions 10/10 covered
+last_activity_desc: Phase 33 execution started
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 3
-  completed_plans: 0
+  completed_plans: 1
   percent: 0
 ---
 
@@ -25,16 +25,16 @@ See: .planning/PROJECT.md (updated 2026-07-02 after v1.5 milestone shipped)
 
 **Core value:** Infraestrutura de agentes modular onde novos Brains são criados definindo apenas prompts, tools, embeddings e fluxos — sem reescrever a base
 
-**Current focus:** v1.6 — Phase 33 (Seed por Tipo de Brain), ready to plan
+**Current focus:** Phase 33 — Seed por Tipo de Brain
 
 ## Current Position
 
-Phase: 33 of 35 (Seed por Tipo de Brain)
-Plan: 3 plans — 33-01 (wave 1), 33-02 + 33-03 (wave 2, both depend on 33-01)
-Status: Planned — ready to execute (plan-checker verification passed)
-Last activity: 2026-08-13 — Phase 33 planned (3 plans), requirements 5/5 + CONTEXT.md decisions 10/10 covered
+Phase: 33 (Seed por Tipo de Brain) — EXECUTING
+Plan: 2 of 3
+Status: Ready to execute
+Last activity: 2026-08-13 — Phase 33 execution started
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [███░░░░░░░] 33%
 
 ## Milestone v1.6 — Phases (planning)
 
@@ -129,6 +129,17 @@ Last activity: 2026-08-12 - ROADMAP.md criado para v1.6 (Phases 33-35): Seed por
 
 ## Session
 
-**Last session:** 2026-08-13T15:54:07.000Z
-**Stopped at:** Phase 33 planned — 3 plans ready, verification passed
-**Resume file:** .planning/phases/33-seed-por-tipo-de-brain/33-01-PLAN.md
+**Last session:** 2026-08-13T16:20:50.775Z
+**Stopped at:** Completed 33-01-PLAN.md
+**Resume file:** None
+
+## Performance Metrics
+
+| Plan | Duration | Tasks | Files |
+|------|----------|-------|-------|
+| Phase 33 P01 | 25min | 2 tasks | 9 files |
+
+## Decisions
+
+- [Phase ?]: Postgres '{...}' curly-brace array literal used instead of ARRAY[...] in seed SQL to satisfy the plan's zero-bracket acceptance criterion without changing values
+- [Phase ?]: apps/brain-sdr/.env.example SEEDS_FOLDER doc line skipped — sandbox denies file access, per plan's own fallback instruction

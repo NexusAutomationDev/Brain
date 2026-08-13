@@ -8,10 +8,10 @@
 ### SEED — Seed por Tipo de Brain
 
 - [ ] **SEED-01**: Cada imagem de Brain semeia, na inicialização, apenas os prompts do seu próprio `brain_type` — sem inserir prompts de outros tipos (echo, sdr, support) no banco
-- [ ] **SEED-02**: Cada Brain tem uma linha padrão de `fup_config` semeada automaticamente na inicialização, se ainda não existir
-- [ ] **SEED-03**: Cada Brain tem um prompt padrão `key='fup'` semeado automaticamente na inicialização, se ainda não existir — corrige o FUP estar silenciosamente inoperante em bancos novos
-- [ ] **SEED-04**: O novo mecanismo de seed roda de forma idempotente (`ON CONFLICT DO NOTHING`), independente do fluxo de migrations do Drizzle (`runMigrations()`/`_schema_lock` continuam intocados)
-- [ ] **SEED-05**: As migrations de seed já existentes (0002, 0005, 0010) permanecem como estão — bancos de clientes já em produção não sofrem migration destrutiva/retroativa
+- [x] **SEED-02**: Cada Brain tem uma linha padrão de `fup_config` semeada automaticamente na inicialização, se ainda não existir
+- [x] **SEED-03**: Cada Brain tem um prompt padrão `key='fup'` semeado automaticamente na inicialização, se ainda não existir — corrige o FUP estar silenciosamente inoperante em bancos novos
+- [x] **SEED-04**: O novo mecanismo de seed roda de forma idempotente (`ON CONFLICT DO NOTHING`), independente do fluxo de migrations do Drizzle (`runMigrations()`/`_schema_lock` continuam intocados)
+- [x] **SEED-05**: As migrations de seed já existentes (0002, 0005, 0010) permanecem como estão — bancos de clientes já em produção não sofrem migration destrutiva/retroativa
 
 ### HANDOFF — Transferência de Lead entre Agentes
 
@@ -50,10 +50,10 @@
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | SEED-01 | Phase 33 | Pending |
-| SEED-02 | Phase 33 | Pending |
-| SEED-03 | Phase 33 | Pending |
-| SEED-04 | Phase 33 | Pending |
-| SEED-05 | Phase 33 | Pending |
+| SEED-02 | Phase 33 | Complete |
+| SEED-03 | Phase 33 | Complete |
+| SEED-04 | Phase 33 | Complete |
+| SEED-05 | Phase 33 | Complete |
 | HANDOFF-01 | Phase 34 | Pending |
 | HANDOFF-02 | Phase 34 | Pending |
 | HANDOFF-04 | Phase 34 | Pending |
