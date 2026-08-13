@@ -482,17 +482,17 @@ describeOrSkip('getAgentConnection() — integration (HANDOFF-04)', () => {
 
 **If this table is empty:** N/A — see entries above; both are low-risk inferences, not unverified guesses, but flagged per the provenance rule since neither was tested by actually attempting `CREATE EXTENSION dblink` as a non-superuser role against a live Brain database in this research session.
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Exact `connection_string` format Phase 35 will require (host/port/dbname/user/password field completeness, SSL mode, etc.)**
+1. **RESOLVED — Exact `connection_string` format Phase 35 will require (host/port/dbname/user/password field completeness, SSL mode, etc.)**
    - What we know: it must be a libpq `key=value` string, not a `postgres://` URI (D-02).
    - What's unclear: whether Phase 35 will need `sslmode`, `connect_timeout`, or other libpq params baked into the stored string, and whether any validation/parsing should happen at write-time (SQL INSERT time, by ops) vs. read-time (Phase 35's `dblink_exec` call).
-   - Recommendation: Phase 34 stores it as an unvalidated `text` column exactly as D-02 specifies — defer format validation entirely to Phase 35, where the actual `dblink_exec` call site will surface any format issues immediately and concretely.
+   - Recommendation (closes this question for Phase 34's scope): Phase 34 stores it as an unvalidated `text` column exactly as D-02 specifies — defer format validation entirely to Phase 35, where the actual `dblink_exec` call site will surface any format issues immediately and concretely.
 
-2. **Whether any currently-deployed Brain instance uses a non-superuser `DATABASE_URL` role (see Assumption A1)**
+2. **RESOLVED — Whether any currently-deployed Brain instance uses a non-superuser `DATABASE_URL` role (see Assumption A1)**
    - What we know: all `.env.example` files in this repo show the `postgres` superuser account or the `pgvector`/`postgres` official Docker image defaults.
    - What's unclear: whether any live client deployment has since been reconfigured with a restricted role (outside this repo's visibility).
-   - Recommendation: no Phase 34 code change is needed either way — if this ever surfaces as a real deployment failure, the fix is operational (grant the role superuser, or have a DBA pre-install `dblink`/`vector` once), not a schema/code change.
+   - Recommendation (closes this question for Phase 34's scope): no Phase 34 code change is needed either way — if this ever surfaces as a real deployment failure, the fix is operational (grant the role superuser, or have a DBA pre-install `dblink`/`vector` once), not a schema/code change.
 
 ## Environment Availability
 
