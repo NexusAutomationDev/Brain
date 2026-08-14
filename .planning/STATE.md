@@ -5,15 +5,15 @@ milestone_name: Transferência de Lead entre Agentes + Seed por Brain
 current_phase: 34
 current_phase_name: Agents + DBLink
 status: executing
-stopped_at: Phase 34 context gathered
-last_updated: "2026-08-13T23:58:06.398Z"
+stopped_at: Completed 34-01-PLAN.md (agents table + dblink + leads.handoff_context, migration 0012 applied and psql-verified)
+last_updated: "2026-08-14T01:12:32.604Z"
 last_activity: 2026-08-13
 last_activity_desc: Phase 33 complete, transitioned to Phase 34
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 5
-  completed_plans: 3
+  completed_plans: 4
   percent: 25
 ---
 
@@ -30,18 +30,18 @@ See: .planning/PROJECT.md (updated 2026-08-13 after Phase 33)
 ## Current Position
 
 Phase: 34 — Fundação de Handoff (Agents + DBLink)
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-08-13 — Phase 33 complete, transitioned to Phase 34
+Plan: 01 complete (1/2) — Plan 02 (getAgentConnection() lookup) pending
+Status: Executing
+Last activity: 2026-08-14 — Plan 34-01 complete (agents table + dblink + leads.handoff_context, migration 0012 applied and psql-verified against real Postgres)
 
-Progress: [██████████] 100%
+Progress: [████████░░] 80%
 
 ## Milestone v1.6 — Phases (planning)
 
 | Phase | Requirements | Plans | Status |
 |-------|--------------|-------|--------|
 | 33 Seed por Tipo de Brain | SEED-01..05 | 3 | Ready to execute |
-| 34 Fundação de Handoff (Agents + DBLink) | HANDOFF-01,02,04,10 | TBD | Not started |
+| 34 Fundação de Handoff (Agents + DBLink) | HANDOFF-01,02,04,10 | 1/2 | In Progress |
 | 35 Execução de Handoff (Transfer Lead) | HANDOFF-03,05,06,07,08,09 | TBD | Not started |
 
 **Architecture note (confirmed by user, deviates from research/ARCHITECTURE.md):** handoff is DBLINK-based (source Brain writes directly into the destination's `leads` table via `dblink`, using a connection string stored in the new `agents` table), not the HTTP-endpoint-first design the research doc sketched. The destination reads `leads.handoff_context` on its own next inbound message and clears it — no wake-up call to the destination. The HTTP endpoint idea is deferred to v2 as HANDOFF-11.
@@ -130,9 +130,9 @@ Last activity: 2026-08-12 - ROADMAP.md criado para v1.6 (Phases 33-35): Seed por
 
 ## Session
 
-**Last session:** 2026-08-13T18:01:21.289Z
-**Stopped at:** Phase 34 context gathered
-**Resume file:** .planning/phases/34-funda-o-de-handoff-agents-dblink/34-CONTEXT.md
+**Last session:** 2026-08-14T01:12:32.585Z
+**Stopped at:** Completed 34-01-PLAN.md (agents table + dblink + leads.handoff_context, migration 0012 applied and psql-verified)
+**Resume file:** None
 
 ## Performance Metrics
 
@@ -141,6 +141,7 @@ Last activity: 2026-08-12 - ROADMAP.md criado para v1.6 (Phases 33-35): Seed por
 | Phase 33 P01 | 25min | 2 tasks | 9 files |
 | Phase 33 P02 | 15min | 2 tasks | 6 files |
 | Phase 33 P03 | 15min | 2 tasks | 4 files |
+| Phase 34 P01 | 25min | 2 tasks | 4 files |
 
 ## Decisions
 
@@ -150,3 +151,5 @@ Last activity: 2026-08-12 - ROADMAP.md criado para v1.6 (Phases 33-35): Seed por
 - [Phase ?]: apps/brain-support/.env.example and apps/brain-echo/.env.example SEEDS_FOLDER doc lines skipped — sandbox denies file access, same fallback as Plan 33-01
 - [Phase ?]: D-10: injectMessage is a REQUIRED field on FupSchedulerOptions, forcing every construction site to explicitly decide checkpoint-write behavior instead of silently no-op-ing
 - [Phase ?]: Fixed fup-e2e.test.ts's out-of-plan FupScheduler construction with a no-op injectMessage mock — required by the new non-optional field (Rule 3)
+- [Phase ?]: 34-01: Task 1 checkpoint (D-01/D-04) resolved by user — option-a, proceed with researched agents table shape + shared migration 0012
+- [Phase ?]: 34-01: regenerated migration 0012 with EMBEDDING_DIMENSIONS=3072 at generate-time to avoid migration 0011's documented dev-workflow gotcha (spurious embeddings/knowledge_chunks vector-type revert)

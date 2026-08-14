@@ -15,8 +15,8 @@
 
 ### HANDOFF — Transferência de Lead entre Agentes
 
-- [ ] **HANDOFF-01**: Tabela `agents` armazena os agentes de destino conhecidos por um Brain (nome, tipo, connection string do banco destino), configurável via SQL direto sem redeploy
-- [ ] **HANDOFF-02**: `CREATE EXTENSION IF NOT EXISTS dblink` faz parte da migration padrão compartilhada — não depende mais de ativação manual por banco
+- [x] **HANDOFF-01**: Tabela `agents` armazena os agentes de destino conhecidos por um Brain (nome, tipo, connection string do banco destino), configurável via SQL direto sem redeploy
+- [x] **HANDOFF-02**: `CREATE EXTENSION IF NOT EXISTS dblink` faz parte da migration padrão compartilhada — não depende mais de ativação manual por banco
 - [ ] **HANDOFF-03**: Tool `transfer_lead` disponível para o LLM; o gatilho de "quando transferir" é definido via prompt de cada Brain (sem regra hardcoded no código), seguindo o mesmo padrão de `qualify_lead`/`pause_session`
 - [ ] **HANDOFF-04**: A tool valida o nome do agente destino contra a tabela `agents` (nome desconhecido ou `enabled=false` retorna erro, sem transferir)
 - [ ] **HANDOFF-05**: Resumo do handoff gerado por LLM one-shot a partir do histórico do checkpoint da conversa (mesmo padrão stateless do sub-agente de qualificação e do FUP-03)
@@ -54,8 +54,8 @@
 | SEED-03 | Phase 33 | Complete |
 | SEED-04 | Phase 33 | Complete |
 | SEED-05 | Phase 33 | Complete |
-| HANDOFF-01 | Phase 34 | Pending |
-| HANDOFF-02 | Phase 34 | Pending |
+| HANDOFF-01 | Phase 34 | Complete |
+| HANDOFF-02 | Phase 34 | Complete |
 | HANDOFF-04 | Phase 34 | Pending |
 | HANDOFF-10 | Phase 34 | Pending |
 | HANDOFF-03 | Phase 35 | Pending |
