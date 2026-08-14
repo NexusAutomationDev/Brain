@@ -18,13 +18,13 @@
 - [x] **HANDOFF-01**: Tabela `agents` armazena os agentes de destino conhecidos por um Brain (nome, tipo, connection string do banco destino), configurável via SQL direto sem redeploy
 - [x] **HANDOFF-02**: `CREATE EXTENSION IF NOT EXISTS dblink` faz parte da migration padrão compartilhada — não depende mais de ativação manual por banco
 - [ ] **HANDOFF-03**: Tool `transfer_lead` disponível para o LLM; o gatilho de "quando transferir" é definido via prompt de cada Brain (sem regra hardcoded no código), seguindo o mesmo padrão de `qualify_lead`/`pause_session`
-- [ ] **HANDOFF-04**: A tool valida o nome do agente destino contra a tabela `agents` (nome desconhecido ou `enabled=false` retorna erro, sem transferir)
+- [x] **HANDOFF-04**: A tool valida o nome do agente destino contra a tabela `agents` (nome desconhecido ou `enabled=false` retorna erro, sem transferir)
 - [ ] **HANDOFF-05**: Resumo do handoff gerado por LLM one-shot a partir do histórico do checkpoint da conversa (mesmo padrão stateless do sub-agente de qualificação e do FUP-03)
 - [ ] **HANDOFF-06**: A tool escreve via DBLINK diretamente no banco do agente destino: upsert do lead (numero, nome, unique_id) + o resumo gerado em uma nova coluna `leads.handoff_context`
 - [ ] **HANDOFF-07**: O Brain destino, ao processar a próxima mensagem desse lead, lê `handoff_context` automaticamente e o usa como contexto inicial da conversa — depois limpa o campo
 - [ ] **HANDOFF-08**: Após confirmação de que a escrita no destino teve sucesso, o Brain de origem desativa o lead (`ia_ativada=false` via `LeadService.setIaAtivada()`) — resolve TD-04 (método existente sem callers de produção)
 - [ ] **HANDOFF-09**: Evento `transfer_lead` publicado no canal de eventos existente (`IEventPublisher`) via adição à `TOOL_EVENTS_WHITELIST` — sem nova infraestrutura de notificação
-- [ ] **HANDOFF-10**: `thread_id` do lead é sempre lido do contexto de execução (nunca do argumento da tool/LLM), seguindo o padrão D-04 das outras tools
+- [x] **HANDOFF-10**: `thread_id` do lead é sempre lido do contexto de execução (nunca do argumento da tool/LLM), seguindo o padrão D-04 das outras tools
 
 ## v2 Requirements
 
@@ -56,8 +56,8 @@
 | SEED-05 | Phase 33 | Complete |
 | HANDOFF-01 | Phase 34 | Complete |
 | HANDOFF-02 | Phase 34 | Complete |
-| HANDOFF-04 | Phase 34 | Pending |
-| HANDOFF-10 | Phase 34 | Pending |
+| HANDOFF-04 | Phase 34 | Complete |
+| HANDOFF-10 | Phase 34 | Complete |
 | HANDOFF-03 | Phase 35 | Pending |
 | HANDOFF-05 | Phase 35 | Pending |
 | HANDOFF-06 | Phase 35 | Pending |

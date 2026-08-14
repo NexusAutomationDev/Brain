@@ -5,16 +5,16 @@ milestone_name: Transferência de Lead entre Agentes + Seed por Brain
 current_phase: 34
 current_phase_name: Agents + DBLink
 status: executing
-stopped_at: Completed 34-01-PLAN.md (agents table + dblink + leads.handoff_context, migration 0012 applied and psql-verified)
-last_updated: "2026-08-14T01:12:32.604Z"
-last_activity: 2026-08-13
-last_activity_desc: Phase 33 complete, transitioned to Phase 34
+stopped_at: Completed 34-02-PLAN.md (getAgentConnection() lookup + unit/integration tests, real-Postgres verified) — Phase 34 complete
+last_updated: "2026-08-14T01:26:20.125Z"
+last_activity: 2026-08-14
+last_activity_desc: Plan 34-02 complete (getAgentConnection() lookup + unit/integration tests, real-Postgres verified, migration-0012 content proven)
 progress:
   total_phases: 4
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 5
-  completed_plans: 4
-  percent: 25
+  completed_plans: 5
+  percent: 50
 ---
 
 # Project State
@@ -30,18 +30,18 @@ See: .planning/PROJECT.md (updated 2026-08-13 after Phase 33)
 ## Current Position
 
 Phase: 34 — Fundação de Handoff (Agents + DBLink)
-Plan: 01 complete (1/2) — Plan 02 (getAgentConnection() lookup) pending
-Status: Executing
-Last activity: 2026-08-14 — Plan 34-01 complete (agents table + dblink + leads.handoff_context, migration 0012 applied and psql-verified against real Postgres)
+Plan: 02 of 2 complete — Phase 34 complete
+Status: Phase complete — ready for verification
+Last activity: 2026-08-14 — Plan 34-02 complete (getAgentConnection() lookup + unit/integration tests, real-Postgres verified, migration-0012 content proven)
 
-Progress: [████████░░] 80%
+Progress: [██████████] 100%
 
 ## Milestone v1.6 — Phases (planning)
 
 | Phase | Requirements | Plans | Status |
 |-------|--------------|-------|--------|
 | 33 Seed por Tipo de Brain | SEED-01..05 | 3 | Ready to execute |
-| 34 Fundação de Handoff (Agents + DBLink) | HANDOFF-01,02,04,10 | 1/2 | In Progress |
+| 34 Fundação de Handoff (Agents + DBLink) | HANDOFF-01,02,04,10 | 2/2 | Complete |
 | 35 Execução de Handoff (Transfer Lead) | HANDOFF-03,05,06,07,08,09 | TBD | Not started |
 
 **Architecture note (confirmed by user, deviates from research/ARCHITECTURE.md):** handoff is DBLINK-based (source Brain writes directly into the destination's `leads` table via `dblink`, using a connection string stored in the new `agents` table), not the HTTP-endpoint-first design the research doc sketched. The destination reads `leads.handoff_context` on its own next inbound message and clears it — no wake-up call to the destination. The HTTP endpoint idea is deferred to v2 as HANDOFF-11.
@@ -130,8 +130,8 @@ Last activity: 2026-08-12 - ROADMAP.md criado para v1.6 (Phases 33-35): Seed por
 
 ## Session
 
-**Last session:** 2026-08-14T01:12:32.585Z
-**Stopped at:** Completed 34-01-PLAN.md (agents table + dblink + leads.handoff_context, migration 0012 applied and psql-verified)
+**Last session:** 2026-08-14T01:26:12.793Z
+**Stopped at:** Completed 34-02-PLAN.md (getAgentConnection() lookup + unit/integration tests, real-Postgres verified) — Phase 34 complete
 **Resume file:** None
 
 ## Performance Metrics
@@ -142,6 +142,7 @@ Last activity: 2026-08-12 - ROADMAP.md criado para v1.6 (Phases 33-35): Seed por
 | Phase 33 P02 | 15min | 2 tasks | 6 files |
 | Phase 33 P03 | 15min | 2 tasks | 4 files |
 | Phase 34 P01 | 25min | 2 tasks | 4 files |
+| Phase 34 P02 | 20min | 2 tasks | 6 files |
 
 ## Decisions
 
@@ -153,3 +154,5 @@ Last activity: 2026-08-12 - ROADMAP.md criado para v1.6 (Phases 33-35): Seed por
 - [Phase ?]: Fixed fup-e2e.test.ts's out-of-plan FupScheduler construction with a no-op injectMessage mock — required by the new non-optional field (Rule 3)
 - [Phase ?]: 34-01: Task 1 checkpoint (D-01/D-04) resolved by user — option-a, proceed with researched agents table shape + shared migration 0012
 - [Phase ?]: 34-01: regenerated migration 0012 with EMBEDDING_DIMENSIONS=3072 at generate-time to avoid migration 0011's documented dev-workflow gotcha (spurious embeddings/knowledge_chunks vector-type revert)
+- [Phase ?]: 34-02: Task 2 full-suite verification run as 'bun test src/__tests__/integration' (the exact scope the plan's own action text names) rather than unscoped whole-package bun test, since the latter surfaces a pre-existing, unrelated mock.module('postgres') pollution bug in pool-manager.test.ts unconnected to HANDOFF-04's behavior
+- [Phase ?]: 34-02: getAgentConnection() implemented as a plain function with injected Sql (seed.ts shape), returning a discriminated-union Result ({ok:true,...}|{ok:false,reason}) per D-06 — not wired into any tool/LLM yet (Phase 35)
