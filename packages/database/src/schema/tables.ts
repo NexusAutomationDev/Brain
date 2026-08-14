@@ -104,6 +104,9 @@ export const leads = pgTable('leads', {
   // Incrementado a cada falha de LLM ou transport. Reset a cada FUP bem-sucedido.
   // Quando >= 3 (MAX_FUP_FAILURES): fup_enabled setado para false automaticamente.
   fupFailureCount: integer('fup_failure_count').notNull().default(0),
+  // HANDOFF-01/02: handoff_context nullable — populado pela tool transfer_lead (Phase 35),
+  // lido e limpo pelo Brain destino na proxima mensagem recebida (Phase 35, nao esta fase).
+  handoffContext: text('handoff_context'),
 }, (table) => ({
   // D-04: UNIQUE constraint em numero — chave de upsert para Phase 7
   numeroIdx: uniqueIndex('leads_numero_unique_idx').on(table.numero),
@@ -145,6 +148,20 @@ export const fupConfig = pgTable('fup_config', {
   allowedDays: text('allowed_days').array().notNull(),
   // D-05: IANA timezone string — ex: 'America/Sao_Paulo'
   timezone: text('timezone').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+// HANDOFF-01: agents — registro de destinos conhecidos por um Brain, populavel via SQL direto
+// D-01: name como PK (o que a tool do LLM referenciara — configuravel, nunca enum de codigo)
+export const agents = pgTable('agents', {
+  name: text('name').primaryKey(),
+  brainType: text('brain_type').notNull(),
+  // D-02: formato libpq key=value ("host=... dbname=... user=... password=..."),
+  // NAO uma URI postgres:// — dblink e uma extensao C que usa libpq, nao um client Node.
+  // Sem parsing/validacao de formato nesta fase (Phase 35 cuida disso).
+  connectionString: text('connection_string').notNull(),
+  enabled: boolean('enabled').notNull().default(true),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
