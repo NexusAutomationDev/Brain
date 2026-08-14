@@ -130,6 +130,13 @@ Uma infraestrutura de agentes modular onde novos Brains são criados definindo a
 - ✓ SEED-04: seed idempotente (`ON CONFLICT DO NOTHING`) — confirmado contra PostgreSQL real (não apenas mock) via `seed-idempotency.test.ts`, human-verified 2026-08-13 — Phase 33
 - ✓ SEED-05: migrations 0002/0005/0010 intocadas — confirmado via git history, sem migration destrutiva/retroativa — Phase 33
 
+**v1.6 — Fundação de Handoff, Agents + DBLink (Phase 34)**
+
+- ✓ HANDOFF-01: tabela `agents` (name PK, brain_type, connection_string, enabled default true, timestamps) — populável via INSERT SQL direto, sem redeploy — Phase 34
+- ✓ HANDOFF-02: migration 0012 executa `CREATE EXTENSION IF NOT EXISTS dblink` automaticamente em `runMigrations()` — banco novo de cliente já tem dblink disponível sem ativação manual — Phase 34
+- ✓ HANDOFF-04: `getAgentConnection(sql, name)` — nome desconhecido → `not_found`, nome com `enabled=false` → `disabled`, nome válido/habilitado → `connectionString`/`brainType`; provado contra Postgres real (não mock), 0 skipped — Phase 34
+- ✓ HANDOFF-10: constraint documentada (thread_id sempre de `config.configurable`, nunca de argumento de tool/LLM) — sem call site nesta fase (D-08); carregada como constraint travada para a Phase 35 aplicar — Phase 34
+
 ### Active
 
 **Backlog (pós v1.4)**
@@ -232,6 +239,7 @@ Brains planejados para o futuro: Suporte, Customer Success, Cobrança, RH, Jurí
 | brainType como 4° parâmetro opcional em upsertLead (v1.4) | Backward compatible com callers existentes — brainType só é necessário para ativar FUP automaticamente | ✓ Good — Phase 25 integrou sem quebrar callers anteriores |
 | Seed mechanism separado do migrator Drizzle (v1.6, Phase 33) | Drizzle's migrator não tem hook de filtro por brain_type — migrations 0002/0005/0010 aplicam-se a todo banco; um seed idempotente próprio (`runBrainSeed()`, `ON CONFLICT DO NOTHING`, mesmo padrão de row-lock do `migrate.ts`) evita contaminação cruzada sem tocar migrations em produção | ✓ Good — SEED-01..05 fechados sem alterar `migrate.ts` ou as 3 migrations protegidas |
 | `injectMessage` como campo obrigatório em `FupSchedulerOptions` (v1.6, D-10) | Forçar toda construção de `FupScheduler` a decidir explicitamente o comportamento de escrita em checkpoint, em vez de no-op silencioso | ✓ Good — pegou um call site fora do plano (`fup-e2e.test.ts`) que precisava do mock, evitando quebra silenciosa em runtime |
+| `agents` (name text PK) + dblink + `leads.handoff_context` em uma única migration 0012 (v1.6, D-01/D-04, one-way) | Aplicar via `runMigrations()`/`_schema_lock` existente sem novo mecanismo; decisão de shape confirmada por checkpoint humano antes da geração (one-way door — reverter exige nova migration, não edição de arquivo) | ✓ Good — Phase 34 aplicou e provou contra Postgres real (psql), reexecução confirmada idempotente |
 
 ## Evolution
 
@@ -251,4 +259,4 @@ Este documento evolui nas transições de fase e marcos de milestone.
 4. Atualizar Context com estado atual
 
 ---
-*Last updated: 2026-08-13 após Phase 33 (Seed por Tipo de Brain, v1.6) — SEED-01..05 validados, SEED-04 human-verified contra Postgres real
+*Last updated: 2026-08-13 após Phase 34 (Fundação de Handoff, Agents + DBLink, v1.6) — HANDOFF-01/02/04 validados contra Postgres real, HANDOFF-10 documentado como constraint travada para Phase 35
