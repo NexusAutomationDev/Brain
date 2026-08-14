@@ -14,3 +14,7 @@ export { runMigrations } from './migrate.js';
 
 // Seed helper (SEED-02/SEED-03: per-brain-type seed, separate from drizzle migrations)
 export { runBrainSeed } from './seed.js';
+
+// Agent destination lookup (HANDOFF-04): getAgentConnection(sql, name)
+export { getAgentConnection } from './agents.js';
+export type { AgentConnectionResult } from './agents.js';
